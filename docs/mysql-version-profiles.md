@@ -32,4 +32,4 @@ The sidecar binary initializes the same registry from built-ins plus an optional
 
 ## Orchestrator and mysqld_exporter
 
-Discovery and failover depend on the **Orchestrator** build bundled in this repo’s chart (`values.yaml` → `orchestrator.image`). Pin a newer image tag when your vendor publishes builds validated against MySQL 8.4 / 9.x. The **mysqld_exporter** image defaults to `prom/mysqld-exporter:v0.16.0` via Helm `metricsExporter` and the operator’s `--metrics-exporter-image` default.
+Discovery and failover depend on the **Orchestrator** build in this repo’s Docker image (`images/mysql-operator-orchestrator/Dockerfile`), built from **[percona/orchestrator](https://github.com/percona/orchestrator)** at a pinned commit so topology discovery uses **MySQL 8.4+ replication SQL** (`SHOW REPLICA STATUS`, etc.). Older **openark/orchestrator** 3.2.x binaries hit parse errors on 8.4 (`near 'slave status'` / `near 'master status'`). Override `values.yaml` → `orchestrator.image` if you use a different build. The **mysqld_exporter** image defaults to `prom/mysqld-exporter:v0.16.0` via Helm `metricsExporter` and the operator’s `--metrics-exporter-image` default.

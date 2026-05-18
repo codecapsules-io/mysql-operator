@@ -266,7 +266,7 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 
 	// configure operator utility user
 	queries = append(queries, createUserQuery(cfg.OperatorUser, cfg.OperatorPassword, "%",
-		[]string{"SUPER", "SHOW DATABASES", "PROCESS", "RELOAD", "CREATE", "SELECT"}, "*.*",
+		[]string{"SUPER", "SHOW DATABASES", "PROCESS", "RELOAD", "CREATE", "CREATE USER", "SELECT"}, "*.*",
 		[]string{"REPLICATION SLAVE"}, "*.*",
 		[]string{"ALL"}, fmt.Sprintf("%s.*", toolsDbName))...)
 

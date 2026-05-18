@@ -79,6 +79,27 @@ var _ = Describe("Orchestrator reconciler", func() {
 		})
 	})
 
+	Describe("getFromOrchestrator", func() {
+		It("uses topology-derived master when orchestrator Master() is empty (e.g. all instances read-only in Orc)", func() {
+			orcClient.Reset()
+			orcClient.AddInstance(orc.Instance{
+				ClusterName:       cluster.GetClusterAlias(),
+				Key:               orc.InstanceKey{Hostname: cluster.GetPodHostname(0)},
+				ReadOnly:          true,
+				SlaveLagSeconds:   sql.NullInt64{Valid: false},
+				IsUpToDate:        true,
+				IsRecentlyChecked: true,
+				IsLastCheckValid:  true,
+			})
+			u := NewOrcUpdater(cluster, rec, orcClient).(*orcUpdater)
+			insts, master, err := u.getFromOrchestrator()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(insts).To(HaveLen(1))
+			Expect(master).NotTo(BeNil())
+			Expect(master.Key.Hostname).To(Equal(cluster.GetPodHostname(0)))
+		})
+	})
+
 	When("orchestrator is not available", func() {
 		BeforeEach(func() {
 			// register nodes into orchestrator

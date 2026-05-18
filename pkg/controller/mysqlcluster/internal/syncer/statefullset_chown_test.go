@@ -73,12 +73,28 @@ func TestEnsureInitContainersSpec_includesDatadirChownAfterUpgradeCheck(t *testi
 			}},
 		},
 	}
+	authJob := &batch.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      versionupgrade.AuthMigrateJobName(cluster),
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				"mysql.presslabs.org/auth-migrate-target-version": "8.4.0",
+			},
+		},
+		Status: batch.JobStatus{
+			Succeeded: 1,
+			Conditions: []batch.JobCondition{{
+				Type:   batch.JobComplete,
+				Status: core.ConditionTrue,
+			}},
+		},
+	}
 	sch := runtime.NewScheme()
 	_ = scheme.AddToScheme(sch)
 	_ = api.SchemeBuilder.AddToScheme(sch)
 	_ = apps.AddToScheme(sch)
 	_ = batch.AddToScheme(sch)
-	c := fake.NewClientBuilder().WithScheme(sch).WithObjects(checkJob).Build()
+	c := fake.NewClientBuilder().WithScheme(sch).WithObjects(checkJob, authJob).Build()
 	s := &sfsSyncer{
 		cluster: cluster,
 		client:  c,

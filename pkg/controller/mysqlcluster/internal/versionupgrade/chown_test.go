@@ -35,7 +35,10 @@ func TestNeedsDatadirChownInit_whenUpgradingFromAppliedVersion(t *testing.T) {
 		},
 	})
 	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
-	c := testClientBuilder().WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).Build()
+	c := testClientBuilder().WithObjects(
+		upgradeCheckJobSucceeded(cluster, "8.4.0"),
+		authMigrateJobSucceeded(cluster, "8.4.0"),
+	).Build()
 	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
 		t.Fatal("expected chown init when applied is 8.0 and spec is 8.4")
 	}

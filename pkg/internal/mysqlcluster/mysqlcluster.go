@@ -160,7 +160,7 @@ func (c *MysqlCluster) GetClusterAlias() string {
 	return fmt.Sprintf("%s.%s", c.Name, c.Namespace)
 }
 
-// GetMasterHost returns name of current master host in a cluster
+// GetMasterHost returns the headless-service FQDN of the current master pod.
 func (c *MysqlCluster) GetMasterHost() string {
 	masterHost := c.GetPodHostname(0)
 
@@ -172,6 +172,12 @@ func (c *MysqlCluster) GetMasterHost() string {
 	}
 
 	return masterHost
+}
+
+// GetMasterServiceHost returns in-cluster DNS for the Service that targets the pod labeled role=master.
+// Prefer this for Jobs and controllers connecting over TCP from other pods.
+func (c *MysqlCluster) GetMasterServiceHost() string {
+	return fmt.Sprintf("%s.%s.svc", c.GetNameForResource(MasterService), c.Namespace)
 }
 
 // GetMySQLSemVer returns the MySQL server version in semver format, or the default one

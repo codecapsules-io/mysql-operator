@@ -143,18 +143,26 @@ func (ou *orcUpdater) getFromOrchestrator() (instances []orc.Instance, master *o
 		ou.log.V(0).Info("can't get master from Orchestrator", "error", "not found")
 	}
 
-	// check if it's the same master with one that is determined from all instances
+	// Prefer the orchestrator Master() result when present; otherwise use topology (DetermineMaster).
+	// A nil Master() is common when every instance is still read-only in Orc (e.g. single-node boot),
+	// but DetermineMaster() can still identify the primary — the old `master == nil` branch wrongly
+	// treated that as a "clash" and cleared the master, so all pods got role=replica.
 	insts := InstancesSet(instances)
 	m := insts.DetermineMaster()
-	if master == nil || m == nil || master.Key.Hostname != m.Key.Hostname {
-		// throw a warning
+	if master != nil && m != nil && master.Key.Hostname != m.Key.Hostname {
 		ou.log.V(0).Info("master clash, between what is determined and what is in Orc",
 			"in_orchestrator", instToLog(master), "determined", instToLog(m))
 		return instances, nil, nil
 	}
-
-	ou.log.V(1).Info("cluster master", "master", master.Key.Hostname)
-	return instances, master, nil
+	if master != nil {
+		ou.log.V(1).Info("cluster master", "master", master.Key.Hostname)
+		return instances, master, nil
+	}
+	if m != nil {
+		ou.log.V(1).Info("cluster master (from topology)", "master", m.Key.Hostname)
+		return instances, m, nil
+	}
+	return instances, nil, nil
 }
 
 func (ou *orcUpdater) updateClusterReadyStatus() {

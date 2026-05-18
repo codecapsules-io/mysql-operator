@@ -48,11 +48,13 @@ Patch-level bumps within the same profile line (e.g. `8.0.20` → `8.0.34`) skip
 
 ### Auth plugin migration (8.0 → 8.4+)
 
-Percona/MySQL 8.4+ no longer loads `mysql_native_password`. Accounts created on the 8.0 line (root, application `USER`, and any other legacy users) must use `caching_sha2_password` instead.
+Percona/MySQL 8.4+ no longer loads `mysql_native_password`. Persistent accounts still using that plugin cannot authenticate after the upgrade.
 
-After the StatefulSet rolls out the target image and pods are ready, the operator runs a one-shot Job (`{cluster}-auth-migrate`) that connects to the **master** as `sys_operator` and runs `ALTER USER … IDENTIFIED WITH caching_sha2_password` for every non-system account still on `mysql_native_password` (passwords are retained). Operator-managed utility users are already recreated on each start via `init-file`; this Job covers **root**, the secret application user, and any other remaining accounts.
+Before the StatefulSet image changes, the operator runs a one-shot Job (`{cluster}-auth-migrate`) on the writable **master while it is still on the source line** (e.g. 8.0). It connects as **root** when possible (from the cluster `secretName` `ROOT_PASSWORD`) and runs `ALTER USER … IDENTIFIED WITH caching_sha2_password` for **persistent** accounts still on `mysql_native_password`: **root** (all host rows), the optional cluster secret `USER` / `PASSWORD`, and any other non-system accounts that are not recreated by the sidecar `init-file`. Root is required because `root` carries `SYSTEM_USER`, which `sys_operator` cannot alter.
 
-`status.appliedMysqlVersion` is not advanced to 8.4 until this Job succeeds. Once `appliedMysqlVersion` matches `8.4`, the auth migration for that upgrade is complete—no separate annotation is stored.
+Operator utility users (`sys_operator`, `sys_replication`, `sys_exporter`, `sys_heartbeat`, orchestrator topology user) are `DROP USER` / `CREATE USER` on every mysqld start via `init-file`. On 8.4 the server default plugin is `caching_sha2_password` (the 8.0 `default-authentication-plugin=mysql_native_password` setting is not applied), so those accounts do **not** need pre-rollout migration. `MysqlUser` CR accounts and other app users without a known password in a secret use `RETAIN CURRENT PASSWORD` when migrated.
+
+The Job is a **pre-rollout** step (with the datadir upgrade check): the image rollout is held until it succeeds. `status.appliedMysqlVersion` advances after rollout completes; auth migration does not block that separately.
 
 If a cluster was marked applied on 8.4 before this Job existed, patch `status.appliedMysqlVersion` back to the prior 8.0 version (or run the `ALTER USER` statements manually) so the operator can run the migration Job and set applied again.
 

@@ -163,6 +163,7 @@ mysqlClustersGlobalServiceMonitor:
       app.kubernetes.io/name: mysql
 
 orchestrator:
+  # Chart default image (bitpoke/mysql-operator-orchestrator) is built from Percona/orchestrator for MySQL 8.4+ SQL compatibility.
   image:
     repository: docker.io/bitpoke/mysql-operator-orchestrator
     pullPolicy: Always

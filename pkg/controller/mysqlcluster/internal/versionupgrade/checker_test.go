@@ -14,8 +14,10 @@ import (
 	apps "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -107,7 +109,7 @@ func TestEnsureChecked_patchBumpSkipsJob(t *testing.T) {
 	if err := EnsureChecked(context.Background(), c, cluster, options.GetOptions()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !upgradeCheckJobComplete(context.Background(), c, cluster, &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}) {
+	if !JobStepsComplete(context.Background(), c, cluster, &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}, PhasePreRollout) {
 		t.Fatal("expected patch bump to skip upgrade check job")
 	}
 }
@@ -164,9 +166,12 @@ func TestShouldBlockRollout(t *testing.T) {
 	if !ShouldBlockRollout(context.Background(), c, cluster, sts) {
 		t.Fatal("expected rollout to be blocked before check job succeeds")
 	}
-	c = testClientBuilder().WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).Build()
+	c = testClientBuilder().WithObjects(
+		upgradeCheckJobSucceeded(cluster, "8.4.0"),
+		authMigrateJobSucceeded(cluster, "8.4.0"),
+	).Build()
 	if ShouldBlockRollout(context.Background(), c, cluster, sts) {
-		t.Fatal("expected rollout to proceed after check job succeeds")
+		t.Fatal("expected rollout to proceed after pre-rollout jobs succeed")
 	}
 }
 
@@ -238,5 +243,61 @@ func TestSyncAppliedVersion(t *testing.T) {
 	}
 	if cluster.Status.AppliedMysqlVersion != "8.0.34" {
 		t.Fatalf("applied status: %q", cluster.Status.AppliedMysqlVersion)
+	}
+}
+
+func TestDeleteCompletedVersionUpgradeJobs_onlyWhenNotPending(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{ReadyReplicas: 1, Replicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.4.0"}},
+					}},
+				},
+			},
+		},
+	}
+	upJob := &batch.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: JobName(cluster), Namespace: cluster.Namespace},
+	}
+	authJob := &batch.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: AuthMigrateJobName(cluster), Namespace: cluster.Namespace},
+	}
+	c := testClientBuilder().WithObjects(upJob, authJob).Build()
+	if err := DeleteCompletedVersionUpgradeJobs(context.Background(), c, cluster, sts); err != nil {
+		t.Fatalf("delete when pending: %v", err)
+	}
+	for _, name := range []string{JobName(cluster), AuthMigrateJobName(cluster)} {
+		j := &batch.Job{}
+		key := types.NamespacedName{Namespace: cluster.Namespace, Name: name}
+		if err := c.Get(context.Background(), key, j); err != nil {
+			t.Fatalf("job %s should still exist: %v", name, err)
+		}
+	}
+
+	cluster.Status.AppliedMysqlVersion = "8.4.0"
+	if err := DeleteCompletedVersionUpgradeJobs(context.Background(), c, cluster, sts); err != nil {
+		t.Fatalf("delete when complete: %v", err)
+	}
+	for _, name := range []string{JobName(cluster), AuthMigrateJobName(cluster)} {
+		j := &batch.Job{}
+		key := types.NamespacedName{Namespace: cluster.Namespace, Name: name}
+		err := c.Get(context.Background(), key, j)
+		if !errors.IsNotFound(err) {
+			t.Fatalf("job %s: expected NotFound, got %v", name, err)
+		}
 	}
 }

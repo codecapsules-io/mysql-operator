@@ -24,7 +24,7 @@ func RolloutMySQLVersion(ctx context.Context, c client.Client, cluster *mysqlclu
 	if !VersionChangePending(cluster, sts) {
 		return desired
 	}
-	if upgradeCheckJobComplete(ctx, c, cluster, sts) {
+	if JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
 		return desired
 	}
 	if v := AppliedDataPlaneVersion(cluster); !v.EQ(semver.Version{}) {

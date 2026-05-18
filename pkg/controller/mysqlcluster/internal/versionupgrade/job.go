@@ -45,7 +45,6 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 	}
 
 	backoff := int32(0)
-	ttl := int32(600)
 
 	var image string
 	var args []string
@@ -98,8 +97,7 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 			Labels:    labels,
 		},
 		Spec: batch.JobSpec{
-			BackoffLimit:            &backoff,
-			TTLSecondsAfterFinished: &ttl,
+			BackoffLimit: &backoff,
 			Template: core.PodTemplateSpec{
 				Spec: core.PodSpec{
 					RestartPolicy:      core.RestartPolicyNever,
@@ -133,6 +131,21 @@ func envVarFromOperatedSecret(cluster *mysqlcluster.MysqlCluster, name, key stri
 			SecretKeyRef: &core.SecretKeySelector{
 				LocalObjectReference: core.LocalObjectReference{
 					Name: cluster.GetNameForResource(mysqlcluster.Secret),
+				},
+				Key:      key,
+				Optional: &optional,
+			},
+		},
+	}
+}
+
+func envVarFromClusterSecret(cluster *mysqlcluster.MysqlCluster, name, key string, optional bool) core.EnvVar {
+	return core.EnvVar{
+		Name: name,
+		ValueFrom: &core.EnvVarSource{
+			SecretKeyRef: &core.SecretKeySelector{
+				LocalObjectReference: core.LocalObjectReference{
+					Name: cluster.Spec.SecretName,
 				},
 				Key:      key,
 				Optional: &optional,

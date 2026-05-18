@@ -41,13 +41,22 @@ RUN apt-get update \
         apt-transport-https ca-certificates pigz wget \
     && rm -rf /var/lib/apt/lists/*
 
-COPY hack/docker/percona.gpg /etc/apt/trusted.gpg.d/percona.gpg
-RUN echo 'deb https://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
-
 ARG XTRABACKUP_PKG=percona-xtrabackup-80
-RUN apt-get update \
+RUN wget -nv -O /tmp/percona-release.deb https://repo.percona.com/apt/percona-release_latest.generic_all.deb \
+    && apt-get install -y --no-install-recommends /tmp/percona-release.deb \
+    && rm -f /tmp/percona-release.deb \
+    && case "${XTRABACKUP_PKG}" in \
+        percona-xtrabackup-24) PXB_REPO=pxb-24 ;; \
+        percona-xtrabackup-80) PXB_REPO=pxb-80 ;; \
+        percona-xtrabackup-84) PXB_REPO=pxb-84-lts ;; \
+        *) echo "unsupported XTRABACKUP_PKG=${XTRABACKUP_PKG}" >&2; exit 1 ;; \
+    esac \
+    && percona-release disable all \
+    && percona-release enable pt release \
+    && percona-release enable "${PXB_REPO}" release \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
-        percona-toolkit ${XTRABACKUP_PKG} unzip default-mysql-client
+        'percona-toolkit>=3.7.0' ${XTRABACKUP_PKG} unzip default-mysql-client
 
 USER mysql
 

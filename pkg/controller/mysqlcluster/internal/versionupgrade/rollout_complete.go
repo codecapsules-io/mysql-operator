@@ -32,14 +32,10 @@ func RolloutComplete(ctx context.Context, c client.Client, cluster *mysqlcluster
 	if !rolloutCompleteOnVersion(cluster, sts, desired) {
 		return false
 	}
-	if !upgradeCheckAllowsRolloutComplete(ctx, c, cluster, sts) {
+	if !JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
 		return false
 	}
 	return podTemplateInitContainersSucceeded(sts, pods, replicas)
-}
-
-func upgradeCheckAllowsRolloutComplete(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
-	return upgradeCheckJobComplete(ctx, c, cluster, sts)
 }
 
 func podTemplateInitContainersSucceeded(sts *apps.StatefulSet, pods []core.Pod, replicas int32) bool {

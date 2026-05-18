@@ -129,9 +129,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		if !ok {
 			return nil
 		}
-		switch job.Labels["mysql.presslabs.org/job-type"] {
-		case versionupgrade.JobTypeUpgradeCheck, versionupgrade.JobTypeAuthMigrate:
-		default:
+		if !versionupgrade.IsRegisteredUpgradeJob(job) {
 			return nil
 		}
 		clusterName := job.Labels["mysql.presslabs.org/cluster"]
@@ -244,7 +242,7 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	appliedStatusBefore := cluster.Status.AppliedMysqlVersion
 	if err = versionupgrade.EnsureChecked(ctx, r.Client, cluster, r.opt); err != nil {
 		if versionupgrade.IsHoldRollout(err) {
-			log.Info("waiting for MySQL upgrade check", "cluster", cluster, "reason", err.Error())
+			log.Info("waiting for MySQL version upgrade pre-rollout steps", "cluster", cluster, "reason", err.Error())
 			if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
 				return reconcile.Result{}, annErr
 			}
@@ -341,12 +339,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	if sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster); stsErr != nil {
 		return reconcile.Result{}, stsErr
 	} else if sts != nil {
-		annBeforeAuth := cloneStringMap(cluster.Annotations)
-		authErr := versionupgrade.EnsureAuthMigrated(ctx, r.Client, cluster, sts, r.opt)
-		if annErr := r.persistClusterAnnotations(ctx, cluster, annBeforeAuth); annErr != nil {
-			return reconcile.Result{}, annErr
-		}
-
 		podList := &corev1.PodList{}
 		if listErr := r.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); listErr != nil {
 			return reconcile.Result{}, listErr
@@ -358,19 +350,9 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 			}
 		}
 
-		if authErr != nil {
-			if versionupgrade.IsHoldRollout(authErr) {
-				log.Info("waiting for MySQL auth plugin migration", "cluster", cluster, "reason", authErr.Error())
-				return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
-			}
-			log.Error(authErr, "MySQL auth plugin migration blocked", "cluster", cluster)
-			r.recorder.Event(cluster.Unwrap(), corev1.EventTypeWarning, "MySQLAuthMigrateBlocked", authErr.Error())
-			cluster.UpdateStatusCondition(api.ClusterConditionReady, corev1.ConditionFalse,
-				"MySQLAuthMigrateBlocked", authErr.Error())
-			if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
-				log.Error(sErr, "failed to update cluster status")
-			}
-			return reconcile.Result{}, authErr
+		if delErr := versionupgrade.DeleteCompletedVersionUpgradeJobs(ctx, r.Client, cluster, sts); delErr != nil {
+			log.Error(delErr, "failed to delete finished MySQL version upgrade jobs", "cluster", cluster)
+			return reconcile.Result{}, delErr
 		}
 	}
 

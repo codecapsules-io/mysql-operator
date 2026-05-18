@@ -1,0 +1,133 @@
+/*
+Copyright 2026 Pressinfra SRL
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+*/
+
+package versionupgrade
+
+import (
+	"github.com/blang/semver"
+
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
+)
+
+// profileTransition identifies a supported one-step LTS profile upgrade (source line → target line).
+type profileTransition struct {
+	From string
+	To   string
+}
+
+// upgradePathSteps lists migration steps for each supported profile transition, in execution order.
+// Add a new transition here when supporting another LTS hop; register step implementations in steps_builtin.go.
+var upgradePathSteps = map[profileTransition][]string{
+	{
+		From: mysqlversioning.ProfilePercona57.String(),
+		To:   mysqlversioning.ProfilePercona80.String(),
+	}: {
+		StepDatadirUpgradeCheck,
+	},
+	{
+		From: mysqlversioning.ProfilePercona80.String(),
+		To:   mysqlversioning.ProfilePercona84.String(),
+	}: {
+		StepDatadirUpgradeCheck,
+		StepDatadirChown,
+		StepAuthPluginMigrate,
+	},
+	{
+		From: mysqlversioning.ProfilePercona84.String(),
+		To:   mysqlversioning.ProfilePercona97.String(),
+	}: {
+		StepDatadirUpgradeCheck,
+	},
+}
+
+func stepIDsOnPath(from, to semver.Version) []string {
+	fromProfile := mysqlversioning.ProfileFor(from).Name()
+	toProfile := mysqlversioning.ProfileFor(to).Name()
+	if fromProfile == toProfile {
+		return nil
+	}
+	return upgradePathSteps[profileTransition{From: fromProfile, To: toProfile}]
+}
+
+// sourceVersionForStep returns the "from" semver used to resolve the upgrade path for a step.
+func sourceVersionForStep(uctx UpgradeContext, stepID string) semver.Version {
+	switch stepID {
+	case StepDatadirChown:
+		if v := AppliedDataPlaneVersion(uctx.Cluster); !v.EQ(semver.Version{}) {
+			return v
+		}
+		return laggingStatefulSetVersion(uctx.Cluster, uctx.STS)
+	default:
+		return uctx.Source
+	}
+}
+
+// stepScheduled reports whether the step is listed on the source→target upgrade path.
+func stepScheduled(uctx UpgradeContext, stepID string) bool {
+	from := sourceVersionForStep(uctx, stepID)
+	if from.EQ(semver.Version{}) {
+		return false
+	}
+	for _, id := range stepIDsOnPath(from, uctx.Target) {
+		if id == stepID {
+			return true
+		}
+	}
+	return false
+}
+
+// stepApplicable reports cluster/runtime preconditions for a step already on the upgrade path.
+func stepApplicable(uctx UpgradeContext, stepID string) bool {
+	switch stepID {
+	case StepDatadirUpgradeCheck:
+		return upgradeDatadirCheckApplicable(uctx)
+	case StepDatadirChown:
+		return datadirChownApplicable(uctx)
+	case StepAuthPluginMigrate:
+		return authPluginMigrateApplicable(uctx)
+	default:
+		return false
+	}
+}
+
+// stepRequired is true when the step is on the upgrade path and cluster state allows it to run.
+func stepRequired(uctx UpgradeContext, stepID string) bool {
+	return stepScheduled(uctx, stepID) && stepApplicable(uctx, stepID)
+}
+
+func upgradeDatadirCheckApplicable(uctx UpgradeContext) bool {
+	if !VersionChangePending(uctx.Cluster, uctx.STS) {
+		return false
+	}
+	return ClusterHasMySQLData(uctx.Cluster, uctx.STS)
+}
+
+func datadirChownApplicable(uctx UpgradeContext) bool {
+	from := sourceVersionForStep(uctx, StepDatadirChown)
+	if from.EQ(semver.Version{}) || from.EQ(uctx.Target) {
+		return false
+	}
+	if !HasPersistentDataVolume(uctx.Cluster) || !ClusterHasMySQLData(uctx.Cluster, uctx.STS) {
+		return false
+	}
+	return uctx.Cluster.IsPerconaImage()
+}
+
+func authPluginMigrateApplicable(uctx UpgradeContext) bool {
+	return VersionChangePending(uctx.Cluster, uctx.STS)
+}
+
+func stepsForPhase(uctx UpgradeContext, phase Phase) []UpgradeStep {
+	var out []UpgradeStep
+	for _, step := range registeredSteps {
+		if step.Phase != phase || !stepRequired(uctx, step.ID) {
+			continue
+		}
+		out = append(out, step)
+	}
+	return out
+}

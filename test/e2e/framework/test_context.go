@@ -41,6 +41,8 @@ type TestContextType struct {
 	OperatorImage       string
 	SidecarMysql57Image string
 	SidecarMysql8Image  string
+	SidecarMysql84Image string
+	SidecarMysql97Image string
 	OrchestratorImage   string
 
 	TimeoutSeconds    int
@@ -73,6 +75,8 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.OperatorImage, "operator-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator:"+commit, "Image for mysql operator.")
 	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-sidecar-5.7:"+commit, "Image for mysql helper.")
 	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-sidecar-8.0:"+commit, "Image for mysql helper.")
+	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from helm).")
+	flag.StringVar(&TestContext.SidecarMysql97Image, "sidecar-mysql97-image", "", "Optional image for Percona 9.7 sidecar (empty = omit from helm).")
 	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
 
 	flag.IntVar(&TestContext.TimeoutSeconds, "pod-wait-timeout", 100, "Timeout to wait for a pod to be ready.")

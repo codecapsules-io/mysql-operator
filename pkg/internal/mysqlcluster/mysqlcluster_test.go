@@ -73,12 +73,68 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 
 		Expect(cluster.Spec.PodSpec.Resources.Requests.Memory()).To(PointTo(Equal(resource.MustParse("1Gi"))))
 		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-buffer-pool-size")))
-		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-log-file-size")))
+		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-redo-log-capacity")))
 		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("max-binlog-size")))
 	})
 
-	It("should use init MySQL container", func() {
-		Expect(cluster.ShouldHaveInitContainerForMysql()).To(Equal(true))
+	It("uses innodb-redo-log-capacity on MySQL 8.0.30+ instead of innodb-log-file-size", func() {
+		cluster = New(&api.MysqlCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cl-name",
+				Namespace: "default",
+			},
+			Spec: api.MysqlClusterSpec{
+				SecretName:   "sct-name",
+				MysqlVersion: "9.7.0",
+				MysqlConf:    map[string]intstr.IntOrString{},
+				PodSpec: api.PodSpec{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("4Gi"),
+						},
+					},
+				},
+			},
+		})
+		api.SetDefaults_MysqlCluster(cluster.Unwrap())
+		cluster.SetDefaults(options.GetOptions())
+		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-redo-log-capacity")))
+		redo := cluster.Spec.MysqlConf["innodb-redo-log-capacity"]
+		Expect((&redo).String()).To(Equal("256M"))
+		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("innodb-log-file-size")))
+	})
+
+	It("selects sidecar image by mysql version", func() {
+		o := options.GetOptions()
+		prev84 := o.SidecarMysql84Image
+		prev97 := o.SidecarMysql97Image
+		defer func() {
+			o.SidecarMysql84Image = prev84
+			o.SidecarMysql97Image = prev97
+		}()
+		o.SidecarMysql84Image = "reg/sidecar84:tag"
+		o.SidecarMysql97Image = "reg/sidecar97:tag"
+
+		cluster.Spec.MysqlVersion = "5.7.35"
+		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql57Image))
+
+		cluster.Spec.MysqlVersion = "8.0.20"
+		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql8Image))
+
+		cluster.Spec.MysqlVersion = "8.4.0"
+		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar84:tag"))
+
+		cluster.Spec.MysqlVersion = "9.7.0"
+		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar97:tag"))
+	})
+
+	It("falls back to mysql8 sidecar for 8.4 when 84 image is empty", func() {
+		o := options.GetOptions()
+		prev := o.SidecarMysql84Image
+		defer func() { o.SidecarMysql84Image = prev }()
+		o.SidecarMysql84Image = ""
+		cluster.Spec.MysqlVersion = "8.4.0"
+		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql8Image))
 	})
 
 	It("should return 0.0.0 version if wrong mysql version was given", func() {

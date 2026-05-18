@@ -63,14 +63,17 @@ func main() {
 		Use:   "clone-and-init",
 		Short: "Clone data from a bucket or prior node.",
 		Run: func(cmd *cobra.Command, args []string) {
+			log.Info("clone-and-init: starting clone phase")
 			if err := sidecar.RunCloneCommand(cfg); err != nil {
 				log.Error(err, "clone command failed")
 				os.Exit(8)
 			}
+			log.Info("clone-and-init: clone phase done, starting config phase")
 			if err := sidecar.RunConfigCommand(cfg); err != nil {
 				log.Error(err, "init command failed")
 				os.Exit(1)
 			}
+			log.Info("clone-and-init: config phase finished successfully")
 		},
 	}
 	cmd.AddCommand(cloneCmd)

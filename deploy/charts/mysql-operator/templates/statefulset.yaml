@@ -57,12 +57,25 @@ spec:
           args:
             - --leader-election-namespace={{ .Release.Namespace }}
             - --orchestrator-uri={{ include "orchestrator.apiURL" . }}
+            - --image-pull-policy={{ .Values.clusterImagePullPolicy }}
             {{- with .Values.sidecar57 }}
             - --sidecar-image={{ .image.repository }}:{{ .image.tag | default $appVersion }}
             {{- end -}}
             {{- with .Values.sidecar80 }}
             - --sidecar-mysql8-image={{ .image.repository }}:{{ .image.tag | default $appVersion }}
             {{- end -}}
+            {{- if and .Values.sidecar84.image.repository (ne .Values.sidecar84.image.repository "") }}
+            - --sidecar-mysql84-image={{ .Values.sidecar84.image.repository }}:{{ .Values.sidecar84.image.tag | default $appVersion }}
+            {{- end }}
+            {{- if and .Values.sidecar97.image.repository (ne .Values.sidecar97.image.repository "") }}
+            - --sidecar-mysql97-image={{ .Values.sidecar97.image.repository }}:{{ .Values.sidecar97.image.tag | default $appVersion }}
+            {{- end }}
+            {{- if .Values.mysqlVersionCatalog.enabled }}
+            - --mysql-version-catalog-file={{ .Values.mysqlVersionCatalog.mountPath }}/{{ .Values.mysqlVersionCatalog.fileName }}
+            {{- end }}
+            {{- if .Values.mysqlVersionProfileOverlay.enabled }}
+            - --mysql-profile-overlay-file={{ .Values.mysqlVersionProfileOverlay.mountPath }}/{{ .Values.mysqlVersionProfileOverlay.fileName }}
+            {{- end }}
             {{- with .Values.metricsExporter }}
             - --metrics-exporter-image={{ .image.repository }}:{{ .image.tag }}
             {{- end -}}
@@ -87,6 +100,19 @@ spec:
               port: 8081
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if or .Values.mysqlVersionCatalog.enabled .Values.mysqlVersionProfileOverlay.enabled }}
+          volumeMounts:
+            {{- if .Values.mysqlVersionCatalog.enabled }}
+            - name: mysql-version-catalog
+              mountPath: {{ .Values.mysqlVersionCatalog.mountPath | quote }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.mysqlVersionProfileOverlay.enabled }}
+            - name: mysql-profile-overlay
+              mountPath: {{ .Values.mysqlVersionProfileOverlay.mountPath | quote }}
+              readOnly: true
+            {{- end }}
+          {{- end }}
         - name: orchestrator
           securityContext:
             {{- toYaml .Values.orchestrator.securityContext | nindent 12 }}
@@ -132,6 +158,16 @@ spec:
             {{- toYaml .Values.orchestrator.resources | nindent 12 }}
 
       volumes:
+        {{- if .Values.mysqlVersionCatalog.enabled }}
+        - name: mysql-version-catalog
+          configMap:
+            name: {{ include "mysql-operator.fullname" . }}-mysql-versions
+        {{- end }}
+        {{- if .Values.mysqlVersionProfileOverlay.enabled }}
+        - name: mysql-profile-overlay
+          configMap:
+            name: {{ include "mysql-operator.fullname" . }}-mysql-profile-overlay
+        {{- end }}
         - name: config
           configMap:
             name: {{ template "orchestrator.fullname" . }}

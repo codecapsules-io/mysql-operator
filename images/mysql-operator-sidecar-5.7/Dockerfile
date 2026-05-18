@@ -2,18 +2,24 @@
 #  Docker image for sidecar containers
 ###############################################################################
 
-FROM debian:buster-slim as sidecar
+# Use a supported Debian release (bookworm) for reliable mirrors; override with DEBIAN_RELEASE if needed.
+ARG DEBIAN_RELEASE=bookworm
+FROM debian:${DEBIAN_RELEASE}-slim AS sidecar
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN printf 'Acquire::Retries "5";\n' >/etc/apt/apt.conf.d/80retry
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bash ca-certificates curl gnupg lsb-release passwd pigz unzip wget \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 999 mysql
 RUN useradd -u 999 -r -g 999 -s /sbin/nologin \
     -c "Default Application User" mysql
 
 COPY rootfs/ /
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        apt-transport-https ca-certificates unzip pigz wget gnupg \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN export RCLONE_VERSION=1.57.0 \
     && gpg --import /etc/gpg-keys/rclone.gpg \
@@ -26,10 +32,13 @@ RUN export RCLONE_VERSION=1.57.0 \
     && chmod 755 /usr/local/bin/rclone \
     && rm -r rclone-*-linux-amd64 rclone-*-linux-amd64.zip
 
-RUN echo 'deb https://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
-
+# Register Percona signing key and apt sources (raw deb line alone is not enough on modern apt).
 ARG XTRABACKUP_PKG=percona-xtrabackup-24
-RUN apt-get update \
+RUN wget -nv -O /tmp/percona-release.deb https://repo.percona.com/apt/percona-release_latest.generic_all.deb \
+    && dpkg -i /tmp/percona-release.deb \
+    && rm -f /tmp/percona-release.deb \
+    && percona-release enable-only tools release \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         percona-toolkit ${XTRABACKUP_PKG} unzip default-mysql-client \
     && rm -rf /var/lib/apt/lists/*

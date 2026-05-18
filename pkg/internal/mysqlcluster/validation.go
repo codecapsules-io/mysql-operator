@@ -18,6 +18,8 @@ package mysqlcluster
 
 import (
 	"fmt"
+
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 )
 
 // Validate checks if the cluster spec is validated
@@ -29,6 +31,10 @@ func (c *MysqlCluster) Validate() error {
 
 	if len(c.GetMysqlImage()) == 0 {
 		return fmt.Errorf("%s is not a valid MySQL version", c.Spec.MysqlVersion)
+	}
+
+	if err := mysqlversioning.ProfileFor(c.GetMySQLSemVer()).Validate(&c.Spec); err != nil {
+		return err
 	}
 
 	// volume spec should be specified on the cluster

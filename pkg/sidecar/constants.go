@@ -57,9 +57,6 @@ var (
 	// toolsHeartbeatTableName is the name used for pt-heartbeat table
 	toolsHeartbeatTableName = "heartbeat"
 
-	// heartBeatUserName is the MySQL user that is used for pt-heartbeat
-	heartBeatUserName = "sys_heartbeat"
-
 	// ServerPort http server port
 	serverPort = constants.SidecarServerPort
 	// ServerProbeEndpoint is the http server endpoint for probe

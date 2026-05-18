@@ -16,8 +16,6 @@ limitations under the License.
 
 package constants
 
-import "github.com/blang/semver"
-
 const (
 	// MysqlPort is the default mysql port.
 	MysqlPort = 3306
@@ -35,6 +33,14 @@ const (
 
 	// ExporterPath is the path on which metrics are expose
 	ExporterPath = "/metrics"
+
+	// MetricsExporterMySQLUser is the MySQL login used by the mysqld_exporter sidecar (bound to 127.0.0.1 in GRANTs).
+	// Must match the operated secret key METRICS_EXPORTER_USER / sidecar init SQL.
+	MetricsExporterMySQLUser = "sys_exporter"
+
+	// HeartBeatMySQLUser is the MySQL login used by pt-heartbeat (GRANTs for localhost socket + 127.0.0.1).
+	// Must match operated secret key HEARTBEAT_USER and sidecar env / init SQL.
+	HeartBeatMySQLUser = "sys_heartbeat"
 
 	// OperatorDbName represent the database name that is used by operator to
 	// manage the mysql cluster. This database contains a table with
@@ -66,6 +72,10 @@ const (
 	// it's important to have a different extension than .cnf to be ignore by MySQL include
 	ConfClientPath = "/etc/mysql/client.conf"
 
+	// ConfClientLoopbackPath is a password-free [client] snippet (host, port, get-server-public-key) for
+	// manual debugging, e.g.: mysql --defaults-file=/etc/mysql/client-loopback.cnf -uroot -p
+	ConfClientLoopbackPath = "/etc/mysql/client-loopback.cnf"
+
 	// ConfHeartBeatPath the path where to put the heartbeat.conf file
 	// it's important to have a different extension than .cnf to be ignore by MySQL include
 	ConfHeartBeatPath = "/etc/mysql/heartbeat.conf"
@@ -81,27 +91,35 @@ const (
 )
 
 var (
-	// MySQLDefaultVersion is the version for mysql that should be used
-	MySQLDefaultVersion = semver.MustParse("5.7.35")
-	// MySQLTagsToSemVer maps simple version to semver versions
+	// MySQLDefaultVersion is the version for mysql that should be used when spec.mysqlVersion is unset.
+	MySQLDefaultVersion = MySQLVersion840.String()
+	// MySQLTagsToSemVer maps simple version tags to canonical semver strings.
 	MySQLTagsToSemVer = map[string]string{
-		"5.7": "5.7.35",
-		"8.0": "8.0.20",
+		MySQLTag57: MySQLVersion5735.String(),
+		MySQLTag80: MySQLVersion8020.String(),
+		MySQLTag84: MySQLVersion840.String(),
+		MySQLTag97: MySQLVersion970.String(),
 	}
 	// MysqlImageVersions is a map of supported mysql version and their image
 	MysqlImageVersions = map[string]string{
 		// percona:5.7.35 CentOS based image
-		"5.7.35": "percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393",
+		MySQLVersion5735.String(): "percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393",
 		// percona:5.7.31-centos
-		"5.7.31": "percona@sha256:68dad5e2efeb6893e2d7d116a1eae144f2c641c17d00e7869397395590c91651",
+		MySQLVersion5731.String(): "percona@sha256:68dad5e2efeb6893e2d7d116a1eae144f2c641c17d00e7869397395590c91651",
 		// This version of mysql has a bug and doesn't work with the operator,
 		// see: https://github.com/bitpoke/mysql-operator/issues/509
-		"5.7.29": "percona@sha256:d801123bbfaf750924f993f5c59189d144a93feb928b8aef95e541dd61c62881",
+		MySQLVersion5729.String(): "percona@sha256:d801123bbfaf750924f993f5c59189d144a93feb928b8aef95e541dd61c62881",
 		// Percona:5.7.26 CentOS based image
-		"5.7.26": "percona@sha256:713c1817615b333b17d0fbd252b0ccc53c48a665d4cfcb42178167435a957322",
+		MySQLVersion5726.String(): "percona@sha256:713c1817615b333b17d0fbd252b0ccc53c48a665d4cfcb42178167435a957322",
 		// Percona:5.7.24 CentOS based image
-		"5.7.24": "percona@sha256:b3b7fb177b416563c46fe012298e042ec1607cc0539ce6014146380b0d27b08c",
+		MySQLVersion5724.String(): "percona@sha256:b3b7fb177b416563c46fe012298e042ec1607cc0539ce6014146380b0d27b08c",
 		// Percona:8.0.20-11 CentOS based image
-		"8.0.20": "percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc",
+		MySQLVersion8020.String(): "percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc",
+		// Percona Server 8.0.34 (linux/amd64 manifest digest from percona/percona-server:8.0.34-26)
+		MySQLVersion8034.String(): "percona/percona-server@sha256:b2588da614b1f382468fc9f44600863e324067a9cae57c204a30a2105d61d9d9",
+		// Percona Server 8.4 LTS — docker.io tag 8.4.8-8 (multi-arch manifest digest, pushed 2026-04-16)
+		MySQLVersion840.String(): "docker.io/percona/percona-server:8.4",
+		// MySQL 9.7.0 LTS — official library/mysql (Percona PS 9.7 not published on Docker Hub as of 2026-05)
+		MySQLVersion970.String(): "docker.io/mysql@sha256:c11782aa2a96624c1efc121768641d96954faa136d6aa82751b032d8c426ffbc",
 	}
 )

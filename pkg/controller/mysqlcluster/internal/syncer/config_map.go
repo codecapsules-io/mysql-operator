@@ -19,9 +19,11 @@ package mysqlcluster
 import (
 	"bytes"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
+	"github.com/blang/semver"
 	"github.com/go-ini/ini"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +34,8 @@ import (
 	"github.com/presslabs/controller-util/syncer"
 
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
+	"github.com/bitpoke/mysql-operator/pkg/util/mysqlversion"
 )
 
 // NewConfigMapSyncer returns config map syncer
@@ -57,26 +61,30 @@ func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlc
 		}
 
 		if cluster.Spec.PodSpec.MysqlLifecycle == nil {
-			cm.Data[shPreStopFile] = buildBashPreStop()
+			cm.Data[shPreStopFile] = buildBashPreStop(cluster)
 		}
 
 		return nil
 	})
 }
 
-func buildBashPreStop() string {
+func buildBashPreStop(cluster *mysqlcluster.MysqlCluster) string {
+	d := mysqlversioning.ProfileFor(cluster.GetMySQLSemVer()).Replication()
+	replicaStatusCmd := d.ShowReplicaStatusCmd
+	replicaHostsCmd := d.ShowReplicasCmd
+	logLabel := d.LogLabelPreStop
 	data := `#!/bin/bash
 set -ex
 
 current=$(date "+%Y-%m-%d %H:%M:%S")
 echo "[${current}]preStop is ongoing"
 read_only_status=$(mysql --defaults-file=ConfClientPathHolder -NB -e 'SELECT @@read_only')
-replica_status=$(mysql --defaults-file=ConfClientPathHolder -NB -e 'show slave status\G')
+replica_status=$(mysql --defaults-file=ConfClientPathHolder -NB -e '__REPLICA_STATUS_CMD__')
 # orchestrator will isolate old master during failover
-has_replica_hosts=$(mysql --defaults-file=ConfClientPathHolder -NB -e 'show slave hosts\G')
+has_replica_hosts=$(mysql --defaults-file=ConfClientPathHolder -NB -e '__REPLICA_HOSTS_CMD__')
 replica_status_count=$(echo -n "$replica_status" | wc -l )
 has_replica_count=$(echo -n "$has_replica_hosts" | wc -l )
-echo "hostname=$(hostname) readonly=${read_only_status} show_slave_status=${replica_status_count}"
+echo "hostname=$(hostname) readonly=${read_only_status} __LOG_LABEL__=${replica_status_count}"
 echo "has_replica_hosts=${has_replica_count}"
 if [ ${read_only_status} -eq 0  ] && [ ${replica_status_count} -eq 0 ] && [ ${has_replica_count} -gt 0 ]
 then
@@ -90,6 +98,9 @@ then
         fi
 fi
 `
+	data = strings.Replace(data, "__REPLICA_STATUS_CMD__", replicaStatusCmd, 1)
+	data = strings.Replace(data, "__REPLICA_HOSTS_CMD__", replicaHostsCmd, 1)
+	data = strings.Replace(data, "__LOG_LABEL__", logLabel, 1)
 	return strings.Replace(data, "ConfClientPathHolder", confClientPath, -1)
 }
 
@@ -97,19 +108,43 @@ func buildMysqlConfData(cluster *mysqlcluster.MysqlCluster) (string, error) {
 	cfg := ini.Empty()
 	sec := cfg.Section("mysqld")
 
-	if cluster.GetMySQLSemVer().Major == 5 {
+	v := cluster.GetMySQLSemVer()
+	prof := mysqlversioning.ProfileFor(v)
+
+	if prof.UseMySQL5xConfigs() {
 		addKVConfigsToSection(sec, convertMapToKVConfig(mysql5xConfigs))
-	} else if cluster.GetMySQLSemVer().Major == 8 {
+	} else if prof.UseMySQL8xConfigs() {
 		addKVConfigsToSection(sec, convertMapToKVConfig(mysql8xConfigs))
+		if prof.UseMySQL80AuthPlugin() {
+			addKVConfigsToSection(sec, convertMapToKVConfig(mysql80AuthPluginConfig))
+		}
 	}
 
-	// boolean configs
-	addBConfigsToSection(sec, mysqlMasterSlaveBooleanConfigs)
-	// add custom configs, would overwrite common configs
-	addKVConfigsToSection(sec, convertMapToKVConfig(mysqlCommonConfigs), cluster.Spec.MysqlConf)
+	// boolean configs (skip-host-cache removed in MySQL 8.0.30+ / Percona 8.0.30+)
+	addBConfigsToSection(sec, mysqlMasterSlaveBooleanConfigsForVersion(v))
+	// Official MySQL images default the client to /var/run/mysqld/mysqld.sock; Percona often uses the
+	// datadir. We pin both server and client to the mounted data volume so probes, pt-heartbeat, and
+	// ad-hoc `mysql` agree (errno 2 if client and server paths differ).
+	opKV := MysqlKVConfigsForVersion(v)
+	effectiveSocket := path.Join(DataVolumeMountPath, "mysql.sock")
+	if _, userSet := cluster.Spec.MysqlConf["socket"]; !userSet {
+		opKV["socket"] = effectiveSocket
+	} else {
+		sv := cluster.Spec.MysqlConf["socket"]
+		effectiveSocket = (&sv).String()
+	}
+	addKVConfigsToSection(sec, convertMapToKVConfig(opKV), cluster.Spec.MysqlConf)
+
+	clientSec, err := cfg.NewSection("client")
+	if err != nil {
+		return "", err
+	}
+	if _, err = clientSec.NewKey("socket", effectiveSocket); err != nil {
+		return "", err
+	}
 
 	// include configs from /etc/mysql/conf.d/*.cnf
-	_, err := sec.NewBooleanKey(fmt.Sprintf("!includedir %s", ConfDPath))
+	_, err = sec.NewBooleanKey(fmt.Sprintf("!includedir %s", ConfDPath))
 	if err != nil {
 		return "", err
 	}
@@ -180,58 +215,9 @@ func writeConfigs(cfg *ini.File) (string, error) {
 	return buf.String(), nil
 }
 
-// mysqlCommonConfigs represents the configuration that mysql-operator needs by default
-var mysqlCommonConfigs = map[string]string{
-	"log-bin":           "/var/lib/mysql/mysql-bin",
-	"log-slave-updates": "on",
-
-	// start server without read-only because of https://bugs.mysql.com/bug.php?id=100283
-	// so we can restore from a backup (see https://github.com/bitpoke/mysql-operator/issues/509)
-	//"read-only":        "on",
-	"skip-slave-start": "on",
-
-	// Crash safe
-	"relay-log-info-repository": "TABLE",
-	"relay-log-recovery":        "on",
-
-	// https://github.com/github/orchestrator/issues/323#issuecomment-338451838
-	"master-info-repository": "TABLE",
-
-	"default-storage-engine":   "InnoDB",
-	"gtid-mode":                "on",
-	"enforce-gtid-consistency": "on",
-
-	// MyISAM
-	"key-buffer-size":        "32M",
-	"myisam-recover-options": "FORCE,BACKUP",
-
-	// Safety
-	"max-allowed-packet": "16M",
-	"max-connect-errors": "1000000",
-
-	"sysdate-is-now": "1",
-
-	// Binary logging
-	"sync-binlog":   "1",
-	"binlog-format": "ROW",
-
-	// CACHES AND LIMITS
-	"tmp-table-size":         "32M",
-	"max-heap-table-size":    "32M",
-	"max-connections":        "500",
-	"thread-cache-size":      "50",
-	"open-files-limit":       "65535",
-	"table-definition-cache": "4096",
-	"table-open-cache":       "4096",
-
-	// InnoDB
-	"innodb-flush-method":            "O_DIRECT",
-	"innodb-log-files-in-group":      "2",
-	"innodb-flush-log-at-trx-commit": "2",
-	"innodb-file-per-table":          "1",
-
-	"character-set-server": "utf8mb4",
-	"collation-server":     "utf8mb4_unicode_ci",
+// MysqlKVConfigsForVersion returns mysqld key/value defaults for the given server version.
+func MysqlKVConfigsForVersion(v semver.Version) map[string]string {
+	return mysqlversioning.OperatorKVForVersion(v)
 }
 
 var mysql5xConfigs = map[string]string{
@@ -248,13 +234,20 @@ var mysql8xConfigs = map[string]string{
 		"NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY",
 
 	"binlog_expire_logs_seconds": "1209600", // 14 days = 14 * 24 * 60 * 60
+}
 
-	// use 5.7 auth plugin to be backward compatible
+// mysql80AuthPluginConfig is not applied on MySQL 8.4+ where mysql_native_password is unavailable.
+var mysql80AuthPluginConfig = map[string]string{
 	"default-authentication-plugin": "mysql_native_password",
 }
 
-var mysqlMasterSlaveBooleanConfigs = []string{
-	// Safety
-	"skip-name-resolve",
-	"skip-host-cache",
+func mysqlMasterSlaveBooleanConfigsForVersion(v semver.Version) []string {
+	out := []string{
+		// Safety
+		"skip-name-resolve",
+	}
+	if !mysqlversion.AtLeastMySQL8030(v) {
+		out = append(out, "skip-host-cache")
+	}
+	return out
 }

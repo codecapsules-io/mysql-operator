@@ -24,8 +24,19 @@ The following table contains the configuration parameters for mysql-operator and
 | `sidecar57.image.tag`           | Docker image tag for sidecar image for MySQL 5.7                                              | `latest`                                                |
 | `sidecar80.image.repository`    | Docker repository for sidecar image for MySQL 8.0                                             | `docker.io/bitpoke/mysql-operator-sidecar-8.0`          |
 | `sidecar80.image.tag`           | Docker image tag for sidecar image for MySQL 8.0                                              | `latest`                                                |
+| `sidecar84.image.repository`    | Optional sidecar for Percona Server 8.4 LTS (empty = use sidecar80)                           | `empty`                                                 |
+| `sidecar84.image.tag`           | Tag for optional 8.4 sidecar                                                                   | `latest`                                                |
+| `sidecar97.image.repository`    | Optional sidecar for Percona Server 9.7 LTS (empty = use sidecar80)                           | `empty`                                                 |
+| `sidecar97.image.tag`           | Tag for optional 9.7 sidecar                                                                   | `latest`                                                |
+| `mysqlVersionCatalog.enabled`   | Mount a ConfigMap of `semver=image` lines and pass `--mysql-version-catalog-file`             | `false`                                                 |
+| `mysqlVersionCatalog.mountPath` | Directory in the operator pod where the catalog file is mounted                                | `/etc/mysql-operator/catalog`                           |
+| `mysqlVersionCatalog.fileName`  | File name inside the ConfigMap                                                                | `versions.properties`                                   |
+| `mysqlVersionProfileOverlay.enabled`   | Mount profile overlay YAML and pass `--mysql-profile-overlay-file`                          | `false`                                                 |
+| `mysqlVersionProfileOverlay.mountPath` | Directory for overlay file in the operator pod                                              | `/etc/mysql-operator/profile-overlay`                   |
+| `mysqlVersionProfileOverlay.fileName`  | ConfigMap key / file name                                                                   | `overlay.yaml`                                          |
+| `mysqlVersionProfileOverlay.data`      | YAML body (see docs/mysql-version-profiles.md)                                              | `""`                                                    |
 | `metricsExporter.image.repository`    | Docker repository for MySQL metrics exporter                                            | `docker.io/prom/mysqld-exporter`                        |
-| `metricsExporter.image.tag`           | Docker image tag for MySQL metrics exporter                                             | `v0.13.0`                                                      |
+| `metricsExporter.image.tag`           | Docker image tag for MySQL metrics exporter                                             | `v0.16.0`                                                      |
 | `imagePullSecrets`              | Controller image pull secrets                                                                 | `[]`                                                    |
 | `extraEnv`                      | MySQL Operator controller extra environment variables                                         | `[]`                                                    |
 | `extraArgs`                     | MySQL Operator controller extra command line arguments                                        | `[]`                                                    |

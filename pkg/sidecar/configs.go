@@ -31,6 +31,8 @@ import (
 	"github.com/presslabs/controller-util/rand"
 
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
+	"github.com/bitpoke/mysql-operator/pkg/options"
 	"github.com/bitpoke/mysql-operator/pkg/util/constants"
 )
 
@@ -216,16 +218,30 @@ func (cfg *Config) XtrabackupPrepareArgs() []string {
 
 // NewConfig returns a pointer to Config configured from environment variables
 func NewConfig() *Config {
+	if err := mysqlversioning.InitDefault(options.GetOptions(), os.Getenv("MYSQL_OPERATOR_PROFILE_OVERLAY_FILE")); err != nil {
+		panic(err)
+	}
+
 	var (
 		err          error
-		hbPass       string
 		eData        bool
 		offset       int
 		customOffset string
 	)
 
-	if hbPass, err = rand.AlphaNumericString(10); err != nil {
-		panic(err)
+	hbUser := strings.TrimSpace(getEnvValue("HEARTBEAT_USER"))
+	if hbUser == "" {
+		hbUser = constants.HeartBeatMySQLUser
+	}
+	hbPass := strings.TrimSpace(getEnvValue("HEARTBEAT_PASSWORD"))
+	if hbPass == "" {
+		if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+			panic("HEARTBEAT_PASSWORD is unset in-cluster: ensure the operated secret includes HEARTBEAT_PASSWORD " +
+				"(upgrade mysql-operator and let it reconcile the secret), then restart mysql pods")
+		}
+		if hbPass, err = rand.AlphaNumericString(10); err != nil {
+			panic(err)
+		}
 	}
 
 	if eData, err = checkIfDataExists(); err != nil {
@@ -269,7 +285,7 @@ func NewConfig() *Config {
 		OrchestratorUser:     getEnvValue("ORC_TOPOLOGY_USER"),
 		OrchestratorPassword: getEnvValue("ORC_TOPOLOGY_PASSWORD"),
 
-		HeartBeatUser:     heartBeatUserName,
+		HeartBeatUser:     hbUser,
 		HeartBeatPassword: hbPass,
 
 		ExistsMySQLData: eData,
@@ -288,6 +304,24 @@ func NewConfig() *Config {
 
 		MySQLVersion: mysqlVersion,
 	}
+
+	prof := mysqlversioning.ProfileFor(mysqlVersion)
+	log.Info("sidecar NewConfig summary",
+		"hostname", cfg.Hostname,
+		"cluster", cfg.ClusterName,
+		"namespace", cfg.Namespace,
+		"mysqlVersion", mysqlVersion.String(),
+		"profile", prof.Name(),
+		"existsMySQLData", eData,
+		"operatorUser", cfg.OperatorUser,
+		"operatorPasswordLen", len(cfg.OperatorPassword),
+		"heartbeatUser", cfg.HeartBeatUser,
+		"heartbeatPasswordLen", len(cfg.HeartBeatPassword),
+		"metricsUser", cfg.MetricsUser,
+		"metricsPasswordLen", len(cfg.MetricsPassword),
+		"orchestratorUser", cfg.OrchestratorUser,
+		"orchestratorPasswordLen", len(cfg.OrchestratorPassword),
+	)
 
 	return cfg
 }

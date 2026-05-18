@@ -49,8 +49,10 @@ var log = logf.Log.WithName(controllerName)
 
 const controllerName = "controller.mysqlNode"
 
-// mysqlReconciliationTimeout the time that should last a reconciliation (this is used as a MySQL timout too)
-const mysqlReconciliationTimeout = 5 * time.Second
+// mysqlReconciliationTimeout bounds a single reconcile (MySQL waits, init SQL, node setup).
+// First mysqld start can take longer than a few seconds; init-file may create sys_operator.status
+// shortly after the server begins accepting connections.
+const mysqlReconciliationTimeout = 2 * time.Minute
 
 // skipGTIDPurgedAnnotations, if this annotations is set on the cluster then the node controller skip setting GTID_PURGED variable.
 // this is the case for the upgrade when the old cluster has already set GTID_PURGED
@@ -125,8 +127,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		},
 
 		// trigger node initialization only on pod update, after pod is created for a while
-		// also the pod should not be initialized before and should be running because the init
-		// timeout is ~5s (see above) and the cluster status can become obsolete
+		// also the pod should not be initialized before and should be running because the reconcile
+		// uses a bounded MySQL wait context (see mysqlReconciliationTimeout) and the cluster status can become obsolete
 		UpdateFunc: func(evt event.UpdateEvent) bool {
 			return isOwnedByMySQL(evt.ObjectNew) && isRunning(evt.ObjectNew) && !isReady(evt.ObjectNew)
 		},
@@ -221,6 +223,11 @@ func (r *ReconcileMysqlNode) Reconcile(ctx context.Context, request reconcile.Re
 
 	// wait for mysql to be ready
 	if err = sql.Wait(ctx); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// init-file (operator-init.sql) may still be running after TCP accepts connections
+	if err = sql.WaitForOperatorStatusTable(ctx); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -330,7 +337,7 @@ func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlClust
 		c.User, c.Password, host, constants.MysqlPort,
 	)
 
-	return r.sqlFactory(dsn, host)
+	return r.sqlFactory(dsn, host, cluster.GetMySQLSemVer())
 }
 
 type credentials struct {

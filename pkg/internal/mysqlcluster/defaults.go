@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 	"github.com/bitpoke/mysql-operator/pkg/util/constants"
 )
@@ -57,7 +58,7 @@ func (cluster *MysqlCluster) SetDefaults(opt *options.Options) {
 
 	// set mysql version if not set to avoid spamming logs
 	if len(cluster.Spec.MysqlVersion) == 0 {
-		cluster.Spec.MysqlVersion = constants.MySQLDefaultVersion.String()
+		cluster.Spec.MysqlVersion = constants.MySQLDefaultVersion
 	}
 
 	// set pod antiaffinity to nodes stay away from other nodes.
@@ -92,8 +93,10 @@ func (cluster *MysqlCluster) SetDefaults(opt *options.Options) {
 	}
 
 	if mem := cluster.Spec.PodSpec.Resources.Requests.Memory(); mem != nil {
-		logFileSize := humanizeSize(computeInnodbLogFileSize(mem))
-		setConfigIfNotSet(cluster.Spec.MysqlConf, "innodb-log-file-size", logFileSize)
+		perFile := computeInnodbLogFileSize(mem)
+		v := cluster.GetMySQLSemVer()
+		key, sizeBytes := mysqlversioning.ProfileFor(v).InnoDBOperatorLogSizing(v, perFile)
+		setConfigIfNotSet(cluster.Spec.MysqlConf, key, humanizeSize(sizeBytes))
 	}
 
 	if pvc := cluster.Spec.VolumeSpec.PersistentVolumeClaim; pvc != nil {

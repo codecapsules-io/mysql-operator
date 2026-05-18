@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/blang/semver"
 	"github.com/imdario/mergo"
 	"github.com/presslabs/controller-util/mergo/transformers"
 	"github.com/presslabs/controller-util/syncer"
@@ -34,6 +35,7 @@ import (
 	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlbackup"
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 	"github.com/bitpoke/mysql-operator/pkg/util/constants"
 )
@@ -167,9 +169,11 @@ func (s *deletionJobSyncer) ensureContainers() []core.Container {
 
 	rcloneCommand = append(rcloneCommand, "delete", bucketForRclone(s.backup.Spec.BackupURL))
 
-	image := s.opt.SidecarMysql57Image
+	image := s.opt.SidecarMysql8Image
 	if s.cluster != nil {
 		image = s.cluster.GetSidecarImage()
+	} else if rt := mysqlversioning.Default(); rt != nil {
+		image = rt.Resolver.SidecarImage(rt.Registry.MustResolve(semver.MustParse("8.0.30")).SidecarProfileKey())
 	}
 
 	container := core.Container{

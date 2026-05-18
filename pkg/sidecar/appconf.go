@@ -26,13 +26,28 @@ import (
 
 	"github.com/go-ini/ini"
 
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/util/constants"
 )
 
 // RunConfigCommand generates my.cnf, client.cnf and 10-dynamic.cnf files.
 // nolint: gocyclo
 func RunConfigCommand(cfg *Config) error {
-	log.Info("configuring server", "host", cfg.Hostname)
+	prof := mysqlversioning.ProfileFor(cfg.MySQLVersion)
+	gh := prof.GrantHints()
+	log.Info("RunConfigCommand start",
+		"host", cfg.Hostname,
+		"cluster", cfg.ClusterName,
+		"namespace", cfg.Namespace,
+		"mysqlVersion", cfg.MySQLVersion.String(),
+		"profile", prof.Name(),
+		"existsMySQLData", cfg.ExistsMySQLData,
+		"orchestratorMetadataTable", gh.OrchestratorMetadataTable,
+		"heartbeatUser", cfg.HeartBeatUser,
+		"heartbeatPasswordLen", len(cfg.HeartBeatPassword),
+		"operatorUser", cfg.OperatorUser,
+		"operatorPasswordLen", len(cfg.OperatorPassword),
+	)
 	var err error
 
 	if err = copyFile(mountConfigDir+"/my.cnf", configDir+"/my.cnf"); err != nil {
@@ -70,9 +85,17 @@ func RunConfigCommand(cfg *Config) error {
 	}
 
 	initFilePath := path.Join(confDPath, "operator-init.sql")
-	if err = ioutil.WriteFile(initFilePath, initFileQuery(cfg, gtidPurged), 0644); err != nil {
+	initBody := initFileQuery(cfg, gtidPurged)
+	if err = ioutil.WriteFile(initFilePath, initBody, 0644); err != nil {
 		return fmt.Errorf("failed to write init-file: %s", err)
 	}
+	approxStmts := strings.Count(string(initBody), ";\n") + 1
+	log.Info("wrote operator-init.sql",
+		"path", initFilePath,
+		"bytes", len(initBody),
+		"approxStatements", approxStmts,
+		"gtidPurgedLen", len(gtidPurged),
+	)
 
 	// mysql server utility user configs
 	if initCFG, err = getInitFileConfigs(initFilePath); err != nil {
@@ -91,8 +114,9 @@ func RunConfigCommand(cfg *Config) error {
 		return fmt.Errorf("failed to save configs: %s", err)
 	}
 
-	// mysql heartbeat connect credentials
-	if heartbeatCFG, err = getClientConfigs(cfg.HeartBeatUser, cfg.HeartBeatPassword); err != nil {
+	// mysql heartbeat: Unix socket avoids Perl DBD::mysql + caching_sha2_password TCP/RSA quirks
+	// ("Authentication requires secure connection" despite get-server-public-key in option files).
+	if heartbeatCFG, err = getHeartbeatClientConfigs(cfg.HeartBeatUser, cfg.HeartBeatPassword); err != nil {
 		return fmt.Errorf("failed to get heartbeat configs: %s", err)
 	}
 
@@ -100,7 +124,36 @@ func RunConfigCommand(cfg *Config) error {
 		return fmt.Errorf("failed to save heartbeat configs: %s", err)
 	}
 
+	if err = writeLoopbackClientHints(); err != nil {
+		return fmt.Errorf("failed to write loopback client hints: %s", err)
+	}
+
+	log.Info("RunConfigCommand completed",
+		"initFile", initFilePath,
+		"clientConf", confClientPath,
+		"heartbeatConf", confHeartbeatPath,
+		"loopbackHints", constants.ConfClientLoopbackPath,
+		"heartbeatSocket", path.Join(constants.DataVolumeMountPath, "mysql.sock"),
+	)
 	return nil
+}
+
+// writeLoopbackClientHints writes a defaults file without credentials so operators can run, e.g.:
+// mysql --defaults-file=/etc/mysql/client-loopback.cnf -uroot -p
+// over 127.0.0.1 with caching_sha2_password without TLS (RSA public key exchange).
+func writeLoopbackClientHints() error {
+	cfg := ini.Empty()
+	client := cfg.Section("client")
+	if _, err := client.NewKey("host", "127.0.0.1"); err != nil {
+		return err
+	}
+	if _, err := client.NewKey("port", mysqlPort); err != nil {
+		return err
+	}
+	if _, err := client.NewKey("get-server-public-key", "1"); err != nil {
+		return err
+	}
+	return cfg.SaveTo(constants.ConfClientLoopbackPath)
 }
 
 func getClientConfigs(user, pass string) (*ini.File, error) {
@@ -112,6 +165,34 @@ func getClientConfigs(user, pass string) (*ini.File, error) {
 		return nil, err
 	}
 	if _, err := client.NewKey("port", mysqlPort); err != nil {
+		return nil, err
+	}
+	if _, err := client.NewKey("user", user); err != nil {
+		return nil, err
+	}
+	if _, err := client.NewKey("password", pass); err != nil {
+		return nil, err
+	}
+	// caching_sha2_password (MySQL 8+ default) over loopback TCP without TLS needs the server RSA
+	// public key exchange; otherwise clients fail with "Authentication requires secure connection".
+	// Safe for 127.0.0.1-only utility accounts (operator client, metrics exporter). See:
+	// https://dev.mysql.com/doc/refman/8.0/en/caching-sha2-pluggable-authentication.html
+	if _, err := client.NewKey("get-server-public-key", "1"); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// getHeartbeatClientConfigs builds [client] for pt-heartbeat: Unix socket to local mysqld only
+// (same pod; datadir mounted read-only on the heartbeat container). No TCP — avoids Perl DBD::mysql
+// ignoring get-server-public-key from defaults with caching_sha2_password.
+func getHeartbeatClientConfigs(user, pass string) (*ini.File, error) {
+	cfg := ini.Empty()
+	client := cfg.Section("client")
+
+	sock := path.Join(constants.DataVolumeMountPath, "mysql.sock")
+	if _, err := client.NewKey("socket", sock); err != nil {
 		return nil, err
 	}
 	if _, err := client.NewKey("user", user); err != nil {
@@ -154,12 +235,34 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 		"SET @@SESSION.SQL_LOG_BIN = 0",
 	}
 
+	hints := mysqlversioning.ProfileFor(cfg.MySQLVersion).GrantHints()
+
+	// Create sys_operator and status before READ_ONLY and user DDL. If a later statement
+	// fails on a newer server (grant syntax, etc.), init-file would otherwise stop before
+	// the status table exists and probes / node init see Error 1146.
+	queries = append(queries, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", toolsDbName))
+
+	// when the status.ibd file does not exist, need to delete the status table
+	_, err := os.Stat(path.Join(dataDir, constants.OperatorDbName, constants.OperatorStatusTableName+".ibd"))
+	if os.IsNotExist(err) {
+		queries = append(queries, fmt.Sprintf("DROP TABLE IF EXISTS %s.%s",
+			constants.OperatorDbName, constants.OperatorStatusTableName))
+	}
+
+	// nolint: gosec
+	queries = append(queries, fmt.Sprintf(
+		"CREATE TABLE IF NOT EXISTS %[1]s.%[2]s ("+
+			"  name varchar(64) PRIMARY KEY,"+
+			"  value varchar(8192) NOT NULL\n)",
+		constants.OperatorDbName, constants.OperatorStatusTableName))
+
+	// nolint: gosec
+	queries = append(queries, fmt.Sprintf("REPLACE INTO %s.%s VALUES ('%s', '0')",
+		constants.OperatorDbName, constants.OperatorStatusTableName, "configured"))
+
 	// set server as read only
 	// https://github.com/bitpoke/mysql-operator/issues/509
 	queries = append(queries, "SET GLOBAL READ_ONLY = 1")
-
-	// create operator database because GRANTS need it
-	queries = append(queries, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", toolsDbName))
 
 	// configure operator utility user
 	queries = append(queries, createUserQuery(cfg.OperatorUser, cfg.OperatorPassword, "%",
@@ -167,18 +270,16 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 		[]string{"REPLICATION SLAVE"}, "*.*",
 		[]string{"ALL"}, fmt.Sprintf("%s.*", toolsDbName))...)
 
+	replMetaTable := hints.OrchestratorMetadataTable
+
 	// configure orchestrator user
 	queries = append(queries, createUserQuery(cfg.OrchestratorUser, cfg.OrchestratorPassword, "%",
 		[]string{"SUPER", "PROCESS", "REPLICATION SLAVE", "REPLICATION CLIENT", "RELOAD"}, "*.*",
-		[]string{"SELECT"}, "mysql.slave_master_info",
+		[]string{"SELECT"}, replMetaTable,
 		[]string{"SELECT", "CREATE"}, fmt.Sprintf("%s.%s", toolsDbName, toolsHeartbeatTableName))...)
 
 	// configure replication user
-	replPermissions := []string{"SELECT", "PROCESS", "RELOAD", "LOCK TABLES", "REPLICATION CLIENT", "REPLICATION SLAVE"}
-	if cfg.MySQLVersion.Major == 8 {
-		// if it's a mysql 8 then the backup user needs BACKUP_ADMIN permissions to take backups
-		replPermissions = append(replPermissions, "BACKUP_ADMIN")
-	}
+	replPermissions := hints.ReplicationUserPrivileges
 	queries = append(queries, createUserQuery(cfg.ReplicationUser, cfg.ReplicationPassword, "%",
 		replPermissions, "*.*")...)
 
@@ -189,36 +290,14 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 
 	queries = append(queries, fmt.Sprintf("ALTER USER %s@'127.0.0.1' WITH MAX_USER_CONNECTIONS 3", cfg.MetricsUser))
 
-	// configure heartbeat user
+	// configure heartbeat user (127.0.0.1 for TCP tools; localhost for Unix socket / pt-heartbeat)
 	// because of pt-heartbeat make sure not to have ALL or SUPER privileges:
 	// https://github.com/percona/percona-toolkit/blob/e85ce15ef24bc4614b4d2f13792fa73583d68f8e/bin/pt-heartbeat#L6433
-	queries = append(queries, createUserQuery(cfg.HeartBeatUser, cfg.HeartBeatPassword, "127.0.0.1",
-		[]string{"CREATE", "SELECT", "DELETE", "UPDATE", "INSERT"}, fmt.Sprintf("%s.%s", toolsDbName, toolsHeartbeatTableName),
-		[]string{"REPLICATION CLIENT"}, "*.*")...)
-
-	// when the status.ibd file does not exist
-	// need to delete the status table
-	_, err := os.Stat(path.Join(dataDir, constants.OperatorDbName, constants.OperatorStatusTableName+".ibd"))
-	if os.IsNotExist(err) {
-		queries = append(queries, fmt.Sprintf("DROP TABLE IF EXISTS %s.%s",
-			constants.OperatorDbName, constants.OperatorStatusTableName))
+	for _, host := range []string{"127.0.0.1", "localhost"} {
+		queries = append(queries, createUserQuery(cfg.HeartBeatUser, cfg.HeartBeatPassword, host,
+			[]string{"CREATE", "SELECT", "DELETE", "UPDATE", "INSERT"}, fmt.Sprintf("%s.%s", toolsDbName, toolsHeartbeatTableName),
+			[]string{"REPLICATION CLIENT"}, "*.*")...)
 	}
-
-	// create the status table used by the operator to configure or to mask MySQL node ready
-	// CSV engine for this table can't be used because we use REPLACE statement that requires PRIMARY KEY or
-	// UNIQUE KEY index. Also, the table may exists (in case of pod restart) and should not be changed.
-	// NOTE: value column should be big enough to contain all GTIDs from xtrabackup_slave_info file
-	// nolint: gosec
-	queries = append(queries, fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS %[1]s.%[2]s ("+
-			"  name varchar(64) PRIMARY KEY,"+
-			"  value varchar(8192) NOT NULL\n)",
-		constants.OperatorDbName, constants.OperatorStatusTableName))
-
-	// mark node as not configured at startup, the operator will mark it configured
-	// nolint: gosec
-	queries = append(queries, fmt.Sprintf("REPLACE INTO %s.%s VALUES ('%s', '0')",
-		constants.OperatorDbName, constants.OperatorStatusTableName, "configured"))
 
 	if len(gtidPurged) != 0 {
 		// if gtid is found in the backup then set it in the status table to be processed by the operator
@@ -227,14 +306,16 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 			constants.OperatorDbName, constants.OperatorStatusTableName, "backup_gtid_purged", gtidPurged))
 	}
 
-	// if just recently the node was initialized from a backup then a RESET SLAVE ALL query should be ran
-	// to avoid not replicate from previous master.
+	// if just recently the node was initialized from a backup then replication must be reset
+	// to avoid replicating from a previous source.
 	if cfg.ShouldCloneFromBucket() {
-		queries = append(queries, "RESET SLAVE ALL")
+		queries = append(queries, hints.ResetReplicationAll)
 	}
 
-	if len(cfg.InitFileExtraSQL[0]) > 0 {
-		queries = append(queries, cfg.InitFileExtraSQL...)
+	for _, stmt := range cfg.InitFileExtraSQL {
+		if strings.TrimSpace(stmt) != "" {
+			queries = append(queries, stmt)
+		}
 	}
 
 	return []byte(strings.Join(queries, ";\n") + ";\n")

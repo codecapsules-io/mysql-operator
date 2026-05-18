@@ -33,6 +33,10 @@ func (f *fakeSQLRunner) Wait(ctx context.Context) error {
 	return nil
 }
 
+func (f *fakeSQLRunner) WaitForOperatorStatusTable(ctx context.Context) error {
+	return nil
+}
+
 func (f *fakeSQLRunner) DisableSuperReadOnly(ctx context.Context) (func(), error) {
 	return func() {}, nil
 }

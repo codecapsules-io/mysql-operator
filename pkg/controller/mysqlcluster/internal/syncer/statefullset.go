@@ -17,13 +17,14 @@ limitations under the License.
 package mysqlcluster
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/blang/semver"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/imdario/mergo"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,11 +32,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/presslabs/controller-util/mergo/transformers"
 	"github.com/presslabs/controller-util/syncer"
 
 	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 	"github.com/bitpoke/mysql-operator/pkg/util/constants"
 )
@@ -51,6 +53,7 @@ const (
 // containers names
 const (
 	// init containers
+	containerDatadirChownName = versionupgrade.DatadirChownInitContainerName
 	containerCloneAndInitName = "init"
 	containerMySQLInitName    = "mysql-init-only"
 
@@ -67,6 +70,9 @@ type sfsSyncer struct {
 	configMapRevision string
 	secretRevision    string
 	opt               *options.Options
+	scheme            *runtime.Scheme
+	client            client.Client
+	rolloutVersion    semver.Version
 }
 
 // NewStatefulSetSyncer returns a syncer for stateful set
@@ -83,15 +89,19 @@ func NewStatefulSetSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysq
 		configMapRevision: cmRev,
 		secretRevision:    sctRev,
 		opt:               opt,
+		scheme:            scheme,
+		client:            c,
 	}
 
-	return syncer.NewObjectSyncer("StatefulSet", cluster.Unwrap(), obj, c, func() error {
-		return sync.SyncFn(obj)
+	return newStatefulSetObjectSyncer("StatefulSet", cluster.Unwrap(), obj, c, func(ctx context.Context) error {
+		return sync.SyncFn(ctx, obj)
 	})
 }
 
-func (s *sfsSyncer) SyncFn(in runtime.Object) error {
+func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 	out := in.(*apps.StatefulSet)
+
+	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(ctx, s.client, s.cluster, out)
 
 	s.cluster.Status.ReadyNodes = int(out.Status.ReadyReplicas)
 
@@ -111,15 +121,10 @@ func (s *sfsSyncer) SyncFn(in runtime.Object) error {
 	out.Spec.Template.ObjectMeta.Annotations["prometheus.io/scrape"] = "true"
 	out.Spec.Template.ObjectMeta.Annotations["prometheus.io/port"] = fmt.Sprintf("%d", ExporterPort)
 
-	err := mergo.Merge(&out.Spec.Template.Spec, s.ensurePodSpec(), mergo.WithTransformers(transformers.PodSpec))
-	if err != nil {
-		return err
-	}
-
-	// mergo will add new keys for NodeSelector and Tolerations and keep the others instead of removing them
-	// Fixes: https://github.com/bitpoke/mysql-operator/issues/454
-	out.Spec.Template.Spec.NodeSelector = s.cluster.Spec.PodSpec.NodeSelector
-	out.Spec.Template.Spec.Tolerations = s.cluster.Spec.PodSpec.Tolerations
+	desiredPod := s.ensurePodSpec(ctx, out)
+	out.Spec.Template.Spec = desiredPod
+	out.Spec.Template.Spec.SecurityContext = s.ensurePodSecurityContext()
+	defaultPodSpec(&out.Spec.Template.Spec, s.scheme)
 
 	if s.cluster.Spec.VolumeSpec.PersistentVolumeClaim != nil {
 		out.Spec.VolumeClaimTemplates = s.ensureVolumeClaimTemplates(out.Spec.VolumeClaimTemplates)
@@ -128,17 +133,12 @@ func (s *sfsSyncer) SyncFn(in runtime.Object) error {
 	return nil
 }
 
-func (s *sfsSyncer) ensurePodSpec() core.PodSpec {
-	fsGroup := int64(999) // mysql user UID
+func (s *sfsSyncer) ensurePodSpec(ctx context.Context, sts *apps.StatefulSet) core.PodSpec {
 	return core.PodSpec{
-		InitContainers: s.ensureInitContainersSpec(),
-		Containers:     s.ensureContainersSpec(),
+		InitContainers: s.ensureInitContainersSpec(ctx, sts),
+		Containers:     s.ensureContainersSpec(sts),
 		Volumes:        s.ensureVolumes(),
-		SecurityContext: &core.PodSecurityContext{
-			// mount volumes with mysql gid
-			FSGroup:   &fsGroup,
-			RunAsUser: &fsGroup,
-		},
+		// SecurityContext is set in SyncFn so a removed RunAsUser clears stale values on the live StatefulSet.
 		Affinity:           s.cluster.Spec.PodSpec.Affinity,
 		ImagePullSecrets:   s.cluster.Spec.PodSpec.ImagePullSecrets,
 		NodeSelector:       s.cluster.Spec.PodSpec.NodeSelector,
@@ -148,8 +148,31 @@ func (s *sfsSyncer) ensurePodSpec() core.PodSpec {
 	}
 }
 
+func (s *sfsSyncer) serverImageForVersion(v semver.Version) string {
+	img, err := mysqlversioning.ServerImage(s.opt, v, &s.cluster.Spec)
+	if err != nil {
+		return s.cluster.GetMysqlImage()
+	}
+	return img
+}
+
+func (s *sfsSyncer) sidecarImageForVersion(v semver.Version) string {
+	return mysqlversioning.SidecarImageFor(v, &s.cluster.Spec, s.cluster.Spec.SidecarImage)
+}
+
+// ensurePodSecurityContext follows mysqlversioning.Profile PodSecurityHints (version line + image).
+func (s *sfsSyncer) ensurePodSecurityContext() *core.PodSecurityContext {
+	h := mysqlversioning.ProfileFor(s.rolloutVersion).PodSecurityHints(s.cluster.IsPerconaImage())
+	fs := h.FSGroup
+	out := &core.PodSecurityContext{FSGroup: &fs}
+	if h.RunAsUser != nil {
+		out.RunAsUser = h.RunAsUser
+	}
+	return out
+}
+
 func (s *sfsSyncer) ensureContainer(name, image string, args []string) core.Container {
-	return core.Container{
+	c := core.Container{
 		Name:            name,
 		Image:           image,
 		ImagePullPolicy: s.cluster.Spec.PodSpec.ImagePullPolicy,
@@ -157,6 +180,26 @@ func (s *sfsSyncer) ensureContainer(name, image string, args []string) core.Cont
 		EnvFrom:         s.getEnvSourcesFor(name),
 		Env:             s.getEnvFor(name),
 		VolumeMounts:    s.getVolumeMountsFor(name),
+	}
+	if sc := s.mysqlProcessSecurityContext(name); sc != nil {
+		c.SecurityContext = sc
+	}
+	return c
+}
+
+func (s *sfsSyncer) mysqlProcessSecurityContext(containerName string) *core.SecurityContext {
+	if containerName != containerMysqlName && containerName != containerMySQLInitName {
+		return nil
+	}
+	h := mysqlversioning.ProfileFor(s.rolloutVersion).PodSecurityHints(s.cluster.IsPerconaImage())
+	if h.MysqlRunAsUser == nil || h.MysqlRunAsGroup == nil {
+		return nil
+	}
+	u := *h.MysqlRunAsUser
+	g := *h.MysqlRunAsGroup
+	return &core.SecurityContext{
+		RunAsUser:  &u,
+		RunAsGroup: &g,
 	}
 }
 
@@ -221,7 +264,7 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	})
 	env = append(env, core.EnvVar{
 		Name:  "MY_MYSQL_VERSION",
-		Value: s.cluster.GetMySQLSemVer().String(),
+		Value: s.rolloutVersion.String(),
 	})
 
 	if len(s.cluster.Spec.InitBucketURL) > 0 && isCloneAndInit(name) {
@@ -301,12 +344,9 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	sctOpName := s.cluster.GetNameForResource(mysqlcluster.Secret)
 	switch name {
 	case containerExporterName:
-		env = append(env, s.envVarFromSecret(sctOpName, "USER", "METRICS_EXPORTER_USER", false))
-		env = append(env, s.envVarFromSecret(sctOpName, "PASSWORD", "METRICS_EXPORTER_PASSWORD", false))
-		env = append(env, core.EnvVar{
-			Name:  "DATA_SOURCE_NAME",
-			Value: fmt.Sprintf("$(USER):$(PASSWORD)@(127.0.0.1:%d)/", s.cluster.ExporterDataSourcePort()),
-		})
+		// mysqld_exporter >=0.15 removed DATA_SOURCE_NAME; use flags + MYSQLD_EXPORTER_PASSWORD.
+		// See https://github.com/prometheus/mysqld_exporter/releases/tag/v0.15.0
+		env = append(env, s.envVarFromSecret(sctOpName, "MYSQLD_EXPORTER_PASSWORD", "METRICS_EXPORTER_PASSWORD", false))
 	case containerMySQLInitName:
 		// set MySQL init only flag for init container
 		env = append(env, core.EnvVar{
@@ -338,26 +378,33 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	return env
 }
 
-func (s *sfsSyncer) ensureInitContainersSpec() []core.Container {
+func (s *sfsSyncer) ensureInitContainersSpec(ctx context.Context, sts *apps.StatefulSet) []core.Container {
 	initCs := []core.Container{}
 
-	// add user defined init containers
+	if versionupgrade.NeedsDatadirChownInit(ctx, s.client, s.cluster, sts) {
+		chown := s.ensureDatadirChownInitContainer()
+		if len(chown.Command) > 0 {
+			chown.Resources = s.ensureResources(containerDatadirChownName)
+			initCs = append(initCs, chown)
+		}
+	}
+
 	if len(s.cluster.Spec.PodSpec.InitContainers) > 0 {
 		initCs = append(initCs, s.cluster.Spec.PodSpec.InitContainers...)
 	}
 
 	// clone and init container
 	cloneInit := s.ensureContainer(containerCloneAndInitName,
-		s.cluster.GetSidecarImage(),
+		s.sidecarImageForVersion(s.rolloutVersion),
 		[]string{"clone-and-init"},
 	)
 	cloneInit.Resources = s.ensureResources(containerCloneAndInitName)
 	initCs = append(initCs, cloneInit)
 
 	// add init container for MySQL if docker image supports this
-	if s.cluster.ShouldHaveInitContainerForMysql() {
+	if s.cluster.IsPerconaImage() && mysqlversioning.ProfileFor(s.rolloutVersion).WantsPerconaInitContainer(s.rolloutVersion) {
 		mysqlInit := s.ensureContainer(containerMySQLInitName,
-			s.cluster.GetMysqlImage(),
+			s.serverImageForVersion(s.rolloutVersion),
 			[]string{})
 		mysqlInit.Resources = s.ensureResources(containerMySQLInitName)
 		initCs = append(initCs, mysqlInit)
@@ -366,10 +413,36 @@ func (s *sfsSyncer) ensureInitContainersSpec() []core.Container {
 	return initCs
 }
 
-func (s *sfsSyncer) ensureContainersSpec() []core.Container {
+func (s *sfsSyncer) ensureDatadirChownInitContainer() core.Container {
+	h := mysqlversioning.ProfileFor(s.rolloutVersion).PodSecurityHints(s.cluster.IsPerconaImage())
+	if h.MysqlRunAsUser == nil || h.MysqlRunAsGroup == nil {
+		return core.Container{Name: containerDatadirChownName}
+	}
+	u := *h.MysqlRunAsUser
+	g := *h.MysqlRunAsGroup
+	root := int64(0)
+	return core.Container{
+		Name:            containerDatadirChownName,
+		Image:           s.cluster.GetMysqlImage(),
+		ImagePullPolicy: s.cluster.Spec.PodSpec.ImagePullPolicy,
+		Command:         []string{"/bin/sh", "-ec"},
+		Args: []string{fmt.Sprintf(
+			`if [ ! -f %s/ibdata1 ] && [ ! -d %s/mysql ]; then exit 0; fi
+chown -R %d:%d %s`,
+			DataVolumeMountPath, DataVolumeMountPath, u, g, DataVolumeMountPath,
+		)},
+		SecurityContext: &core.SecurityContext{RunAsUser: &root},
+		VolumeMounts: []core.VolumeMount{
+			{Name: dataVolumeName, MountPath: DataVolumeMountPath},
+		},
+	}
+}
+
+func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container {
+	_ = sts
 	// MYSQL container
 	mysql := s.ensureContainer(containerMysqlName,
-		s.cluster.GetMysqlImage(),
+		s.serverImageForVersion(s.rolloutVersion),
 		[]string{},
 	)
 	mysql.Ports = ensurePorts(core.ContainerPort{
@@ -416,7 +489,7 @@ func (s *sfsSyncer) ensureContainersSpec() []core.Container {
 
 	// SIDECAR container
 	sidecar := s.ensureContainer(containerSidecarName,
-		s.cluster.GetSidecarImage(),
+		s.sidecarImageForVersion(s.rolloutVersion),
 		[]string{"config-and-serve"},
 	)
 	sidecar.Ports = ensurePorts(core.ContainerPort{
@@ -432,10 +505,16 @@ func (s *sfsSyncer) ensureContainersSpec() []core.Container {
 		},
 	})
 
-	// METRICS container
+	// METRICS container (mysqld_exporter >=0.15: no DATA_SOURCE_NAME; config merges a synthetic [client]
+	// stanza with --config.my-cnf. Default ".my.cnf" can pick up an empty/bad file in cwd — force /dev/null.
+	// Do not add a second --config.my-cnf in metricsExporterExtraArgs (kingpin rejects duplicate flags).
+	// See https://github.com/prometheus/mysqld_exporter/releases/tag/v0.15.0
 	exporterCommand := []string{
+		"--config.my-cnf=/dev/null",
 		fmt.Sprintf("--web.listen-address=0.0.0.0:%d", ExporterPort),
 		fmt.Sprintf("--web.telemetry-path=%s", ExporterPath),
+		fmt.Sprintf("--mysqld.address=127.0.0.1:%d", s.cluster.ExporterDataSourcePort()),
+		fmt.Sprintf("--mysqld.username=%s", constants.MetricsExporterMySQLUser),
 		"--collect.heartbeat",
 		fmt.Sprintf("--collect.heartbeat.database=%s", constants.OperatorDbName),
 	}
@@ -464,7 +543,8 @@ func (s *sfsSyncer) ensureContainersSpec() []core.Container {
 		},
 	})
 
-	// PT-HEARTBEAT container
+	// PT-HEARTBEAT container (explicit --socket: pt-heartbeat's DSN defaults to TCP 127.0.0.1, which
+	// ignores socket-only defaults for Perl DBD::mysql and breaks caching_sha2 / host-matched grants.)
 	heartbeat := s.ensureContainer(containerHeartBeatName,
 		s.cluster.GetSidecarImage(),
 		[]string{
@@ -476,6 +556,7 @@ func (s *sfsSyncer) ensureContainersSpec() []core.Container {
 			"--table", "heartbeat",
 			"--utc",
 			"--defaults-file", constants.ConfHeartBeatPath,
+			"--socket", fmt.Sprintf("%s/mysql.sock", constants.DataVolumeMountPath),
 			// it's important to exit when exceeding more than 20 failed attempts otherwise
 			// pt-heartbeat will run forever using old connection.
 			"--fail-successive-errors=20",
@@ -598,7 +679,18 @@ func (s *sfsSyncer) ensureVolumeClaimTemplates(in []core.PersistentVolumeClaim) 
 		}
 	}
 
-	data.Spec = *s.cluster.Spec.VolumeSpec.PersistentVolumeClaim
+	existingVolumeMode := data.Spec.VolumeMode
+	data.Spec = *s.cluster.Spec.VolumeSpec.PersistentVolumeClaim.DeepCopy()
+	// The API defaults volumeMode to Filesystem on VolumeClaimTemplates; MysqlCluster spec usually omits it.
+	// Leaving it nil causes a perpetual diff and StatefulSet update conflicts that block pod template changes.
+	if data.Spec.VolumeMode == nil {
+		if existingVolumeMode != nil {
+			data.Spec.VolumeMode = existingVolumeMode
+		} else {
+			mode := core.PersistentVolumeFilesystem
+			data.Spec.VolumeMode = &mode
+		}
+	}
 
 	in[0] = data
 
@@ -630,6 +722,11 @@ func (s *sfsSyncer) getEnvSourcesFor(name string) []core.EnvFromSource {
 
 func (s *sfsSyncer) getVolumeMountsFor(name string) []core.VolumeMount {
 	switch name {
+	case containerDatadirChownName:
+		return []core.VolumeMount{
+			{Name: dataVolumeName, MountPath: DataVolumeMountPath},
+		}
+
 	case containerCloneAndInitName:
 		mounts := []core.VolumeMount{
 			{Name: confVolumeName, MountPath: ConfVolumeMountPath},
@@ -655,7 +752,17 @@ func (s *sfsSyncer) getVolumeMountsFor(name string) []core.VolumeMount {
 
 		return mounts
 
-	case containerHeartBeatName, containerKillerName:
+	case containerHeartBeatName:
+		mounts := []core.VolumeMount{
+			{Name: confVolumeName, MountPath: ConfVolumeMountPath},
+			{Name: dataVolumeName, MountPath: DataVolumeMountPath, ReadOnly: true},
+		}
+		if s.cluster.Spec.TmpfsSize != nil {
+			mounts = append(mounts, core.VolumeMount{Name: tmpfsVolumeName, MountPath: DataVolumeMountPath, ReadOnly: true})
+		}
+		return mounts
+
+	case containerKillerName:
 		return []core.VolumeMount{
 			{Name: confVolumeName, MountPath: ConfVolumeMountPath},
 		}
@@ -677,7 +784,7 @@ func (s *sfsSyncer) ensureResources(name string) core.ResourceRequirements {
 	case containerExporterName:
 		return s.cluster.Spec.PodSpec.MetricsExporterResources
 
-	case containerMySQLInitName, containerCloneAndInitName, containerMysqlName:
+	case containerDatadirChownName, containerMySQLInitName, containerCloneAndInitName, containerMysqlName:
 		return s.cluster.Spec.PodSpec.Resources
 
 	case containerHeartBeatName:
@@ -759,6 +866,11 @@ func ensureProbe(delay, timeout, period int32, handler core.Handler) *core.Probe
 }
 
 func ensurePorts(ports ...core.ContainerPort) []core.ContainerPort {
+	for i := range ports {
+		if ports[i].Protocol == "" {
+			ports[i].Protocol = core.ProtocolTCP
+		}
+	}
 	return ports
 }
 

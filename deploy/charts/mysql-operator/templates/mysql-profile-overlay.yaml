@@ -1,0 +1,11 @@
+{{- if .Values.mysqlVersionProfileOverlay.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql-operator.fullname" . }}-mysql-profile-overlay
+  labels:
+    {{- include "mysql-operator.labels" . | nindent 4 }}
+data:
+  {{ .Values.mysqlVersionProfileOverlay.fileName }}: |
+{{ .Values.mysqlVersionProfileOverlay.data | nindent 4 }}
+{{- end }}

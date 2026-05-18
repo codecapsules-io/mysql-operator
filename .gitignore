@@ -67,3 +67,7 @@ webroot/*
 _output
 
 build
+
+# local testing
+rendered-local-test/
+build-all-local.test.sh

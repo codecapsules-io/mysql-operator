@@ -3,9 +3,14 @@
 # Declare variables to be passed into your templates.
 replicaCount: 1
 
+# Passed to the operator as --image-pull-policy: default for MysqlCluster pods (init, sidecar, mysql,
+# exporter, etc.) when spec.podSpec.imagePullPolicy is empty, and for backup/deletion Jobs.
+clusterImagePullPolicy: Always
+
 image:
   repository: docker.io/bitpoke/mysql-operator
-  pullPolicy: IfNotPresent
+  # Always helps local / dev clusters pick up rebuilt operator and sidecar tags without stale node cache.
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
@@ -21,10 +26,35 @@ sidecar80:
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 
+# Optional sidecars for Percona Server 8.4 LTS and 9.7 LTS (XtraBackup line). When repository is empty,
+# Helm does not pass --sidecar-mysql84-image / --sidecar-mysql97-image and the operator falls back to sidecar80.
+sidecar84:
+  image:
+    repository: ""
+    tag: ""
+
+sidecar97:
+  image:
+    repository: ""
+    tag: ""
+
+mysqlVersionCatalog:
+  enabled: false
+  mountPath: /etc/mysql-operator/catalog
+  fileName: versions.properties
+  data: {}
+
+# Optional YAML profile overlays (prependProfiles). See docs/mysql-version-profiles.md.
+mysqlVersionProfileOverlay:
+  enabled: false
+  mountPath: /etc/mysql-operator/profile-overlay
+  fileName: overlay.yaml
+  data: ""
+
 metricsExporter:
   image:
     repository: docker.io/prom/mysqld-exporter
-    tag: "v0.13.0"
+    tag: "v0.16.0"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -135,7 +165,7 @@ mysqlClustersGlobalServiceMonitor:
 orchestrator:
   image:
     repository: docker.io/bitpoke/mysql-operator-orchestrator
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 

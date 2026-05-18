@@ -1,0 +1,50 @@
+/*
+Copyright 2026 Pressinfra SRL
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+*/
+
+package mysqlcluster
+
+import (
+	"testing"
+
+	core "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+)
+
+func TestDefaultPodSpec_appliesContainerDefaults(t *testing.T) {
+	spec := core.PodSpec{
+		InitContainers: []core.Container{{
+			Name: "mysql-datadir-chown",
+		}},
+		Containers: []core.Container{{
+			Name: "mysql",
+			Args: nil,
+		}},
+	}
+	defaultPodSpec(&spec, scheme.Scheme)
+
+	c := spec.InitContainers[0]
+	if c.TerminationMessagePath != core.TerminationMessagePathDefault {
+		t.Fatalf("TerminationMessagePath: %q", c.TerminationMessagePath)
+	}
+	if c.TerminationMessagePolicy != core.TerminationMessageReadFile {
+		t.Fatalf("TerminationMessagePolicy: %q", c.TerminationMessagePolicy)
+	}
+	if c.Args == nil {
+		t.Fatal("Args should be non-nil empty slice")
+	}
+	if c.EnvFrom == nil {
+		t.Fatal("EnvFrom should be non-nil empty slice")
+	}
+
+	mysql := spec.Containers[0]
+	if mysql.Args == nil {
+		t.Fatal("mysql Args should be non-nil empty slice")
+	}
+	if len(mysql.Ports) == 0 {
+		// no ports on bare container — still fine
+	}
+}

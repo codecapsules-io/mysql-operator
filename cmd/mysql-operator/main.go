@@ -19,6 +19,8 @@ package main
 import (
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 
 	logf "github.com/presslabs/controller-util/log"
 	"github.com/spf13/pflag"
@@ -32,6 +34,7 @@ import (
 
 	"github.com/bitpoke/mysql-operator/pkg/apis"
 	"github.com/bitpoke/mysql-operator/pkg/controller"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 )
 
@@ -59,6 +62,23 @@ func main() {
 		log.Error(err, "failed to validate command line args, see help.")
 		os.Exit(1)
 	}
+
+	if err := mysqlversioning.InitDefault(opt, opt.MySQLProfileOverlayFile); err != nil {
+		log.Error(err, "failed to initialize mysql versioning runtime")
+		os.Exit(1)
+	}
+
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGHUP)
+		for range ch {
+			if err := mysqlversioning.Reload(opt, opt.MySQLProfileOverlayFile); err != nil {
+				log.Error(err, "mysql profile overlay reload failed")
+			} else {
+				log.Info("reloaded mysql profile overlay")
+			}
+		}
+	}()
 
 	log.Info("Starting mysql-operator...")
 

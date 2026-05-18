@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 	"github.com/bitpoke/mysql-operator/pkg/util/constants"
 )
@@ -192,24 +193,14 @@ func (c *MysqlCluster) GetMySQLSemVer() semver.Version {
 
 // GetMysqlImage returns the mysql image for current mysql cluster
 func (c *MysqlCluster) GetMysqlImage() string {
-	if len(c.Spec.Image) != 0 {
-		return c.Spec.Image
-	}
-
-	// check if the user set some overrides
 	opt := options.GetOptions()
-	if img, ok := opt.MySQLVersionImageOverride[c.GetMySQLSemVer().String()]; ok {
-		return img
+	img, err := mysqlversioning.ServerImage(opt, c.GetMySQLSemVer(), &c.Spec)
+	if err != nil {
+		log.Error(err, "no image found with given MySQL version, the image can manually be set by setting .spec.image on cluster",
+			"version", c.GetMySQLSemVer())
+		return ""
 	}
-
-	if img, ok := constants.MysqlImageVersions[c.GetMySQLSemVer().String()]; ok {
-		return img
-	}
-
-	// this means the cluster has a wrong MysqlVersion set
-	log.Error(nil, "no image found with given MySQL version, the image can manually be set by setting .spec.image on cluster",
-		"version", c.GetMySQLSemVer())
-	return ""
+	return img
 }
 
 // UpdateSpec updates the cluster specs that need to be saved
@@ -227,9 +218,7 @@ func (c *MysqlCluster) IsPerconaImage() bool {
 
 // ShouldHaveInitContainerForMysql checks the MySQL version and returns true or false if the docker image supports or not init only
 func (c *MysqlCluster) ShouldHaveInitContainerForMysql() bool {
-	expectedRange := semver.MustParseRange(">=5.7.26 <8.0.0 || >=8.0.15")
-
-	return c.IsPerconaImage() && expectedRange(c.GetMySQLSemVer())
+	return c.IsPerconaImage() && mysqlversioning.ProfileFor(c.GetMySQLSemVer()).WantsPerconaInitContainer(c.GetMySQLSemVer())
 }
 
 // String returns the cluster name and namespace
@@ -268,14 +257,7 @@ func (c *MysqlCluster) GetNamespacedName() types.NamespacedName {
 
 // GetSidecarImage selects the sidecar docker image based on mysql version
 func (c *MysqlCluster) GetSidecarImage() string {
-	if c.Spec.SidecarImage != "" {
-		return c.Spec.SidecarImage
-	}
-	// decide the sidecar image based on mysql version
-	if c.GetMySQLSemVer().Major == 8 {
-		return options.GetOptions().SidecarMysql8Image
-	}
-	return options.GetOptions().SidecarMysql57Image
+	return mysqlversioning.SidecarImageFor(c.GetMySQLSemVer(), &c.Spec, c.Spec.SidecarImage)
 }
 
 // IsClusterReady checks if the cluster is ready or not.

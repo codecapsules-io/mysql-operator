@@ -19,13 +19,16 @@ package mysqlcluster
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"github.com/presslabs/controller-util/syncer"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -41,6 +44,7 @@ import (
 	cleaner "github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/cleaner"
 	clustersyncer "github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/syncer"
 	"github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/upgrades"
+	"github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 )
@@ -116,6 +120,29 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		IsController: true,
 		OwnerType:    &mysqlv1alpha1.MysqlCluster{},
 	})
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{Type: &batchv1.Job{}}, handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		job, ok := obj.(*batchv1.Job)
+		if !ok {
+			return nil
+		}
+		switch job.Labels["mysql.presslabs.org/job-type"] {
+		case versionupgrade.JobTypeUpgradeCheck, versionupgrade.JobTypeAuthMigrate:
+		default:
+			return nil
+		}
+		clusterName := job.Labels["mysql.presslabs.org/cluster"]
+		if clusterName == "" {
+			return nil
+		}
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{
+			Namespace: job.Namespace,
+			Name:      clusterName,
+		}}}
+	}))
 	if err != nil {
 		return err
 	}
@@ -213,6 +240,35 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	annBefore := cloneStringMap(cluster.Annotations)
+	appliedStatusBefore := cluster.Status.AppliedMysqlVersion
+	if err = versionupgrade.EnsureChecked(ctx, r.Client, cluster, r.opt); err != nil {
+		if versionupgrade.IsHoldRollout(err) {
+			log.Info("waiting for MySQL upgrade check", "cluster", cluster, "reason", err.Error())
+			if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
+				return reconcile.Result{}, annErr
+			}
+			return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
+		}
+		log.Error(err, "MySQL version upgrade blocked", "cluster", cluster)
+		r.recorder.Event(cluster.Unwrap(), corev1.EventTypeWarning, "MySQLVersionUpgradeBlocked", err.Error())
+		cluster.UpdateStatusCondition(api.ClusterConditionReady, corev1.ConditionFalse,
+			"MySQLVersionUpgradeBlocked", err.Error())
+		if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
+			log.Error(sErr, "failed to update cluster status")
+		}
+		return reconcile.Result{}, err
+	}
+	if cluster.Status.AppliedMysqlVersion != appliedStatusBefore {
+		if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
+			log.Error(sErr, "failed to persist applied MySQL version status")
+			return reconcile.Result{}, sErr
+		}
+	}
+	if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
+		return reconcile.Result{}, annErr
+	}
+
 	status := *cluster.Status.DeepCopy()
 	defer func() {
 		if !reflect.DeepEqual(status, cluster.Status) {
@@ -251,7 +307,13 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		syncers = append(syncers, clustersyncer.NewPDBSyncer(r.Client, r.scheme, cluster))
 	}
 
-	// run the syncers
+	// StatefulSet sync always runs; versionupgrade.RolloutMySQLVersion holds the mysql image/env until the check passes.
+	if sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster); stsErr != nil {
+		return reconcile.Result{}, stsErr
+	} else if versionupgrade.ShouldBlockRollout(ctx, r.Client, cluster, sts) {
+		log.Info("holding MySQL image rollout until upgrade check completes", "cluster", cluster)
+	}
+
 	for _, sync := range syncers {
 		if err = syncer.Sync(context.TODO(), sync, r.recorder); err != nil {
 			return reconcile.Result{}, err
@@ -276,7 +338,62 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	if sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster); stsErr != nil {
+		return reconcile.Result{}, stsErr
+	} else if sts != nil {
+		annBeforeAuth := cloneStringMap(cluster.Annotations)
+		authErr := versionupgrade.EnsureAuthMigrated(ctx, r.Client, cluster, sts, r.opt)
+		if annErr := r.persistClusterAnnotations(ctx, cluster, annBeforeAuth); annErr != nil {
+			return reconcile.Result{}, annErr
+		}
+
+		podList := &corev1.PodList{}
+		if listErr := r.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); listErr != nil {
+			return reconcile.Result{}, listErr
+		}
+		if versionupgrade.SyncAppliedVersion(ctx, r.Client, cluster, sts, podList.Items) {
+			if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
+				log.Error(sErr, "failed to persist applied MySQL version status")
+				return reconcile.Result{}, sErr
+			}
+		}
+
+		if authErr != nil {
+			if versionupgrade.IsHoldRollout(authErr) {
+				log.Info("waiting for MySQL auth plugin migration", "cluster", cluster, "reason", authErr.Error())
+				return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
+			}
+			log.Error(authErr, "MySQL auth plugin migration blocked", "cluster", cluster)
+			r.recorder.Event(cluster.Unwrap(), corev1.EventTypeWarning, "MySQLAuthMigrateBlocked", authErr.Error())
+			cluster.UpdateStatusCondition(api.ClusterConditionReady, corev1.ConditionFalse,
+				"MySQLAuthMigrateBlocked", authErr.Error())
+			if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
+				log.Error(sErr, "failed to update cluster status")
+			}
+			return reconcile.Result{}, authErr
+		}
+	}
+
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileMysqlCluster) persistClusterAnnotations(ctx context.Context, cluster *mysqlcluster.MysqlCluster, before map[string]string) error {
+	if reflect.DeepEqual(before, cluster.Annotations) {
+		return nil
+	}
+	return r.Update(ctx, cluster.Unwrap())
+}
+
+// cloneStringMap copies annotation maps; assigning a map only copies the reference in Go.
+func cloneStringMap(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // getPodSyncers returns a list of syncers for every pod of the cluster. The

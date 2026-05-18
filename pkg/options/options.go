@@ -24,8 +24,6 @@ import (
 
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
-
-	"github.com/bitpoke/mysql-operator/pkg/version"
 )
 
 // nolint: unparam
@@ -41,8 +39,12 @@ func getFromEnvOrDefault(key, def string) string {
 type Options struct {
 	// SidecarMysql57Image is the image used in sidecar container to serve backups and configure MySQL
 	SidecarMysql57Image string
-	// SidecarMysql8Image as above but used when cluster uses mysql 8.0 and above
+	// SidecarMysql8Image is used for MySQL / Percona Server 8.0 through 8.3 (XtraBackup 8.0 line).
 	SidecarMysql8Image string
+	// SidecarMysql84Image is used for Percona Server 8.4 LTS when non-empty; otherwise SidecarMysql8Image is used.
+	SidecarMysql84Image string
+	// SidecarMysql97Image is used for Percona Server 9.7 LTS when non-empty; otherwise SidecarMysql8Image is used.
+	SidecarMysql97Image string
 
 	// MetricsExporterImage is the image for exporter container
 	MetricsExporterImage string
@@ -64,7 +66,7 @@ type Options struct {
 
 	// LeaderElectionNamespace the namespace where the lock resource will be created
 	LeaderElectionNamespace string
-	// LederElectionID the name of the lock resource
+	// LeaderElectionID the name of the lock resource
 	LeaderElectionID string
 
 	// Namespace where to look after objects. This will limit the operator action range.
@@ -73,6 +75,16 @@ type Options struct {
 	// MySQLVersionImageOverride define a map between MySQL version and image.
 	// This overrides the default versions and has priority.
 	MySQLVersionImageOverride map[string]string
+
+	// MySQLVersionCatalogFile, if set, is merged after built-in defaults and before CLI overrides
+	// for each exact semver key (e.g. mount a ConfigMap at this path).
+	MySQLVersionCatalogFile string
+
+	// MySQLProfileOverlayFile, if set, is YAML with prependProfiles (see docs/mysql-version-profiles.md).
+	MySQLProfileOverlayFile string
+
+	// mysqlVersionCatalog is populated from MySQLVersionCatalogFile during Validate.
+	mysqlVersionCatalog map[string]string
 
 	// OrchestratorConcurrentReconciles sets the orchestrator controller workers
 	OrchestratorConcurrentReconciles int32
@@ -98,11 +110,11 @@ type Options struct {
 type pullpolicy corev1.PullPolicy
 
 func (pp *pullpolicy) String() string {
-	return string(*pp)
+	return string(corev1.PullPolicy(*pp))
 }
 
 func (pp *pullpolicy) Set(value string) error {
-	*pp = pullpolicy(value)
+	*pp = pullpolicy(corev1.PullPolicy(value))
 	return nil
 }
 
@@ -117,7 +129,7 @@ func newPullPolicyValue(defaultValue corev1.PullPolicy, v *corev1.PullPolicy) *p
 }
 
 const (
-	defaultExporterImage = "prom/mysqld-exporter:v0.13.0"
+	defaultExporterImage = "prom/mysqld-exporter:v0.16.0"
 
 	defaultImagePullPolicy     = corev1.PullIfNotPresent
 	defaultImagePullSecretName = ""
@@ -135,10 +147,23 @@ const (
 	defaultHealthProbeBindAddress = ":8081"
 )
 
-var (
-	defaultSidecarMysql57Image = "docker.io/bitpoke/mysql-operator-sidecar-5.7:" + version.GetInfo().GitVersion
-	defaultSidecarMysql8Image  = "docker.io/bitpoke/mysql-operator-sidecar-8.0:" + version.GetInfo().GitVersion
-)
+func defaultSidecarMysql57Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL57_IMAGE",
+		"docker.io/bitpoke/mysql-operator-sidecar-5.7:latest")
+}
+
+func defaultSidecarMysql8Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL8_IMAGE",
+		"docker.io/bitpoke/mysql-operator-sidecar-8.0:latest")
+}
+
+func defaultSidecarMysql84Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL84_IMAGE", "")
+}
+
+func defaultSidecarMysql97Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL97_IMAGE", "")
+}
 
 func namespace() string {
 	if ns := os.Getenv("KUBE_NAMESPACE"); ns != "" {
@@ -160,11 +185,17 @@ func namespace() string {
 
 // AddFlags registers all mysql-operator needed flags
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.SidecarMysql57Image, "sidecar-image", defaultSidecarMysql57Image,
+	fs.StringVar(&o.SidecarMysql57Image, "sidecar-image", defaultSidecarMysql57Image(),
 		"The image that is used for mysql node instrumentation.")
 
-	fs.StringVar(&o.SidecarMysql8Image, "sidecar-mysql8-image", defaultSidecarMysql8Image,
-		"The image that is used for mysql (version 8.0 or above) node instrumentation.")
+	fs.StringVar(&o.SidecarMysql8Image, "sidecar-mysql8-image", defaultSidecarMysql8Image(),
+		"The image that is used for mysql (version 8.0 through 8.3) node instrumentation.")
+
+	fs.StringVar(&o.SidecarMysql84Image, "sidecar-mysql84-image", defaultSidecarMysql84Image(),
+		"The image used for Percona Server 8.4 LTS. When empty, falls back to --sidecar-mysql8-image.")
+
+	fs.StringVar(&o.SidecarMysql97Image, "sidecar-mysql97-image", defaultSidecarMysql97Image(),
+		"The image used for Percona Server 9.7 LTS. When empty, falls back to --sidecar-mysql8-image.")
 
 	fs.StringVar(&o.MetricsExporterImage, "metrics-exporter-image", defaultExporterImage,
 		"The image for mysql metrics exporter.")
@@ -176,9 +207,9 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&o.OrchestratorURI, "orchestrator-uri", "",
 		"The orchestrator uri")
-	fs.StringVar(&o.OrchestratorTopologyPassword, "orchestrator-topology-password", defaultOrchestratorTopologyUser,
+	fs.StringVar(&o.OrchestratorTopologyPassword, "orchestrator-topology-password", defaultOrchestratorTopologyPassword,
 		"The orchestrator topology password. Can also be set as ORC_TOPOLOGY_PASSWORD environment variable.")
-	fs.StringVar(&o.OrchestratorTopologyUser, "orchestrator-topology-user", defaultOrchestratorTopologyPassword,
+	fs.StringVar(&o.OrchestratorTopologyUser, "orchestrator-topology-user", defaultOrchestratorTopologyUser,
 		"The orchestrator topology user. Can also be set as ORC_TOPOLOGY_USER environment variable.")
 
 	fs.StringVar(&o.LeaderElectionNamespace, "leader-election-namespace", namespace(),
@@ -191,6 +222,12 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 
 	fs.StringToStringVar(&o.MySQLVersionImageOverride, "mysql-versions-to-image", map[string]string{},
 		"A map to override default image for different mysql versions. Example: 5.7.23=mysql:5.7,5.7.24=mysql:5.7")
+
+	fs.StringVar(&o.MySQLVersionCatalogFile, "mysql-version-catalog-file", "",
+		"Path to a file of lines 'semver=image' merged after built-in defaults (e.g. ConfigMap mount).")
+
+	fs.StringVar(&o.MySQLProfileOverlayFile, "mysql-profile-overlay-file", "",
+		"Path to optional YAML profile overlays (prependProfiles) merged before built-in Percona profiles.")
 
 	fs.Int32Var(&o.OrchestratorConcurrentReconciles, "orchestrator-concurrent-reconciles", 10,
 		"Set the number of workers for orchestrator reconciler.")
@@ -218,8 +255,10 @@ var once sync.Once
 func GetOptions() *Options {
 	once.Do(func() {
 		instance = &Options{
-			SidecarMysql57Image:  defaultSidecarMysql57Image,
-			SidecarMysql8Image:   defaultSidecarMysql8Image,
+			SidecarMysql57Image:  defaultSidecarMysql57Image(),
+			SidecarMysql8Image:   defaultSidecarMysql8Image(),
+			SidecarMysql84Image:  defaultSidecarMysql84Image(),
+			SidecarMysql97Image:  defaultSidecarMysql97Image(),
 			MetricsExporterImage: defaultExporterImage,
 
 			ImagePullPolicy:     defaultImagePullPolicy,
@@ -236,6 +275,8 @@ func GetOptions() *Options {
 
 			MetricsBindAddress:     defaultMetricsBindAddress,
 			HealthProbeBindAddress: defaultHealthProbeBindAddress,
+
+			mysqlVersionCatalog: map[string]string{},
 		}
 	})
 
@@ -251,5 +292,25 @@ func (o *Options) Validate() error {
 	if len(o.OrchestratorTopologyPassword) == 0 {
 		o.OrchestratorTopologyPassword = getFromEnvOrDefault("ORC_TOPOLOGY_PASSWORD", "")
 	}
+
+	if o.MySQLVersionCatalogFile != "" {
+		m, err := LoadMySQLVersionCatalogFile(o.MySQLVersionCatalogFile)
+		if err != nil {
+			return err
+		}
+		o.mysqlVersionCatalog = m
+	}
+	if o.mysqlVersionCatalog == nil {
+		o.mysqlVersionCatalog = map[string]string{}
+	}
 	return nil
+}
+
+// MysqlImageFromCatalog returns an image from the catalog file for an exact semver key, if present.
+func (o *Options) MysqlImageFromCatalog(versionKey string) (string, bool) {
+	if o.mysqlVersionCatalog == nil {
+		return "", false
+	}
+	img, ok := o.mysqlVersionCatalog[versionKey]
+	return img, ok
 }

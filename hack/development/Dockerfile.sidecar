@@ -30,7 +30,7 @@ RUN wget -nv https://github.com/ncw/rclone/releases/download/v${RCLONE_VERSION}/
 #  Docker image for sidecar containers
 ###############################################################################
 
-FROM debian:buster-slim as sidecar
+FROM debian:bullseye-slim as sidecar
 
 RUN groupadd -g 999 mysql
 RUN useradd -u 999 -r -g 999 -s /sbin/nologin \
@@ -42,7 +42,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY hack/docker/percona.gpg /etc/apt/trusted.gpg.d/percona.gpg
-RUN echo 'deb https://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
+RUN echo 'deb https://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
 
 ARG XTRABACKUP_PKG=percona-xtrabackup-80
 RUN apt-get update \

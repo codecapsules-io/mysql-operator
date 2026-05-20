@@ -86,27 +86,25 @@ func TestAuthPluginMigrationRequired_80To84(t *testing.T) {
 	}
 }
 
-func TestAuthMigrateScript_usesServerQuotedAlterStatements(t *testing.T) {
+func TestAuthMigrateScript_usesMasterSidecarSocketMigration(t *testing.T) {
 	script := authMigrateScript()
-	if strings.Contains(script, `IFS=$'\t' read`) {
-		t.Fatal("auth migrate must not split mysql batch output on tabs in shell")
-	}
 	for _, want := range []string{
-		"IDENTIFIED WITH caching_sha2_password BY",
-		"RETAIN CURRENT PASSWORD",
-		"sys_replication",
-		"init-file",
-		"MYSQL_APP_USER",
-		"MYSQL_ROOT_PASSWORD", "OPERATOR_USER", "--protocol=TCP",
-		"pre-rollout", "ORDER BY (user =", "one session",
-		"user <>",
+		"MYSQL_AUTH_MIGRATE_TARGET_PLUGIN",
+		"TARGET_PLUGIN",
+		"MYSQL_AUTH_MIGRATE_POD_HOST",
+		"BACKUP_USER",
+		"BACKUP_PASSWORD",
+		"/auth-migrate",
+		"socket-based migration as root",
+		"curl -sf",
+		"pre-rollout",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("auth migrate script missing %q", want)
 		}
 	}
-	if strings.Contains(script, "mysqladmin --") || strings.Contains(script, "mysqladmin_cmd") {
-		t.Fatal("auth migrate must not invoke mysqladmin (ping does not verify credentials)")
+	if strings.Contains(script, "mysqladmin --") || strings.Contains(script, "mysql_cmd") {
+		t.Fatal("auth migrate must not use TCP mysql client; migration runs on master sidecar via socket")
 	}
 }
 
@@ -157,7 +155,7 @@ func TestAuthMigrateJob_usesMasterServiceHost(t *testing.T) {
 		switch e.Name {
 		case mysqlAuthMigrateHost:
 			gotHost = e.Value
-		case "MYSQL_AUTH_MIGRATE_POD_HOST":
+		case mysqlAuthMigratePodHost:
 			gotPod = e.Value
 		}
 	}
@@ -169,7 +167,26 @@ func TestAuthMigrateJob_usesMasterServiceHost(t *testing.T) {
 	}
 }
 
-func TestAuthMigrateJob_envUsesClusterRootSecret(t *testing.T) {
+func TestAuthMigrateJob_defaultTargetPlugin(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	job := newAuthMigrateJob(cluster, semver.MustParse("8.4.0"))
+	for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == mysqlAuthMigrateTargetPlugin && e.Value == defaultAuthMigrateTargetPlugin {
+			return
+		}
+	}
+	t.Fatalf("expected %s=%q in job env", mysqlAuthMigrateTargetPlugin, defaultAuthMigrateTargetPlugin)
+}
+
+func TestAuthMigrateJob_envUsesOperatedBackupSecret(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -182,23 +199,17 @@ func TestAuthMigrateJob_envUsesClusterRootSecret(t *testing.T) {
 	})
 	job := newAuthMigrateJob(cluster, semver.MustParse("8.4.0"))
 	env := job.Spec.Template.Spec.Containers[0].Env
-	var rootUser, rootPass core.EnvVar
+	var backupPass core.EnvVar
 	for _, e := range env {
-		switch e.Name {
-		case "MYSQL_ROOT_USER":
-			rootUser = e
-		case "MYSQL_ROOT_PASSWORD":
-			rootPass = e
+		if e.Name == "BACKUP_PASSWORD" {
+			backupPass = e
 		}
 	}
-	if rootUser.Value != "root" {
-		t.Fatalf("MYSQL_ROOT_USER: got %q", rootUser.Value)
+	if backupPass.ValueFrom == nil || backupPass.ValueFrom.SecretKeyRef == nil {
+		t.Fatal("BACKUP_PASSWORD must come from operated secret")
 	}
-	if rootPass.ValueFrom == nil || rootPass.ValueFrom.SecretKeyRef == nil {
-		t.Fatal("MYSQL_ROOT_PASSWORD must come from cluster secret")
-	}
-	if rootPass.ValueFrom.SecretKeyRef.Name != "app-secret" || rootPass.ValueFrom.SecretKeyRef.Key != "ROOT_PASSWORD" {
-		t.Fatalf("unexpected root secret ref: %+v", rootPass.ValueFrom.SecretKeyRef)
+	if backupPass.ValueFrom.SecretKeyRef.Name != "c1-mysql-operated" || backupPass.ValueFrom.SecretKeyRef.Key != "BACKUP_PASSWORD" {
+		t.Fatalf("unexpected backup secret ref: %+v", backupPass.ValueFrom.SecretKeyRef)
 	}
 }
 

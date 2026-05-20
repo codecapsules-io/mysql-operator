@@ -65,6 +65,10 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 	}
 
 	if JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
+		MarkPhaseJobsDone(cluster, PhasePreRollout, DesiredSemVer(cluster))
+		if err := DeleteSucceededJobStepsForPhase(ctx, c, cluster, sts, PhasePreRollout); err != nil {
+			return fmt.Errorf("delete succeeded pre-rollout upgrade jobs: %w", err)
+		}
 		return nil
 	}
 
@@ -99,13 +103,13 @@ func SyncAppliedVersion(ctx context.Context, c client.Client, cluster *mysqlclus
 	if !JobStepsComplete(ctx, c, cluster, sts, PhasePostRollout) {
 		return false
 	}
+	MarkPhaseJobsDone(cluster, PhasePostRollout, desired)
+	if err := DeleteSucceededJobStepsForPhase(ctx, c, cluster, sts, PhasePostRollout); err != nil {
+		log.Error(err, "failed to delete succeeded post-rollout upgrade jobs", "cluster", cluster)
+		return false
+	}
 	MarkAppliedVersion(cluster, desired)
 	return true
-}
-
-// DeleteCompletedVersionUpgradeJobs removes finished upgrade Jobs after applied version matches spec.
-func DeleteCompletedVersionUpgradeJobs(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) error {
-	return DeleteCompletedJobSteps(ctx, c, cluster, sts)
 }
 
 // GetStatefulSetForRollout loads the cluster StatefulSet if it exists.

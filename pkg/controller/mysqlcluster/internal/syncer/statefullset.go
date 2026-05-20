@@ -356,6 +356,13 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	case containerCloneAndInitName:
 		env = append(env, s.envVarFromSecret(sctOpName, "BACKUP_USER", "BACKUP_USER", true))
 		env = append(env, s.envVarFromSecret(sctOpName, "BACKUP_PASSWORD", "BACKUP_PASSWORD", true))
+		env = append(env, s.envVarFromSecret(sctName, "MYSQL_ROOT_PASSWORD", "ROOT_PASSWORD", true))
+		env = append(env, s.envVarFromSecret(sctName, "MYSQL_USER", "USER", true))
+		env = append(env, s.envVarFromSecret(sctName, "MYSQL_PASSWORD", "PASSWORD", true))
+	case containerSidecarName:
+		env = append(env, s.envVarFromSecret(sctName, "MYSQL_ROOT_PASSWORD", "ROOT_PASSWORD", true))
+		env = append(env, s.envVarFromSecret(sctName, "MYSQL_USER", "USER", true))
+		env = append(env, s.envVarFromSecret(sctName, "MYSQL_PASSWORD", "PASSWORD", true))
 	case containerMysqlName:
 		env = append(env, core.EnvVar{
 			Name:  "ORCH_CLUSTER_ALIAS",

@@ -54,6 +54,7 @@ func newServer(cfg *Config, stop <-chan struct{}) *server {
 	// Add handle functions
 	mux.HandleFunc(serverProbeEndpoint, srv.healthHandler)
 	mux.Handle(serverBackupEndpoint, maxClients(http.HandlerFunc(srv.backupHandler), 1))
+	mux.Handle(serverAuthMigrateEndpoint, maxClients(http.HandlerFunc(srv.authMigrateHandler), 1))
 
 	// Shutdown gracefully the http server
 	go func() {
@@ -135,6 +136,27 @@ func (s *server) backupHandler(w http.ResponseWriter, r *http.Request) {
 func (s *server) isAuthenticated(r *http.Request) bool {
 	user, pass, ok := r.BasicAuth()
 	return ok && user == s.cfg.BackupUser && pass == s.cfg.BackupPassword
+}
+
+func (s *server) authMigrateHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.isAuthenticated(r) {
+		http.Error(w, "Not authenticated!", http.StatusForbidden)
+		return
+	}
+	targetPlugin := r.URL.Query().Get("target_plugin")
+	if err := RunAuthMigrate(s.cfg, targetPlugin); err != nil {
+		log.Error(err, "auth plugin migration failed")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("ok\n")); err != nil {
+		log.Error(err, "failed writing auth migrate response")
+	}
 }
 
 // maxClients limit an http endpoint to allow just n max concurrent connections

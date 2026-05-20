@@ -63,6 +63,8 @@ var (
 	serverProbeEndpoint = constants.SidecarServerProbePath
 	// ServerBackupEndpoint is the http server endpoint for backups
 	serverBackupEndpoint = "/xbackup"
+	// serverAuthMigrateEndpoint triggers socket-based auth plugin migration on the master pod.
+	serverAuthMigrateEndpoint = constants.SidecarAuthMigratePath
 	// ServerDialTimeout is the connect timeout (not http timeout) for requesting a backup from the sidecar server
 	serverConnectTimeout = 5 * time.Second
 

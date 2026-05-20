@@ -139,21 +139,6 @@ func envVarFromOperatedSecret(cluster *mysqlcluster.MysqlCluster, name, key stri
 	}
 }
 
-func envVarFromClusterSecret(cluster *mysqlcluster.MysqlCluster, name, key string, optional bool) core.EnvVar {
-	return core.EnvVar{
-		Name: name,
-		ValueFrom: &core.EnvVarSource{
-			SecretKeyRef: &core.SecretKeySelector{
-				LocalObjectReference: core.LocalObjectReference{
-					Name: cluster.Spec.SecretName,
-				},
-				Key:      key,
-				Optional: &optional,
-			},
-		},
-	}
-}
-
 // onlineUpgradeCheckScript validates the live master before changing the StatefulSet image.
 // MySQL 8.4+ removed --upgrade=CHECK; an online check avoids mounting the PVC while mysqld holds locks.
 func onlineUpgradeCheckScript() string {

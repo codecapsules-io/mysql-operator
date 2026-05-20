@@ -74,6 +74,13 @@ type Config struct {
 	HeartBeatUser     string
 	HeartBeatPassword string
 
+	// RootPassword from spec.secretName ROOT_PASSWORD (socket login for auth migration).
+	RootPassword string
+
+	// AppUser and AppPassword from spec.secretName USER/PASSWORD (optional).
+	AppUser     string
+	AppPassword string
+
 	// ExistsMySQLData checks if MySQL data is initialized by checking if the mysql dir exists
 	ExistsMySQLData bool
 
@@ -287,6 +294,10 @@ func NewConfig() *Config {
 
 		HeartBeatUser:     hbUser,
 		HeartBeatPassword: hbPass,
+
+		RootPassword: getEnvValue("MYSQL_ROOT_PASSWORD"),
+		AppUser:      getEnvValue("MYSQL_USER"),
+		AppPassword:  getEnvValue("MYSQL_PASSWORD"),
 
 		ExistsMySQLData: eData,
 

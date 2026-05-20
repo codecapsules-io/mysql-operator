@@ -31,6 +31,11 @@ const (
 	// JobTypeAuthMigrate is the mysql.presslabs.org/job-type label value for auth plugin migrate Jobs.
 	JobTypeAuthMigrate = "mysql-auth-migrate"
 
+	// preRolloutJobsDoneAnnotation records the spec target version for which pre-rollout Jobs succeeded.
+	preRolloutJobsDoneAnnotation = "mysql.presslabs.org/pre-rollout-jobs-done-version"
+	// postRolloutJobsDoneAnnotation records the spec target version for which post-rollout Jobs succeeded.
+	postRolloutJobsDoneAnnotation = "mysql.presslabs.org/post-rollout-jobs-done-version"
+
 	DataVolumeMountPath = constants.DataVolumeMountPath
 )
 
@@ -179,6 +184,46 @@ func SetAnnotation(cluster *mysqlcluster.MysqlCluster, key, value string) {
 // MarkAppliedVersion records the version now running on the data plane in status.
 func MarkAppliedVersion(cluster *mysqlcluster.MysqlCluster, version semver.Version) {
 	cluster.Status.AppliedMysqlVersion = version.String()
+	ClearPhaseJobsDoneAnnotations(cluster)
+}
+
+func phaseJobsDoneAnnotation(phase Phase) string {
+	switch phase {
+	case PhasePreRollout:
+		return preRolloutJobsDoneAnnotation
+	case PhasePostRollout:
+		return postRolloutJobsDoneAnnotation
+	default:
+		return ""
+	}
+}
+
+// PhaseJobsDoneForTarget is true when Jobs for the phase already succeeded for the given target version
+// (recorded before Job objects are deleted).
+func PhaseJobsDoneForTarget(cluster *mysqlcluster.MysqlCluster, phase Phase, target semver.Version) bool {
+	key := phaseJobsDoneAnnotation(phase)
+	if key == "" || target.EQ(semver.Version{}) {
+		return false
+	}
+	return cluster.Annotations[key] == target.String()
+}
+
+// MarkPhaseJobsDone records that all required Jobs in the phase succeeded for target.
+func MarkPhaseJobsDone(cluster *mysqlcluster.MysqlCluster, phase Phase, target semver.Version) {
+	key := phaseJobsDoneAnnotation(phase)
+	if key == "" {
+		return
+	}
+	SetAnnotation(cluster, key, target.String())
+}
+
+// ClearPhaseJobsDoneAnnotations removes phase completion markers after the upgrade finishes.
+func ClearPhaseJobsDoneAnnotations(cluster *mysqlcluster.MysqlCluster) {
+	if cluster.Annotations == nil {
+		return
+	}
+	delete(cluster.Annotations, preRolloutJobsDoneAnnotation)
+	delete(cluster.Annotations, postRolloutJobsDoneAnnotation)
 }
 
 // JobName returns the stable Job name for the cluster's upgrade check.

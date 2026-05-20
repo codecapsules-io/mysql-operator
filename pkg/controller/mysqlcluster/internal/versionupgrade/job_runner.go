@@ -16,6 +16,7 @@ import (
 	apps "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -51,13 +52,21 @@ func JobStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluste
 	return true
 }
 
-// DeleteCompletedJobSteps removes finished Job resources for all Job steps after applied version catches up.
-func DeleteCompletedJobSteps(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) error {
-	if sts == nil || VersionChangePending(cluster, sts) {
+// DeleteSucceededJobStepsForPhase removes succeeded upgrade Jobs (and their pods via foreground
+// cascade) once every required step in the phase has completed successfully.
+func DeleteSucceededJobStepsForPhase(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, phase Phase) error {
+	if sts == nil || !JobStepsComplete(ctx, c, cluster, sts, phase) {
 		return nil
 	}
+	uctx := newUpgradeContext(ctx, c, cluster, sts, nil)
+	propagation := metav1.DeletePropagationForeground
+	deleteOpts := client.DeleteOptions{PropagationPolicy: &propagation}
+
 	for _, step := range registeredSteps {
-		if step.Job == nil {
+		if step.Phase != phase || step.Job == nil {
+			continue
+		}
+		if !stepScheduled(uctx, step.ID) || !jobStepComplete(uctx, step) {
 			continue
 		}
 		name := step.Job.JobName(cluster)
@@ -69,10 +78,13 @@ func DeleteCompletedJobSteps(ctx context.Context, c client.Client, cluster *mysq
 			}
 			return err
 		}
-		if err := c.Delete(ctx, job); err != nil && !errors.IsNotFound(err) {
+		if !jobSucceeded(job) {
+			continue
+		}
+		if err := c.Delete(ctx, job, &deleteOpts); err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("delete upgrade job %s/%s: %w", cluster.Namespace, name, err)
 		}
-		log.Info("deleted finished MySQL version upgrade job", "cluster", cluster, "step", step.ID, "job", name)
+		log.Info("deleted succeeded MySQL version upgrade job", "cluster", cluster, "step", step.ID, "job", name, "phase", phase)
 	}
 	return nil
 }
@@ -149,6 +161,9 @@ func jobStepComplete(uctx UpgradeContext, step UpgradeStep) bool {
 	job := &batch.Job{}
 	key := types.NamespacedName{Name: spec.JobName(uctx.Cluster), Namespace: uctx.Cluster.Namespace}
 	if err := uctx.Client.Get(uctx.Ctx, key, job); err != nil {
+		if errors.IsNotFound(err) && PhaseJobsDoneForTarget(uctx.Cluster, step.Phase, target) {
+			return true
+		}
 		return false
 	}
 	if !jobMatchesTarget(job, spec.TargetVersionLabel, target) {

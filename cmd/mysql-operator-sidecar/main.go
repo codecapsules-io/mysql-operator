@@ -111,6 +111,19 @@ func main() {
 	}
 	cmd.AddCommand(takeBackupCmd)
 
+	authMigrateCmd := &cobra.Command{
+		Use:   "auth-migrate",
+		Short: "Migrate mysql_native_password accounts via local root socket.",
+		Run: func(cmd *cobra.Command, args []string) {
+			targetPlugin := os.Getenv("MYSQL_AUTH_MIGRATE_TARGET_PLUGIN")
+			if err := sidecar.RunAuthMigrate(cfg, targetPlugin); err != nil {
+				log.Error(err, "auth migrate command failed")
+				os.Exit(1)
+			}
+		},
+	}
+	cmd.AddCommand(authMigrateCmd)
+
 	if err := cmd.Execute(); err != nil {
 		log.Error(err, "failed to execute command", "cmd", cmd)
 		os.Exit(1)

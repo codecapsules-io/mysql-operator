@@ -349,11 +349,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 				return reconcile.Result{}, sErr
 			}
 		}
-
-		if delErr := versionupgrade.DeleteCompletedVersionUpgradeJobs(ctx, r.Client, cluster, sts); delErr != nil {
-			log.Error(delErr, "failed to delete finished MySQL version upgrade jobs", "cluster", cluster)
-			return reconcile.Result{}, delErr
-		}
 	}
 
 	return reconcile.Result{}, nil

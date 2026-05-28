@@ -55,15 +55,11 @@ func stepIDsOnPath(from, to semver.Version) []string {
 
 // sourceVersionForStep returns the "from" semver used to resolve the upgrade path for a step.
 func sourceVersionForStep(uctx UpgradeContext, stepID string) semver.Version {
-	switch stepID {
-	case StepDatadirChown:
-		if v := AppliedDataPlaneVersion(uctx.Cluster); !v.EQ(semver.Version{}) {
-			return v
-		}
-		return laggingStatefulSetVersion(uctx.Cluster, uctx.STS)
-	default:
-		return uctx.Source
+	step := StepByID(stepID)
+	if step == nil {
+		return semver.Version{}
 	}
+	return step.sourceVersion(uctx)
 }
 
 // stepScheduled reports whether the step is listed on the source→target upgrade path.
@@ -82,43 +78,16 @@ func stepScheduled(uctx UpgradeContext, stepID string) bool {
 
 // stepApplicable reports cluster/runtime preconditions for a step already on the upgrade path.
 func stepApplicable(uctx UpgradeContext, stepID string) bool {
-	switch stepID {
-	case StepDatadirUpgradeCheck:
-		return upgradeDatadirCheckApplicable(uctx)
-	case StepDatadirChown:
-		return datadirChownApplicable(uctx)
-	case StepAuthPluginMigrate:
-		return authPluginMigrateApplicable(uctx)
-	default:
+	step := StepByID(stepID)
+	if step == nil {
 		return false
 	}
+	return step.applicable(uctx)
 }
 
 // stepRequired is true when the step is on the upgrade path and cluster state allows it to run.
 func stepRequired(uctx UpgradeContext, stepID string) bool {
 	return stepScheduled(uctx, stepID) && stepApplicable(uctx, stepID)
-}
-
-func upgradeDatadirCheckApplicable(uctx UpgradeContext) bool {
-	if !VersionChangePending(uctx.Cluster, uctx.STS) {
-		return false
-	}
-	return ClusterHasMySQLData(uctx.Cluster, uctx.STS)
-}
-
-func datadirChownApplicable(uctx UpgradeContext) bool {
-	from := sourceVersionForStep(uctx, StepDatadirChown)
-	if from.EQ(semver.Version{}) || from.EQ(uctx.Target) {
-		return false
-	}
-	if !HasPersistentDataVolume(uctx.Cluster) || !ClusterHasMySQLData(uctx.Cluster, uctx.STS) {
-		return false
-	}
-	return uctx.Cluster.IsPerconaImage()
-}
-
-func authPluginMigrateApplicable(uctx UpgradeContext) bool {
-	return VersionChangePending(uctx.Cluster, uctx.STS)
 }
 
 func stepsForPhase(uctx UpgradeContext, phase Phase) []UpgradeStep {

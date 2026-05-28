@@ -53,12 +53,15 @@ func MasterSlaveReplication() ReplicationDialect {
 func SourceReplicaReplication() ReplicationDialect {
 	return ReplicationDialect{
 		StopReplication: "STOP REPLICA;",
+		// GET_SOURCE_PUBLIC_KEY allows replicas to authenticate to the source over TCP
+		// with caching_sha2_password (server default on 8.4+) without replication SSL.
 		ChangeSourceSQL: `
 	  CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION=1,
 		SOURCE_HOST=?,
 		SOURCE_USER=?,
 		SOURCE_PASSWORD=?,
-		SOURCE_CONNECT_RETRY=?;
+		SOURCE_CONNECT_RETRY=?,
+		GET_SOURCE_PUBLIC_KEY=1;
 	`,
 		StartReplication: "START REPLICA;",
 		FallbackStartSQL: `

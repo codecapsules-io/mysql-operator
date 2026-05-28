@@ -19,7 +19,8 @@ import (
 	"github.com/bitpoke/mysql-operator/pkg/options"
 )
 
-// Step identifiers for built-in upgrade actions. New steps add a constant here, implement in steps_builtin.go, and list on upgrade paths in upgrade_paths.go.
+// Step identifiers for built-in upgrade actions. New steps add a constant here, a StepStrategy in step_strategy.go,
+// registration in steps_builtin.go, and a path entry in upgrade_paths.go.
 const (
 	StepDatadirUpgradeCheck = "datadir-upgrade-check"
 	StepDatadirChown        = "datadir-chown"
@@ -63,10 +64,11 @@ func newUpgradeContext(ctx context.Context, c client.Client, cluster *mysqlclust
 }
 
 // UpgradeStep describes one version-transition action (Job and/or rollout init container).
-// Whether a step runs for the current upgrade is defined in upgrade_paths.go (profile transition → step IDs).
+// Profile transitions list step IDs in upgrade_paths.go; per-step behavior is implemented via Strategy.
 type UpgradeStep struct {
-	ID    string
-	Phase Phase
+	ID       string
+	Phase    Phase
+	Strategy StepStrategy
 
 	Job  *JobStepSpec
 	Init *InitStepSpec

@@ -24,8 +24,9 @@ func builtinUpgradeSteps() []UpgradeStep {
 
 func datadirUpgradeCheckStep() UpgradeStep {
 	return UpgradeStep{
-		ID:    StepDatadirUpgradeCheck,
-		Phase: PhasePreRollout,
+		ID:       StepDatadirUpgradeCheck,
+		Phase:    PhasePreRollout,
+		Strategy: datadirUpgradeCheckStrategy{},
 		Job: &JobStepSpec{
 			JobType:            JobTypeUpgradeCheck,
 			TargetVersionLabel: upgradeCheckTargetLabel,
@@ -41,8 +42,9 @@ func datadirUpgradeCheckStep() UpgradeStep {
 
 func datadirChownStep() UpgradeStep {
 	return UpgradeStep{
-		ID:    StepDatadirChown,
-		Phase: PhaseRolloutInit,
+		ID:       StepDatadirChown,
+		Phase:    PhaseRolloutInit,
+		Strategy: datadirChownStrategy{},
 		Init: &InitStepSpec{
 			ContainerName:       DatadirChownInitContainerName,
 			AfterPreRolloutJobs: true,
@@ -52,8 +54,9 @@ func datadirChownStep() UpgradeStep {
 
 func authPluginMigrateStep() UpgradeStep {
 	return UpgradeStep{
-		ID:    StepAuthPluginMigrate,
-		Phase: PhasePreRollout,
+		ID:       StepAuthPluginMigrate,
+		Phase:    PhasePreRollout,
+		Strategy: authPluginMigrateStrategy{},
 		Job: &JobStepSpec{
 			JobType:            JobTypeAuthMigrate,
 			TargetVersionLabel: authMigrateTargetLabel,

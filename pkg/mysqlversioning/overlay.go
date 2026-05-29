@@ -74,7 +74,6 @@ func (o overlayRangeProfile) InnoDBOperatorLogSizing(v semver.Version, perFileBy
 func builtinProfilesByName() map[string]Profile {
 	out := map[string]Profile{}
 	for _, p := range []Profile{
-		profilePercona97{},
 		profilePercona84{},
 		profilePercona80{},
 		profilePercona57{},

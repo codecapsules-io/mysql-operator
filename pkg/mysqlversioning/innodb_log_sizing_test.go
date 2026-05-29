@@ -25,7 +25,6 @@ func TestInnoDBOperatorLogSizing_builtinProfiles(t *testing.T) {
 		{"8.0.20", "innodb-log-file-size", perFile},
 		{"8.0.30", "innodb-redo-log-capacity", 2 * perFile},
 		{"8.4.0", "innodb-redo-log-capacity", 2 * perFile},
-		{"9.7.0", "innodb-redo-log-capacity", 2 * perFile},
 	}
 	for _, tc := range cases {
 		v := semver.MustParse(tc.ver)

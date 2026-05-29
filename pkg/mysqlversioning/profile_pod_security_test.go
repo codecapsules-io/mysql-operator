@@ -26,7 +26,6 @@ func TestProfilePodSecurityHints_builtin(t *testing.T) {
 		wantMysqlUID1001 bool
 	}{
 		{"8.4.8", true, 1001, true, true},
-		{"9.7.0", true, 1001, true, true},
 		{"8.4.0", false, 999, false, false},
 		{"8.0.34", true, 999, false, false},
 		{"5.7.35", true, 999, false, false},
@@ -76,7 +75,7 @@ func TestProfilesWithOverlay_podSecurityDelegatesToBase(t *testing.T) {
 	content := `prependProfiles:
   - name: test-10x
     semverRange: ">=10.0.0 <11.0.0"
-    baseProfile: ` + ProfilePercona97.String() + `
+    baseProfile: ` + ProfilePercona84.String() + `
 `
 	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -89,6 +88,6 @@ func TestProfilesWithOverlay_podSecurityDelegatesToBase(t *testing.T) {
 	v := semver.MustParse("10.1.0")
 	h := reg.MustResolve(v).PodSecurityHints(true)
 	if h.FSGroup != 1001 || h.RunAsUser != nil || h.MysqlRunAsUser == nil || *h.MysqlRunAsUser != 1001 {
-		t.Fatalf("overlay on percona-9.7 base: want fsGroup 1001, nil pod RunAsUser, mysql 1001, got %+v", h)
+		t.Fatalf("overlay on percona-8.4 base: want fsGroup 1001, nil pod RunAsUser, mysql 1001, got %+v", h)
 	}
 }

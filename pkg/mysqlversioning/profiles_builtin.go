@@ -102,7 +102,7 @@ type profilePercona84 struct{}
 func (profilePercona84) Name() string { return ProfilePercona84.String() }
 
 func (profilePercona84) Matches(v semver.Version) bool {
-	return mysqlversion.AtLeastMySQL84(v) && !mysqlversion.AtLeastMySQL9(v)
+	return mysqlversion.AtLeastMySQL84(v)
 }
 
 func (profilePercona84) MySQLOperatorKV(v semver.Version) map[string]string {
@@ -138,52 +138,10 @@ func (profilePercona84) InnoDBOperatorLogSizing(_ semver.Version, perFileBytes i
 	return "innodb-redo-log-capacity", 2 * perFileBytes
 }
 
-type profilePercona97 struct{}
-
-func (profilePercona97) Name() string { return ProfilePercona97.String() }
-
-func (profilePercona97) Matches(v semver.Version) bool {
-	return mysqlversion.AtLeastMySQL9(v)
-}
-
-func (profilePercona97) MySQLOperatorKV(v semver.Version) map[string]string {
-	return OperatorKVCommon(v, true)
-}
-
-func (profilePercona97) UseMySQL5xConfigs() bool { return false }
-func (profilePercona97) UseMySQL8xConfigs() bool { return true }
-func (profilePercona97) UseMySQL80AuthPlugin() bool {
-	return false
-}
-
-func (profilePercona97) Replication() ReplicationDialect { return SourceReplicaReplication() }
-func (profilePercona97) GrantHints() GrantHints          { return sourceReplicaGrantHints() }
-func (profilePercona97) SidecarProfileKey() string       { return SidecarPercona97.String() }
-
-func (profilePercona97) WantsPerconaInitContainer(v semver.Version) bool {
-	return perconaInitRange(v)
-}
-
-func (profilePercona97) Validate(spec *api.MysqlClusterSpec) error {
-	return DefaultValidate(spec)
-}
-
-func (profilePercona97) PodSecurityHints(perconaServerImage bool) PodSecurityHints {
-	if perconaServerImage {
-		return PodSecurityPerconaUID1001VolumeGroup()
-	}
-	return PodSecurityLegacy999()
-}
-
-func (profilePercona97) InnoDBOperatorLogSizing(_ semver.Version, perFileBytes int64) (string, int64) {
-	return "innodb-redo-log-capacity", 2 * perFileBytes
-}
-
 // BuiltinProfiles returns built-in Percona profiles in match order (first match wins),
 // terminated by a catch-all fallback for unknown semvers.
 func BuiltinProfiles() []Profile {
 	return []Profile{
-		profilePercona97{},
 		profilePercona84{},
 		profilePercona80{},
 		profilePercona57{},

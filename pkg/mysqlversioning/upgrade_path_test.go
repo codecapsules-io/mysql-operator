@@ -26,7 +26,7 @@ func TestNeedsAuthPluginMigration(t *testing.T) {
 	if NeedsAuthPluginMigration(semver.Version{}, v84) {
 		t.Fatal("expected empty current to skip auth migration")
 	}
-	if NeedsAuthPluginMigration(v84, semver.MustParse("9.7.0")) {
-		t.Fatal("expected 8.4 -> 9.7 to skip mysql_native_password migration")
+	if NeedsAuthPluginMigration(v84, semver.MustParse("8.4.8")) {
+		t.Fatal("expected patch bump on 8.4 line to skip mysql_native_password migration")
 	}
 }

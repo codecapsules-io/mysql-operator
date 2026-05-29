@@ -48,8 +48,3 @@ func AtLeastMySQL84(v semver.Version) bool {
 	}
 	return false
 }
-
-// AtLeastMySQL9 reports major version 9+ (e.g. MySQL 9.7 LTS).
-func AtLeastMySQL9(v semver.Version) bool {
-	return v.Major >= 9
-}

@@ -25,6 +25,7 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/go-ini/ini"
+	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,13 +34,15 @@ import (
 
 	"github.com/presslabs/controller-util/syncer"
 
+	"github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
 	"github.com/bitpoke/mysql-operator/pkg/util/mysqlversion"
 )
 
-// NewConfigMapSyncer returns config map syncer
-func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlcluster.MysqlCluster) syncer.Interface {
+// NewConfigMapSyncer returns config map syncer.
+// sts may be nil; when status.appliedMysqlVersion is unset, a lagging StatefulSet template is used for preStop SQL.
+func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) syncer.Interface {
 	cm := &core.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.GetNameForResource(mysqlcluster.ConfigMap),
@@ -61,15 +64,17 @@ func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlc
 		}
 
 		if cluster.Spec.PodSpec.MysqlLifecycle == nil {
-			cm.Data[shPreStopFile] = buildBashPreStop(cluster)
+			cm.Data[shPreStopFile] = buildBashPreStop(cluster, sts)
 		}
 
 		return nil
 	})
 }
 
-func buildBashPreStop(cluster *mysqlcluster.MysqlCluster) string {
-	d := mysqlversioning.ProfileFor(cluster.GetMySQLSemVer()).Replication()
+func buildBashPreStop(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) string {
+	// preStop runs on pods still serving the data-plane version; spec.mysqlVersion may already target an upgrade.
+	v := versionupgrade.SourceVersionForUpgrade(cluster, sts)
+	d := mysqlversioning.ProfileFor(v).Replication()
 	replicaStatusCmd := d.ShowReplicaStatusCmd
 	replicaHostsCmd := d.ShowReplicasCmd
 	logLabel := d.LogLabelPreStop

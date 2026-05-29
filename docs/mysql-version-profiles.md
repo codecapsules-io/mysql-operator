@@ -2,7 +2,7 @@
 
 Server **images** are resolved by `ImageResolver` (see [mysql-version-upgrades.md](mysql-version-upgrades.md)): `spec.image`, CLI overrides, catalog file, then built-in constants.
 
-**Profiles** describe version-line behavior: replication SQL dialect, grant metadata, operator `my.cnf` fragments, sidecar logical key, and validation. Built-in Percona profiles are `percona-5.7`, `percona-8.0`, `percona-8.4`, `percona-9.7`, plus a last-resort `fallback-unknown` for unrecognized semvers.
+**Profiles** describe version-line behavior: replication SQL dialect, grant metadata, operator `my.cnf` fragments, sidecar logical key, and validation. Built-in Percona profiles are `percona-5.7`, `percona-8.0`, `percona-8.4` (MySQL 8.4+), plus a last-resort `fallback-unknown` for unrecognized semvers.
 
 ## Declarative overlays
 
@@ -12,12 +12,12 @@ You can prepend profiles from a YAML file (merged **before** built-ins, first ma
 prependProfiles:
   - name: my-10x-line
     semverRange: ">=10.0.0 <11.0.0"
-    baseProfile: percona-9.7
+    baseProfile: percona-8.4
 ```
 
 - **name**: Observability only (returned from `Profile.Name()` for custom entries).
 - **semverRange**: A [blang/semver](https://github.com/blang/semver) range expression.
-- **baseProfile**: One of `percona-5.7`, `percona-8.0`, `percona-8.4`, `percona-9.7`, or `fallback-unknown` to reuse that line’s replication, grants, sidecar key, and `my.cnf` defaults.
+- **baseProfile**: One of `percona-5.7`, `percona-8.0`, `percona-8.4`, or `fallback-unknown` to reuse that line’s replication, grants, sidecar key, and `my.cnf` defaults.
 
 ### Operator flags and Helm
 

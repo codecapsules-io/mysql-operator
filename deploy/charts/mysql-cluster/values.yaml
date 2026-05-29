@@ -18,11 +18,7 @@ appDatabase: ""
 # appSecretLabels: {}
 # appSecretAnnotations: {}
 
-# Applied to every container in the MySQL StatefulSet (init, sidecar, mysqld, exporter, …).
-# Use Always while iterating on custom images; set IfNotPresent for production if you prefer.
 podSpec:
-  imagePullPolicy: Always
-
 mysqlConf:
 volumeSpec:
 

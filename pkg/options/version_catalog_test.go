@@ -20,7 +20,7 @@ func TestLoadMySQLVersionCatalogFile(t *testing.T) {
 # comment
 8.4.0=percona/ps:8.4
 
-9.7.0=percona/ps:9.7
+8.4.8=percona/ps:8.4.8
 `
 	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestLoadMySQLVersionCatalogFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m["8.4.0"] != "percona/ps:8.4" || m["9.7.0"] != "percona/ps:9.7" {
+	if m["8.4.0"] != "percona/ps:8.4" || m["8.4.8"] != "percona/ps:8.4.8" {
 		t.Fatalf("unexpected map: %#v", m)
 	}
 }
@@ -37,7 +37,7 @@ func TestLoadMySQLVersionCatalogFile(t *testing.T) {
 func TestValidateLoadsCatalog(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "c.props")
-	if err := os.WriteFile(p, []byte("9.7.0=img:9\n"), 0644); err != nil {
+	if err := os.WriteFile(p, []byte("8.4.8=img:84\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	o := &Options{
@@ -46,8 +46,8 @@ func TestValidateLoadsCatalog(t *testing.T) {
 	if err := o.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	img, ok := o.MysqlImageFromCatalog("9.7.0")
-	if !ok || img != "img:9" {
+	img, ok := o.MysqlImageFromCatalog("8.4.8")
+	if !ok || img != "img:84" {
 		t.Fatalf("got ok=%v img=%q", ok, img)
 	}
 }

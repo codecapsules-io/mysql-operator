@@ -43,8 +43,6 @@ type Options struct {
 	SidecarMysql8Image string
 	// SidecarMysql84Image is used for Percona Server 8.4 LTS when non-empty; otherwise SidecarMysql8Image is used.
 	SidecarMysql84Image string
-	// SidecarMysql97Image is used for Percona Server 9.7 LTS when non-empty; otherwise SidecarMysql8Image is used.
-	SidecarMysql97Image string
 
 	// MetricsExporterImage is the image for exporter container
 	MetricsExporterImage string
@@ -161,10 +159,6 @@ func defaultSidecarMysql84Image() string {
 	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL84_IMAGE", "")
 }
 
-func defaultSidecarMysql97Image() string {
-	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL97_IMAGE", "")
-}
-
 func namespace() string {
 	if ns := os.Getenv("KUBE_NAMESPACE"); ns != "" {
 		return ns
@@ -193,9 +187,6 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&o.SidecarMysql84Image, "sidecar-mysql84-image", defaultSidecarMysql84Image(),
 		"The image used for Percona Server 8.4 LTS. When empty, falls back to --sidecar-mysql8-image.")
-
-	fs.StringVar(&o.SidecarMysql97Image, "sidecar-mysql97-image", defaultSidecarMysql97Image(),
-		"The image used for Percona Server 9.7 LTS. When empty, falls back to --sidecar-mysql8-image.")
 
 	fs.StringVar(&o.MetricsExporterImage, "metrics-exporter-image", defaultExporterImage,
 		"The image for mysql metrics exporter.")
@@ -258,7 +249,6 @@ func GetOptions() *Options {
 			SidecarMysql57Image:  defaultSidecarMysql57Image(),
 			SidecarMysql8Image:   defaultSidecarMysql8Image(),
 			SidecarMysql84Image:  defaultSidecarMysql84Image(),
-			SidecarMysql97Image:  defaultSidecarMysql97Image(),
 			MetricsExporterImage: defaultExporterImage,
 
 			ImagePullPolicy:     defaultImagePullPolicy,

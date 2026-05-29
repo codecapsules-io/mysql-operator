@@ -43,13 +43,6 @@ func TestStepIDsOnPath_80To84(t *testing.T) {
 	}
 }
 
-func TestStepIDsOnPath_84To97(t *testing.T) {
-	got := stepIDsOnPath(semver.MustParse("8.4.0"), semver.MustParse("9.7.0"))
-	if len(got) != 1 || got[0] != StepDatadirUpgradeCheck {
-		t.Fatalf("84→97: got %v", got)
-	}
-}
-
 func TestStepIDsOnPath_57To80(t *testing.T) {
 	got := stepIDsOnPath(semver.MustParse("5.7.44"), semver.MustParse("8.0.34"))
 	if len(got) != 1 || got[0] != StepDatadirUpgradeCheck {
@@ -59,7 +52,7 @@ func TestStepIDsOnPath_57To80(t *testing.T) {
 
 func TestStepIDsOnPath_unmappedTransition(t *testing.T) {
 	// Skipping an LTS line is blocked by ValidateUpgradePath; no steps are scheduled.
-	got := stepIDsOnPath(semver.MustParse("8.0.20"), semver.MustParse("9.7.0"))
+	got := stepIDsOnPath(semver.MustParse("5.7.44"), semver.MustParse("8.4.0"))
 	if got != nil {
 		t.Fatalf("unmapped transition should have no steps, got %v", got)
 	}

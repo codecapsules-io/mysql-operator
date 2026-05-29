@@ -67,9 +67,6 @@ spec:
             {{- if and .Values.sidecar84.image.repository (ne .Values.sidecar84.image.repository "") }}
             - --sidecar-mysql84-image={{ .Values.sidecar84.image.repository }}:{{ .Values.sidecar84.image.tag | default $appVersion }}
             {{- end }}
-            {{- if and .Values.sidecar97.image.repository (ne .Values.sidecar97.image.repository "") }}
-            - --sidecar-mysql97-image={{ .Values.sidecar97.image.repository }}:{{ .Values.sidecar97.image.tag | default $appVersion }}
-            {{- end }}
             {{- if .Values.mysqlVersionCatalog.enabled }}
             - --mysql-version-catalog-file={{ .Values.mysqlVersionCatalog.mountPath }}/{{ .Values.mysqlVersionCatalog.fileName }}
             {{- end }}

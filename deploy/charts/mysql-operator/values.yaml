@@ -26,14 +26,9 @@ sidecar80:
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 
-# Optional sidecars for Percona Server 8.4 LTS and 9.7 LTS (XtraBackup line). When repository is empty,
-# Helm does not pass --sidecar-mysql84-image / --sidecar-mysql97-image and the operator falls back to sidecar80.
+# Optional sidecar for Percona Server 8.4 LTS (XtraBackup line). When repository is empty,
+# Helm does not pass --sidecar-mysql84-image and the operator falls back to sidecar80.
 sidecar84:
-  image:
-    repository: ""
-    tag: ""
-
-sidecar97:
   image:
     repository: ""
     tag: ""

@@ -38,7 +38,7 @@ RUN export RCLONE_VERSION=1.57.0 \
 # - percona-xtrabackup-24 lives in the legacy 'tools' repo
 # - percona-xtrabackup-80 lives in the 'pxb-80' repo
 # - percona-xtrabackup-84 lives in the 'pxb-84-lts' repo
-ARG XTRABACKUP_PKG=percona-xtrabackup-84
+ARG XTRABACKUP_PKG=percona-xtrabackup-24
 RUN wget -nv -O /tmp/percona-release.deb https://repo.percona.com/apt/percona-release_latest.generic_all.deb \
     && dpkg -i /tmp/percona-release.deb \
     && rm -f /tmp/percona-release.deb \

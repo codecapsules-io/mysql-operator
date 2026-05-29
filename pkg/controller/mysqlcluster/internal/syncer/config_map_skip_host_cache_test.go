@@ -26,7 +26,6 @@ func TestBuildMysqlConfData_skipHostCacheByVersion(t *testing.T) {
 		{"8.0.29", true},
 		{"8.0.30", false},
 		{"8.4.8", false},
-		{"9.7.0", false},
 	} {
 		tc := tc
 		t.Run(tc.version, func(t *testing.T) {

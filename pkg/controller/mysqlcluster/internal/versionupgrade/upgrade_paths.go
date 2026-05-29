@@ -36,12 +36,6 @@ var upgradePathSteps = map[profileTransition][]string{
 		StepDatadirChown,
 		StepAuthPluginMigrate,
 	},
-	{
-		From: mysqlversioning.ProfilePercona84.String(),
-		To:   mysqlversioning.ProfilePercona97.String(),
-	}: {
-		StepDatadirUpgradeCheck,
-	},
 }
 
 func stepIDsOnPath(from, to semver.Version) []string {

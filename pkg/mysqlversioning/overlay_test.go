@@ -23,7 +23,7 @@ func TestProfilesWithOverlay_prependMatchesBeforeBuiltin(t *testing.T) {
 	content := `prependProfiles:
   - name: test-10x
     semverRange: ">=10.0.0 <11.0.0"
-    baseProfile: ` + ProfilePercona97.String() + `
+    baseProfile: ` + ProfilePercona84.String() + `
 `
 	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -38,8 +38,8 @@ func TestProfilesWithOverlay_prependMatchesBeforeBuiltin(t *testing.T) {
 	if got.Name() != "test-10x" {
 		t.Fatalf("expected overlay name test-10x, got %q", got.Name())
 	}
-	if got.SidecarProfileKey() != SidecarPercona97.String() {
-		t.Fatalf("expected sidecar key from %s base, got %q", ProfilePercona97, got.SidecarProfileKey())
+	if got.SidecarProfileKey() != SidecarPercona84.String() {
+		t.Fatalf("expected sidecar key from %s base, got %q", ProfilePercona84, got.SidecarProfileKey())
 	}
 	v80 := semver.MustParse("8.0.20")
 	if reg.MustResolve(v80).Name() != ProfilePercona80.String() {
@@ -55,7 +55,6 @@ func TestBuiltinProfileSidecarKeys(t *testing.T) {
 		{"5.7.35", SidecarPercona57},
 		{"8.0.20", SidecarPercona80},
 		{"8.4.0", SidecarPercona84},
-		{"9.7.0", SidecarPercona97},
 	}
 	reg := NewRegistry(BuiltinProfiles())
 	for _, tc := range cases {

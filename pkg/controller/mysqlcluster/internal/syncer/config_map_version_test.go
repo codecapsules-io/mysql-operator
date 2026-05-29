@@ -41,9 +41,3 @@ func TestMysqlKVConfigsForVersion_sourceReplica84(t *testing.T) {
 	}
 }
 
-func TestMysqlKVConfigsForVersion_97(t *testing.T) {
-	m := syncer.MysqlKVConfigsForVersion(semver.MustParse("9.7.0"))
-	if _, ok := m["skip-replica-start"]; !ok {
-		t.Fatalf("expected skip-replica-start for 9.7")
-	}
-}

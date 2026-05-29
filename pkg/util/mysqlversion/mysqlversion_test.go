@@ -21,7 +21,7 @@ func TestAtLeastMySQL8030(t *testing.T) {
 		{"8.0.29", false},
 		{"8.0.30", true},
 		{"8.1.0", true},
-		{"9.7.0", true},
+		{"9.0.0", true},
 	}
 	for _, tc := range cases {
 		sv := semver.MustParse(tc.v)
@@ -38,7 +38,7 @@ func TestAtLeastMySQL84(t *testing.T) {
 	if AtLeastMySQL84(semver.MustParse("8.3.9")) {
 		t.Fatal()
 	}
-	if !AtLeastMySQL84(semver.MustParse("9.7.0")) {
+	if !AtLeastMySQL84(semver.MustParse("9.0.0")) {
 		t.Fatal()
 	}
 }

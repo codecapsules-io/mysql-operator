@@ -278,7 +278,11 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		}
 	}()
 
-	configMapSyncer := clustersyncer.NewConfigMapSyncer(r.Client, r.scheme, cluster)
+	sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster)
+	if stsErr != nil {
+		return reconcile.Result{}, stsErr
+	}
+	configMapSyncer := clustersyncer.NewConfigMapSyncer(r.Client, r.scheme, cluster, sts)
 	if err = syncer.Sync(context.TODO(), configMapSyncer, r.recorder); err != nil {
 		return reconcile.Result{}, err
 	}
@@ -307,9 +311,7 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// StatefulSet sync always runs; versionupgrade.RolloutMySQLVersion holds the mysql image/env until the check passes.
-	if sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster); stsErr != nil {
-		return reconcile.Result{}, stsErr
-	} else if versionupgrade.ShouldBlockRollout(ctx, r.Client, cluster, sts) {
+	if versionupgrade.ShouldBlockRollout(ctx, r.Client, cluster, sts) {
 		log.Info("holding MySQL image rollout until upgrade check completes", "cluster", cluster)
 	}
 

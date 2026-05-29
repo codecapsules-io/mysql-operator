@@ -3,11 +3,11 @@
 This operator resolves the Percona (or other) **server image** for a `MysqlCluster` in this order:
 
 1. `spec.image` on the cluster (highest priority).
-2. `--mysql-versions-to-image` CLI entries for the exact semver string (e.g. `9.7.0=...`).
+2. `--mysql-versions-to-image` CLI entries for the exact semver string (e.g. `8.4.0=...`).
 3. Lines from `--mysql-version-catalog-file` (e.g. a ConfigMap mounted as a file), same `semver=image` format.
 4. Built-in defaults in `pkg/util/constants/constants.go`.
 
-**Sidecar images** are chosen by resolving the server semver to a **profile** `SidecarProfileKey` (`percona-57`, `percona-80`, `percona-84`, `percona-97`) and mapping that to operator flags (`--sidecar-image`, `--sidecar-mysql8-image`, optional `--sidecar-mysql84-image`, `--sidecar-mysql97-image`). You can override with `spec.sidecarImage` on a cluster.
+**Sidecar images** are chosen by resolving the server semver to a **profile** `SidecarProfileKey` (`percona-57`, `percona-80`, `percona-84`) and mapping that to operator flags (`--sidecar-image`, `--sidecar-mysql8-image`, optional `--sidecar-mysql84-image`). You can override with `spec.sidecarImage` on a cluster.
 
 Version-specific SQL and `my.cnf` behavior is defined in built-in profiles and optional YAML overlays; see [mysql-version-profiles.md](mysql-version-profiles.md).
 
@@ -21,7 +21,7 @@ The catalog file is a list of lines `8.4.2=percona@sha256:...` (comments with `#
 
 ## Helm
 
-The chart can pass `--sidecar-mysql84-image`, `--sidecar-mysql97-image`, optional catalog mounts, and optional profile overlay mounts via `values.yaml`. See `deploy/charts/mysql-operator/values.yaml`.
+The chart can pass `--sidecar-mysql84-image`, optional catalog mounts, and optional profile overlay mounts via `values.yaml`. See `deploy/charts/mysql-operator/values.yaml`.
 
 ## MySQL server major upgrades
 

@@ -26,8 +26,6 @@ The following table contains the configuration parameters for mysql-operator and
 | `sidecar80.image.tag`           | Docker image tag for sidecar image for MySQL 8.0                                              | `latest`                                                |
 | `sidecar84.image.repository`    | Optional sidecar for Percona Server 8.4 LTS (empty = use sidecar80)                           | `empty`                                                 |
 | `sidecar84.image.tag`           | Tag for optional 8.4 sidecar                                                                   | `latest`                                                |
-| `sidecar97.image.repository`    | Optional sidecar for Percona Server 9.7 LTS (empty = use sidecar80)                           | `empty`                                                 |
-| `sidecar97.image.tag`           | Tag for optional 9.7 sidecar                                                                   | `latest`                                                |
 | `mysqlVersionCatalog.enabled`   | Mount a ConfigMap of `semver=image` lines and pass `--mysql-version-catalog-file`             | `false`                                                 |
 | `mysqlVersionCatalog.mountPath` | Directory in the operator pod where the catalog file is mounted                                | `/etc/mysql-operator/catalog`                           |
 | `mysqlVersionCatalog.fileName`  | File name inside the ConfigMap                                                                | `versions.properties`                                   |

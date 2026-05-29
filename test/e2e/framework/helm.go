@@ -52,9 +52,6 @@ func HelmInstallChart(release, ns string) {
 	if TestContext.SidecarMysql84Image != "" {
 		args = append(args, setImage("sidecar84.image", TestContext.SidecarMysql84Image)...)
 	}
-	if TestContext.SidecarMysql97Image != "" {
-		args = append(args, setImage("sidecar97.image", TestContext.SidecarMysql97Image)...)
-	}
 	args = append(args, setImage("orchestrator.image", TestContext.OrchestratorImage)...)
 
 	cmd := exec.Command("helm", args...)

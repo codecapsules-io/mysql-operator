@@ -22,7 +22,7 @@ func TestBuildMysqlConfData_socketOnDataVolume(t *testing.T) {
 	c := icluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
 		Spec: api.MysqlClusterSpec{
-			MysqlVersion: "9.7.0",
+			MysqlVersion: "8.4.0",
 			SecretName:   "sec",
 		},
 	})

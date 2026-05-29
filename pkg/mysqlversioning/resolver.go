@@ -61,11 +61,6 @@ func (r *ImageResolver) SidecarImage(key string) string {
 			return r.opt.SidecarMysql84Image
 		}
 		return r.opt.SidecarMysql8Image
-	case SidecarPercona97:
-		if r.opt.SidecarMysql97Image != "" {
-			return r.opt.SidecarMysql97Image
-		}
-		return r.opt.SidecarMysql8Image
 	default:
 		return r.opt.SidecarMysql8Image
 	}

@@ -16,7 +16,6 @@ const (
 	ProfilePercona57       ProfileName = "percona-5.7"
 	ProfilePercona80       ProfileName = "percona-8.0"
 	ProfilePercona84       ProfileName = "percona-8.4"
-	ProfilePercona97       ProfileName = "percona-9.7"
 	ProfileFallbackUnknown ProfileName = "fallback-unknown"
 )
 
@@ -32,7 +31,6 @@ const (
 	SidecarPercona57 SidecarProfileKey = "percona-57"
 	SidecarPercona80 SidecarProfileKey = "percona-80"
 	SidecarPercona84 SidecarProfileKey = "percona-84"
-	SidecarPercona97 SidecarProfileKey = "percona-97"
 )
 
 // String implements fmt.Stringer.
@@ -45,7 +43,6 @@ var profileUpgradeOrder = []ProfileName{
 	ProfilePercona57,
 	ProfilePercona80,
 	ProfilePercona84,
-	ProfilePercona97,
 	ProfileFallbackUnknown,
 }
 

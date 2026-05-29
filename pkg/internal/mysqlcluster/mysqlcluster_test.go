@@ -85,7 +85,7 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 			},
 			Spec: api.MysqlClusterSpec{
 				SecretName:   "sct-name",
-				MysqlVersion: "9.7.0",
+				MysqlVersion: "8.4.0",
 				MysqlConf:    map[string]intstr.IntOrString{},
 				PodSpec: api.PodSpec{
 					Resources: corev1.ResourceRequirements{
@@ -107,13 +107,10 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 	It("selects sidecar image by mysql version", func() {
 		o := options.GetOptions()
 		prev84 := o.SidecarMysql84Image
-		prev97 := o.SidecarMysql97Image
 		defer func() {
 			o.SidecarMysql84Image = prev84
-			o.SidecarMysql97Image = prev97
 		}()
 		o.SidecarMysql84Image = "reg/sidecar84:tag"
-		o.SidecarMysql97Image = "reg/sidecar97:tag"
 
 		cluster.Spec.MysqlVersion = "5.7.35"
 		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql57Image))
@@ -123,9 +120,6 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 
 		cluster.Spec.MysqlVersion = "8.4.0"
 		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar84:tag"))
-
-		cluster.Spec.MysqlVersion = "9.7.0"
-		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar97:tag"))
 	})
 
 	It("falls back to mysql8 sidecar for 8.4 when 84 image is empty", func() {

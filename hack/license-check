@@ -1,9 +1,81 @@
 #!/usr/bin/env bash
-MISSING=($(grep -s -rL --include "*.go" "Licensed under the Apache License, Version 2.0" pkg cmd))
+# Verify Apache 2.0 license headers in Go sources under pkg/ and cmd/.
+set -euo pipefail
 
-if [[ -n "${MISSING[0]}" ]]; then
-    echo "Files missing license header:"
-    printf "\t%s\n" "${MISSING[@]}"
-    exit 1
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+MISSING=()
+while IFS= read -r -d '' f; do
+	if ! grep -q 'Licensed under the Apache License, Version 2.0' "$f"; then
+		MISSING+=("$f")
+	fi
+done < <(find pkg cmd -name '*.go' -print0)
+
+if [[ -n "${MISSING[0]:-}" ]]; then
+	echo "Files missing Apache 2.0 license header:"
+	printf '\t%s\n' "${MISSING[@]}"
+	exit 1
 fi
+
+if ! git rev-parse --verify master >/dev/null 2>&1; then
+	exit 0
+fi
+
+SHORT=()
+MISSING_CC=()
+WRONG=()
+while IFS= read -r f; do
+	[[ "$f" == *.go ]] || continue
+	[[ -f "$f" ]] || continue
+	if ! grep -q 'limitations under the License' "$f"; then
+		SHORT+=("$f")
+	fi
+	if ! grep -q 'Code Capsules' "$f"; then
+		MISSING_CC+=("$f")
+	fi
+	if git diff --name-status master...HEAD -- "$f" 2>/dev/null | grep -q '^A'; then
+		if grep -q 'Copyright 2026 Pressinfra' "$f"; then
+			WRONG+=("$f")
+		fi
+	fi
+done < <(git diff --name-only master...HEAD 2>/dev/null || true)
+
+if [[ -n "${SHORT[0]:-}" ]]; then
+	echo "Branch-changed Go files with incomplete license header:"
+	printf '\t%s\n' "${SHORT[@]}"
+	exit 1
+fi
+
+if [[ -n "${MISSING_CC[0]:-}" ]]; then
+	echo "Branch-changed Go files missing Code Capsules copyright:"
+	printf '\t%s\n' "${MISSING_CC[@]}"
+	exit 1
+fi
+
+if [[ -n "${WRONG[0]:-}" ]]; then
+	echo "New Go files must not attribute Copyright 2026 to Pressinfra:"
+	printf '\t%s\n' "${WRONG[@]}"
+	exit 1
+fi
+
+MISSING_SPDX=()
+while IFS= read -r f; do
+	[[ -f "$f" ]] || continue
+	case "$f" in
+	*.go|go.mod|LICENSE|NOTICE|.gitignore) continue ;;
+	esac
+	if ! grep -q 'SPDX-License-Identifier: Apache-2.0' "$f" 2>/dev/null; then
+		if ! grep -q 'Licensed under the Apache License, Version 2.0' "$f" 2>/dev/null; then
+			MISSING_SPDX+=("$f")
+		fi
+	fi
+done < <(git diff --name-only master...HEAD 2>/dev/null || true)
+
+if [[ -n "${MISSING_SPDX[0]:-}" ]]; then
+	echo "Branch-changed non-Go files missing SPDX-License-Identifier or Apache notice:"
+	printf '\t%s\n' "${MISSING_SPDX[@]}"
+	exit 1
+fi
+
 exit 0

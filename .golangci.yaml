@@ -1,4 +1,6 @@
 # golangci-lint v2 schema (requires golangci-lint >= 2.x, built with current Go toolchain).
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
 version: "2"
 
 run:

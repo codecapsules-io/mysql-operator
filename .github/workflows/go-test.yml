@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 name: Go Tests
 
 on:

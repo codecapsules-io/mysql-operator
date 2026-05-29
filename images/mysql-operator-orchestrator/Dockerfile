@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # Docker image for orchestrator
 #
 # Percona/orchestrator fork (pinned ref) includes MySQL 8.4+ replication SQL (SHOW REPLICA STATUS, etc.).

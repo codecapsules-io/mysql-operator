@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 PLATFORMS := linux_amd64
 include ../../build/makelib/common.mk
 

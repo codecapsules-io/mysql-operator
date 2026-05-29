@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # NOTE: this image is for development only
 # Copy the mysql-operator-sidecar into its own image
 

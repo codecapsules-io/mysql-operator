@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -68,7 +69,7 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 	})
 
 	It("should have defaults set", func() {
-		Expect(cluster.GetMySQLSemVer()).To(Equal(constants.MySQLDefaultVersion))
+		Expect(cluster.GetMySQLSemVer().String()).To(Equal(constants.MySQLDefaultVersion))
 		Expect(cluster.GetMysqlImage()).To(ContainSubstring("percona"))
 
 		Expect(cluster.Spec.PodSpec.Resources.Requests.Memory()).To(PointTo(Equal(resource.MustParse("1Gi"))))

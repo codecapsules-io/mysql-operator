@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # Project Setup
 PROJECT_NAME := mysql-operator
 PROJECT_REPO := github.com/bitpoke/mysql-operator

@@ -13,24 +13,3 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package sidecar
-
-import (
-	"strings"
-	"testing"
-)
-
-func TestRootRemoteAccessQueries_escapesPassword(t *testing.T) {
-	queries := rootRemoteAccessQueries("pa'ss")
-	if len(queries) != 2 {
-		t.Fatalf("expected 2 queries, got %d", len(queries))
-	}
-	for _, q := range queries {
-		if !strings.Contains(q, "pa''ss") {
-			t.Fatalf("expected escaped password in %q", q)
-		}
-		if !strings.Contains(q, "root@'%'") {
-			t.Fatalf("expected root@'%%' in %q", q)
-		}
-	}
-}

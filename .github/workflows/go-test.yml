@@ -2,9 +2,9 @@ name: Go Tests
 
 on:
   push:
-    branches: ["feat/8.4support"] # runs on push to any branch
+    branches: ["**"] # runs on push to any branch
   pull_request:
-    branches: ["feat/8.4support"]
+    branches: ["**"]
 
 jobs:
   test:

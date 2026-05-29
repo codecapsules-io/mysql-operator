@@ -42,7 +42,7 @@ DOCKER_REGISTRY ?= docker.io/bitpoke
 IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4
 include build/makelib/image.mk
 
-KUBEBUILDER_ASSETS_VERSION := 1.21.2
+KUBEBUILDER_ASSETS_VERSION := 1.23.5
 GEN_CRD_OPTIONS := crd:crdVersions=v1,preserveUnknownFields=false
 include build/makelib/kubebuilder-v3.mk
 

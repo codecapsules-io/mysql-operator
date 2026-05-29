@@ -31,15 +31,17 @@ CONTROLLER_GEN_WEBHOOK_OPTIONS ?= webhook
 CONTROLLER_GEN_OBJECT_OPTIONS ?= object:headerFile=$(BOILERPLATE_FILE)
 CONTROLLER_GEN_PATHS ?= $(foreach t,$(GO_SUBDIRS),paths=./$(t)/...)
 
-KUBEBUILDER_ASSETS_VERSION ?= 1.19.2
+# Oldest version in controller-tools envtest-releases.yaml (GCS kubebuilder-tools bucket is gone).
+KUBEBUILDER_ASSETS_VERSION ?= 1.23.5
 KUBEBUILDER_ASSETS = $(CACHE_DIR)/kubebuilder/k8s/$(KUBEBUILDER_ASSETS_VERSION)-$(HOSTOS)-$(HOSTARCH)
 export KUBEBUILDER_ASSETS
 
 # ====================================================================================
 # tools
 
-# setup-envtest download and install
-SETUP_ENVTEST_VERSION ?= 0.0.0-20211206022232-3ffc700bc2a3
+# setup-envtest: pin a release that downloads from controller-tools GitHub releases, not GCS.
+# See https://github.com/kubernetes-sigs/kubebuilder/discussions/4082
+SETUP_ENVTEST_VERSION ?= 0.0.0-20250308055145-5fe7bb3edc86
 SETUP_ENVTEST_DOWNLOAD_URL ?= sigs.k8s.io/controller-runtime/tools/setup-envtest
 $(eval $(call tool.go.install,setup-envtest,v$(SETUP_ENVTEST_VERSION),$(SETUP_ENVTEST_DOWNLOAD_URL)))
 

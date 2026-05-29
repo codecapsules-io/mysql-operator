@@ -23,12 +23,10 @@ import (
 	"strings"
 
 	core "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/bitpoke/mysql-operator/pkg/options"
 )
@@ -71,7 +69,7 @@ func (p *PVCCleaner) Run(ctx context.Context) error {
 	}
 
 	// Find any pvcs with higher ordinal than replicas and delete them
-	pvcs, err := p.getPVCs(ctx)
+	pvcs, err := listOwnedClusterPVCs(ctx, p.client, p.cluster)
 	if err != nil {
 		return err
 	}
@@ -102,50 +100,6 @@ func (p *PVCCleaner) deletePVC(ctx context.Context, pvc *core.PersistentVolumeCl
 	p.recorder.Event(p.cluster, core.EventTypeNormal, reasonPVCCleanupSuccessful,
 		fmt.Sprintf(messageCleanupSuccessful, pvc.Name, p.cluster.Name))
 	return nil
-}
-
-func (p *PVCCleaner) getPVCs(ctx context.Context) ([]core.PersistentVolumeClaim, error) {
-	pvcs := &core.PersistentVolumeClaimList{}
-	opts := &client.ListOptions{
-		Namespace:     p.cluster.Namespace,
-		LabelSelector: labels.SelectorFromSet(p.cluster.GetSelectorLabels()),
-	}
-
-	if err := p.client.List(ctx, pvcs, opts); err != nil {
-		return nil, err
-	}
-
-	// check just claims with cluster as owner reference
-	claims := []core.PersistentVolumeClaim{}
-	for _, claim := range pvcs.Items {
-		if !isOwnedBy(claim, p.cluster.Unwrap()) {
-			log.Info("pvc not owner by cluster", "pvc", claim.Name, "key", p.cluster)
-			continue // skip it's not owned by this cluster
-		}
-
-		if claim.DeletionTimestamp != nil {
-			continue // is being deleted, skip
-		}
-
-		claims = append(claims, claim)
-	}
-
-	return claims, nil
-}
-
-func isOwnedBy(pvc core.PersistentVolumeClaim, cluster *api.MysqlCluster) bool {
-	if pvc.Namespace != cluster.Namespace {
-		// check is that cluster is in the same namespace
-		return false
-	}
-
-	for _, ref := range pvc.ObjectMeta.GetOwnerReferences() {
-		if ref.Kind == "MysqlCluster" && ref.Name == cluster.Name {
-			return true
-		}
-	}
-
-	return false
 }
 
 func getOrdinal(name string) (int32, error) {

@@ -126,11 +126,18 @@ func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 	out.Spec.Template.Spec.SecurityContext = s.ensurePodSecurityContext()
 	defaultPodSpec(&out.Spec.Template.Spec, s.scheme)
 
-	if s.cluster.Spec.VolumeSpec.PersistentVolumeClaim != nil {
+	// volumeClaimTemplates are immutable once the StatefulSet exists (except on some clusters
+	// for storage expansion only). Storage growth is applied by PVCResizer on live claims.
+	if s.cluster.Spec.VolumeSpec.PersistentVolumeClaim != nil && s.shouldSetVolumeClaimTemplates(out) {
 		out.Spec.VolumeClaimTemplates = s.ensureVolumeClaimTemplates(out.Spec.VolumeClaimTemplates)
 	}
 
 	return nil
+}
+
+// shouldSetVolumeClaimTemplates is true only when creating the StatefulSet or it has no templates yet.
+func (s *sfsSyncer) shouldSetVolumeClaimTemplates(sts *apps.StatefulSet) bool {
+	return sts.CreationTimestamp.IsZero() || len(sts.Spec.VolumeClaimTemplates) == 0
 }
 
 func (s *sfsSyncer) ensurePodSpec(ctx context.Context, sts *apps.StatefulSet) core.PodSpec {
@@ -687,6 +694,7 @@ func (s *sfsSyncer) ensureVolumeClaimTemplates(in []core.PersistentVolumeClaim) 
 	}
 
 	existingVolumeMode := data.Spec.VolumeMode
+	existingStorageClass := data.Spec.StorageClassName
 	data.Spec = *s.cluster.Spec.VolumeSpec.PersistentVolumeClaim.DeepCopy()
 	// The API defaults volumeMode to Filesystem on VolumeClaimTemplates; MysqlCluster spec usually omits it.
 	// Leaving it nil causes a perpetual diff and StatefulSet update conflicts that block pod template changes.
@@ -697,6 +705,10 @@ func (s *sfsSyncer) ensureVolumeClaimTemplates(in []core.PersistentVolumeClaim) 
 			mode := core.PersistentVolumeFilesystem
 			data.Spec.VolumeMode = &mode
 		}
+	}
+	// storageClassName is immutable on volumeClaimTemplates; keep the live value when spec omits it.
+	if data.Spec.StorageClassName == nil && existingStorageClass != nil {
+		data.Spec.StorageClassName = existingStorageClass
 	}
 
 	in[0] = data

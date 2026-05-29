@@ -161,6 +161,7 @@ type ReconcileMysqlCluster struct {
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps;secrets;services;events;jobs;pods;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=mysql.presslabs.org,resources=mysqlclusters;mysqlclusters/status;mysqlclusters/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
@@ -327,6 +328,12 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 				return reconcile.Result{}, err
 			}
 		}
+	}
+
+	// Expand existing data PVCs when volumeSpec storage increases (StatefulSet template alone does not resize claims).
+	pvcResizer := cleaner.NewPVCResizer(cluster, r.opt, r.recorder, r.Client)
+	if err = pvcResizer.Run(context.TODO()); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Perform any cleanup

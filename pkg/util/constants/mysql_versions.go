@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,7 +31,7 @@ const (
 	MySQLVersion5731 MySQLVersion = "5.7.31"
 	MySQLVersion5735 MySQLVersion = "5.7.35"
 	MySQLVersion8020 MySQLVersion = "8.0.20"
-	MySQLVersion8034 MySQLVersion = "8.0.34"
+	MySQLVersion8032 MySQLVersion = "8.0.32"
 	MySQLVersion840  MySQLVersion = "8.4.0"
 )
 

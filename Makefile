@@ -46,7 +46,8 @@ IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 
 include build/makelib/image.mk
 
 KUBEBUILDER_ASSETS_VERSION := 1.23.5
-GEN_CRD_OPTIONS := crd:crdVersions=v1,preserveUnknownFields=false
+# preserveUnknownFields is applied post-generate via .kubebuilder.fix-preserve-unknown-fields (yq).
+GEN_CRD_OPTIONS := crd:crdVersions=v1
 include build/makelib/kubebuilder-v3.mk
 
 # fix for https://github.com/kubernetes-sigs/controller-tools/issues/476

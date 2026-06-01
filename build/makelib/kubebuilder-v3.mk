@@ -28,7 +28,8 @@ RBAC_DIR ?= config/rbac
 
 BOILERPLATE_FILE ?= hack/boilerplate.go.txt
 
-CONTROLLER_GEN_CRD_OPTIONS ?= crd output:crd:artifacts:config=$(CRD_DIR)
+# controller-gen < v0.14 panics on Go 1.22+ (go/types + apimachinery/resource/math.go).
+CONTROLLER_GEN_CRD_OPTIONS ?= crd:crdVersions=v1 output:crd:artifacts:config=$(CRD_DIR)
 CONTROLLER_GEN_RBAC_OPTIONS ?= rbac:roleName=manager-role output:rbac:artifacts:config=$(RBAC_DIR)
 CONTROLLER_GEN_WEBHOOK_OPTIONS ?= webhook
 CONTROLLER_GEN_OBJECT_OPTIONS ?= object:headerFile=$(BOILERPLATE_FILE)
@@ -54,7 +55,7 @@ KUBEBUILDER_DOWNLOAD_URL ?= https://github.com/kubernetes-sigs/kubebuilder/relea
 $(eval $(call tool.download,kubebuilder,$(KUBEBUILDER_VERSION),$(KUBEBUILDER_DOWNLOAD_URL)))
 
 # controller-gen download and install
-CONTROLLER_GEN_VERSION ?= 0.7.0
+CONTROLLER_GEN_VERSION ?= 0.16.5
 CONTROLLER_GEN_DOWNLOAD_URL ?= sigs.k8s.io/controller-tools/cmd/controller-gen
 $(eval $(call tool.go.install,controller-gen,v$(CONTROLLER_GEN_VERSION),$(CONTROLLER_GEN_DOWNLOAD_URL)))
 

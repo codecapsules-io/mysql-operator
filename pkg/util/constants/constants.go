@@ -99,7 +99,7 @@ var (
 	// MySQLTagsToSemVer maps simple version tags to canonical semver strings.
 	MySQLTagsToSemVer = map[string]string{
 		MySQLTag57: MySQLVersion5735.String(),
-		MySQLTag80: MySQLVersion8020.String(),
+		MySQLTag80: MySQLVersion8032.String(),
 		MySQLTag84: MySQLVersion840.String(),
 	}
 	// MysqlImageVersions is a map of supported mysql version and their image
@@ -118,7 +118,7 @@ var (
 		// Percona:8.0.20-11 CentOS based image
 		MySQLVersion8020.String(): "percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc",
 		// Percona Server 8.0.34 (linux/amd64 manifest digest from percona/percona-server:8.0.34-26)
-		MySQLVersion8034.String(): "percona/percona-server@sha256:b2588da614b1f382468fc9f44600863e324067a9cae57c204a30a2105d61d9d9",
+		MySQLVersion8032.String(): "percona@sha256:5332a2dd238486f597566403403410e85cc4438f11f317f65458105be00feeba",
 		// Percona Server 8.4 LTS — docker.io tag 8.4.8-8 (multi-arch manifest digest, pushed 2026-04-16)
 		MySQLVersion840.String(): "docker.io/percona/percona-server:8.4",
 	}

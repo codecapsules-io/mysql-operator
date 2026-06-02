@@ -28,10 +28,10 @@ Release notes for version `[0.6.3]` and earlier describe the upstream
 [presslabs/mysql-operator](https://github.com/presslabs/mysql-operator)). Historical compare
 links at the bottom of this file for those versions point to the upstream repositories.
 
-From `[Unreleased]` onward, entries document the **Code Capsules** fork maintained at
+From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 [codecapsules-io/mysql-operator](https://github.com/codecapsules-io/mysql-operator).
 
-## [Unreleased]
+## [0.7.0] - Unreleased
 
 ### Changed
 

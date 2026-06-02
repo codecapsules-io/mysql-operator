@@ -50,6 +50,8 @@ For version-specific behavior (MySQL 8.4, upgrades, catalogs, profiles), see the
 
 | Topic                            | Location                                                                           |
 | -------------------------------- | ---------------------------------------------------------------------------------- |
+| Active maintenance scope         | [`MAINTENANCE.md`](MAINTENANCE.md)                                                 |
+| Contributing & pull requests     | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                               |
 | MySQL version catalog & upgrades | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                 |
 | Version profiles & overlays      | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                 |
 | Helm chart values                | [`deploy/charts/mysql-operator/README.md`](deploy/charts/mysql-operator/README.md) |
@@ -79,6 +81,10 @@ kubectl apply -f examples/example-cluster.yaml
 Adapt names, storage classes, and `mysqlVersion` to your environment before use in production.
 
 ## Roadmap and support
+
+**Active maintenance:** See [`MAINTENANCE.md`](MAINTENANCE.md) for what this fork actively maintains (MySQL version support, core infrastructure fixes, ease-of-use work) and what is out of scope (including built-in backups).
+
+**Contributing:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how pull requests and public contributions are handled (PR-only workflow, Code Capsules approval, CI, and quality expectations).
 
 **Roadmap:** Not published publicly. Planning and prioritization are handled internally by Code Capsules.
 

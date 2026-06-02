@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,11 +25,11 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/controller/internal/testutil"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlbackup"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller/internal/testutil"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlbackup"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
 
 var _ = Describe("MysqlBackup job syncer", func() {

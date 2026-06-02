@@ -22,7 +22,7 @@ import (
 	apps "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // RolloutMySQLVersion is the MySQL version the StatefulSet must run until the upgrade check passes.

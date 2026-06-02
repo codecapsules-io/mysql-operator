@@ -34,9 +34,9 @@ import (
 
 	logf "github.com/presslabs/controller-util/log"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 func TestMySQLClusterWrapper(t *testing.T) {

@@ -26,10 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 // nolint: megacheck, deadcode, varcheck
@@ -196,7 +196,7 @@ func computeInnodbLogFileSize(mem *resource.Quantity) int64 {
 }
 
 // computeInnodbBufferPoolSize returns a computed value, to configure MySQL, based on requested
-// memory. As described in: https://github.com/bitpoke/mysql-operator/issues/502
+// memory. As described in: https://github.com/codecapsules-io/mysql-operator/issues/502
 func computeInnodbBufferPoolSize(mem *resource.Quantity) (int64, error) {
 	availableMem := mem.DeepCopy()
 	percentRAM := 0.75

@@ -8,6 +8,7 @@ include ../../build/makelib/image.mk
 img.build:
 	@$(INFO) docker build $(IMAGE) $(IMAGE_PLATFORM)
 	@cp -La . $(IMAGE_TEMP_DIR)
+	@cp ../../LICENSE ../../NOTICE $(IMAGE_TEMP_DIR)/
 	@mkdir -p $(IMAGE_TEMP_DIR)/rootfs/usr/local/bin
 	@cp $(OUTPUT_DIR)/bin/linux_$(ARCH)/orc-helper $(IMAGE_TEMP_DIR)/rootfs/usr/local/bin/orc-helper
 	@docker buildx build $(BUILD_ARGS) \

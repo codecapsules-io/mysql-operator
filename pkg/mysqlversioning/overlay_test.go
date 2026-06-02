@@ -22,7 +22,7 @@ import (
 
 	"github.com/blang/semver"
 
-	"github.com/bitpoke/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
 
 func TestProfilesWithOverlay_prependMatchesBeforeBuiltin(t *testing.T) {

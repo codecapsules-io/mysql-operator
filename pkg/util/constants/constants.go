@@ -109,7 +109,6 @@ var (
 		// percona:5.7.31-centos
 		MySQLVersion5731.String(): "percona@sha256:68dad5e2efeb6893e2d7d116a1eae144f2c641c17d00e7869397395590c91651",
 		// This version of mysql has a bug and doesn't work with the operator,
-		// see: https://github.com/bitpoke/mysql-operator/issues/509
 		MySQLVersion5729.String(): "percona@sha256:d801123bbfaf750924f993f5c59189d144a93feb928b8aef95e541dd61c62881",
 		// Percona:5.7.26 CentOS based image
 		MySQLVersion5726.String(): "percona@sha256:713c1817615b333b17d0fbd252b0ccc53c48a665d4cfcb42178167435a957322",

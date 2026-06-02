@@ -23,8 +23,8 @@ import (
 	batch "k8s.io/api/batch/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
 
 // Step identifiers for built-in upgrade actions. New steps add a constant here, a StepStrategy in step_strategy.go,

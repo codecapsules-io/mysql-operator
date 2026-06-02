@@ -26,10 +26,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (

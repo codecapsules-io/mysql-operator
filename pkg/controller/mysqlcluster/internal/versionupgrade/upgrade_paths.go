@@ -18,7 +18,7 @@ package versionupgrade
 import (
 	"github.com/blang/semver"
 
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
 
 // profileTransition identifies a supported one-step LTS profile upgrade (source line → target line).

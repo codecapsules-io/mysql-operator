@@ -1,5 +1,6 @@
 /*
 Copyright 2020 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +17,7 @@ limitations under the License.
 
 package controller
 
-import "github.com/bitpoke/mysql-operator/pkg/controller/mysqluser"
+import "github.com/codecapsules-io/mysql-operator/pkg/controller/mysqluser"
 
 func init() {
 	// AddToManagerFuncs is a list of functions to create controllers and add them to a manager.

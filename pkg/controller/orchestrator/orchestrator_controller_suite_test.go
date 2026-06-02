@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/bitpoke/mysql-operator/pkg/apis"
-	"github.com/bitpoke/mysql-operator/pkg/controller/internal/testutil"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller/internal/testutil"
 )
 
 var cfg *rest.Config

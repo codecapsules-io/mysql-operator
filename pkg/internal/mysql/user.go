@@ -1,5 +1,6 @@
 /*
 Copyright 2020 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +25,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	mysqlv1alpha1 "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	mysqlv1alpha1 "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 )
 
 // CreateUserIfNotExists creates a user if it doesn't already exist and it gives it the specified permissions

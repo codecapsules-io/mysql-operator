@@ -1,41 +1,44 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 apiVersion: v2
 name: mysql-operator
-description: A helm chart for Bitpoke Operator for MySQL
-appVersion: "latest"
-kubeVersion: ">= 1.19.0-0"
+description: A helm chart for Code Capsules Operator for MySQL
+appVersion: 'latest'
+kubeVersion: '>= 1.19.0-0'
 keywords:
   - mysql
   - percona
   - orchestrator
-  - bitpoke
+  - codecapsules
   - database
 version: 0.0.0
-home: https://www.bitpoke.io/mysql-operator/
+home: https://codecapsules.io/
 sources:
-  - https://github.com/bitpoke/mysql-operator.git
+  - https://github.com/codecapsules-io/mysql-operator.git
 annotations:
-  artifacthub.io/license: "Apache-2.0"
-  artifacthub.io/operator: "true"
-  artifacthub.io/operatorCapabilities: "full lifecycle"
+  artifacthub.io/license: 'Apache-2.0'
+  artifacthub.io/operator: 'true'
+  artifacthub.io/operatorCapabilities: 'full lifecycle'
   artifacthub.io/images: |
     - name: mysql-operator
-      image: docker.io/bitpoke/mysql-operator:latest
+      image: docker.io/codecapsules-io/mysql-operator:latest
       whitelisted: true
     - name: orchestrator
-      image: docker.io/bitpoke/mysql-operator-orchestrator:latest
+      image: docker.io/codecapsules-io/mysql-operator-orchestrator:latest
       whitelisted: true
     - name: mysql-5.7-sidecar
-      image: docker.io/bitpoke/mysql-operator-sidecar-5.7:latest
+      image: docker.io/codecapsules-io/mysql-operator-sidecar-5.7:latest
       whitelisted: true
     - name: mysql-8.0-sidecar
-      image: docker.io/bitpoke/mysql-operator-sidecar-8.0:latest
+      image: docker.io/codecapsules-io/mysql-operator-sidecar-8.0:latest
       whitelisted: true
   artifacthub.io/crds: |
     - kind: MySQLCluster
       version: v1alpha1
       name: mysqlclusters.mysql.presslabs.org
       displayName: MySQLCluster
-      description: Represents a MySQL cluster managed by Bitpoke's Operator for MySQL.
+      description: Represents a MySQL cluster managed by Code Capsules Operator for MySQL.
   artifacthub.io/crdsExamples: |
     - apiVersion: v1alpha1
       kind: MysqlCluster
@@ -48,4 +51,3 @@ annotations:
          innodb-buffer-size: 128M
       targetSLO:
         maxSlaveLatency: 10s
-

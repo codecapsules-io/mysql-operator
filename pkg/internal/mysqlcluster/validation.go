@@ -20,7 +20,7 @@ package mysqlcluster
 import (
 	"fmt"
 
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
 
 // Validate checks if the cluster spec is validated

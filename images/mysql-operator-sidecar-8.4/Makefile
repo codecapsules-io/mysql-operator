@@ -11,6 +11,7 @@ include ../../build/makelib/image.mk
 img.build:
 	@$(INFO) docker build $(IMAGE) $(IMAGE_PLATFORM)
 	@cp -La ../mysql-operator-sidecar-5.7 $(IMAGE_TEMP_DIR)
+	@cp ../../LICENSE ../../NOTICE $(IMAGE_TEMP_DIR)/mysql-operator-sidecar-5.7/
 	@cp $(OUTPUT_DIR)/bin/linux_$(ARCH)/mysql-operator-sidecar $(IMAGE_TEMP_DIR)/mysql-operator-sidecar-5.7/rootfs/usr/local/bin/mysql-operator-sidecar
 	@docker buildx build $(BUILD_ARGS) \
 		--platform $(IMAGE_PLATFORM) \

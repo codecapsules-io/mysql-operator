@@ -24,6 +24,9 @@ RUN useradd -u 999 -r -g 999 -s /sbin/nologin \
 
 COPY rootfs/ /
 
+# Apache 2.0 redistribution (object form): include LICENSE and NOTICE for recipients.
+COPY LICENSE NOTICE /licenses/
+
 RUN export RCLONE_VERSION=1.57.0 \
     && gpg --import /etc/gpg-keys/rclone.gpg \
     && wget -nv https://github.com/ncw/rclone/releases/download/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.zip \

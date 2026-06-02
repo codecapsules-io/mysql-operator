@@ -21,7 +21,7 @@ import (
 
 	"github.com/onsi/ginkgo/config"
 
-	"github.com/bitpoke/mysql-operator/pkg/version"
+	"github.com/codecapsules-io/mysql-operator/pkg/version"
 
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -73,11 +73,11 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.ChartPath, "operator-chart-path", "../../deploy/charts/mysql-operator", "The chart name or path for mysql operator")
 	flag.StringVar(&TestContext.ChartValues, "operator-chart-values-path", "../../test/e2e-values.yaml", "Path to a values file for mysql-operator chart.")
 
-	flag.StringVar(&TestContext.OperatorImage, "operator-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator:"+commit, "Image for mysql operator.")
-	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-sidecar-5.7:"+commit, "Image for mysql helper.")
-	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-sidecar-8.0:"+commit, "Image for mysql helper.")
+	flag.StringVar(&TestContext.OperatorImage, "operator-image", "docker.io/codecapsules-io/mysql-operator:"+commit, "Image for mysql operator.")
+	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", "docker.io/codecapsules-io/mysql-operator-sidecar-5.7:"+commit, "Image for mysql helper.")
+	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", "docker.io/codecapsules-io/mysql-operator-sidecar-8.0:"+commit, "Image for mysql helper.")
 	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from helm).")
-	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
+	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "docker.io/codecapsules-io/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
 
 	flag.IntVar(&TestContext.TimeoutSeconds, "pod-wait-timeout", 100, "Timeout to wait for a pod to be ready.")
 	flag.BoolVar(&TestContext.DumpLogsOnFailure, "dump-logs-on-failure", true, "Dump pods logs when a test fails.")

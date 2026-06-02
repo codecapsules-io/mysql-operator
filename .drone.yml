@@ -7,7 +7,7 @@ clone:
 
 workspace:
   base: /workspace
-  path: src/github.com/bitpoke/mysql-operator
+  path: src/github.com/codecapsules-io/mysql-operator
 
 steps:
 - name: git
@@ -70,7 +70,7 @@ clone:
 
 workspace:
   base: /workspace
-  path: src/github.com/bitpoke/mysql-operator
+  path: src/github.com/codecapsules-io/mysql-operator
 
 steps:
 - name: git
@@ -125,7 +125,7 @@ clone:
 
 workspace:
   base: /workspace
-  path: src/github.com/bitpoke/mysql-operator
+  path: src/github.com/codecapsules-io/mysql-operator
 
 steps:
 - name: git

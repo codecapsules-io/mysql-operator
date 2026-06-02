@@ -1,6 +1,9 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 version: "2"
 domain: presslabs.org
-repo: github.com/bitpoke/mysql-operator
+repo: github.com/codecapsules-io/mysql-operator
 resources:
 - group: mysql
   kind: MysqlCluster

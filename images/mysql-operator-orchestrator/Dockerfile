@@ -41,6 +41,10 @@ COPY --from=orchestrator-build /src/bin/orchestrator /usr/local/orchestrator/orc
 COPY --from=orchestrator-build /src/bin/resources /usr/local/orchestrator/resources
 
 COPY rootfs/ /
+
+# Apache 2.0 redistribution (object form): include LICENSE and NOTICE for recipients.
+COPY LICENSE NOTICE /licenses/
+
 RUN set -ex \
 	&& mkdir -p /etc/orchestrator /var/lib/orchestrator \
 	&& chown -R 65532:65532 /etc/orchestrator /var/lib/orchestrator /usr/local/orchestrator

@@ -18,7 +18,7 @@ package sidecar
 import (
 	"testing"
 
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 func TestGetClientConfigs_includesGetServerPublicKey(t *testing.T) {

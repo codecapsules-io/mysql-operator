@@ -19,8 +19,8 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	icluster "github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	icluster "github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )

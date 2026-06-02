@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 )
 
 var log = logf.Log.WithName("update-status")

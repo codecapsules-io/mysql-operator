@@ -23,8 +23,8 @@ import (
 	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (

@@ -35,10 +35,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
-	fakeOrc "github.com/bitpoke/mysql-operator/pkg/orchestrator/fake"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
+	fakeOrc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator/fake"
 )
 
 var _ = Describe("Orchestrator reconciler", func() {

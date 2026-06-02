@@ -24,7 +24,7 @@ import (
 	// add mysql driver
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 var (

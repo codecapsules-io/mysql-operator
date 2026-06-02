@@ -33,12 +33,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlbackup"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlbackup"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (

@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,9 +32,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
-	"github.com/bitpoke/mysql-operator/test/e2e/framework"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework"
 )
 
 const (

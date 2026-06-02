@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 )
 
 func TestDataPVCName(t *testing.T) {

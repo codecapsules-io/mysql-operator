@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,10 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 var log = logf.Log.WithName("upgrades.cluster")

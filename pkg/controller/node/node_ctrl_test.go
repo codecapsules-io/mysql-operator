@@ -36,9 +36,9 @@ import (
 
 	"github.com/blang/semver"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/controller/internal/testutil"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller/internal/testutil"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 var (

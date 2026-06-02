@@ -1,5 +1,6 @@
 /*
 Copyright 2015 The Kubernetes Authors.
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,9 +38,9 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	core "k8s.io/client-go/kubernetes/typed/core/v1"
 
-	"github.com/bitpoke/mysql-operator/test/e2e/framework"
-	"github.com/bitpoke/mysql-operator/test/e2e/framework/ginkgowrapper"
-	pf "github.com/bitpoke/mysql-operator/test/e2e/framework/portforward"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework/ginkgowrapper"
+	pf "github.com/codecapsules-io/mysql-operator/test/e2e/framework/portforward"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )

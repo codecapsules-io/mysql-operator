@@ -3,7 +3,7 @@
 #
 # Project Setup
 PROJECT_NAME := mysql-operator
-PROJECT_REPO := github.com/bitpoke/mysql-operator
+PROJECT_REPO := github.com/codecapsules-io/mysql-operator
 
 PLATFORMS := darwin_amd64 linux_amd64
 include build/makelib/common.mk
@@ -41,7 +41,7 @@ GO_INTEGRATION_TESTS_PARAMS ?= -timeout 50m \
 TEST_FILTER_PARAM += $(GO_INTEGRATION_TESTS_PARAMS)
 include build/makelib/golang.mk
 
-DOCKER_REGISTRY ?= docker.io/bitpoke
+DOCKER_REGISTRY ?= docker.io/codecapsules-io
 IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4
 include build/makelib/image.mk
 
@@ -96,7 +96,7 @@ include build/makelib/helm.mk
 .helm.publish:
 	@$(INFO) publishing helm charts
 	@rm -rf $(WORK_DIR)/charts
-	@git clone -q git@github.com:bitpoke/helm-charts.git $(WORK_DIR)/charts
+	@git clone -q git@github.com:codecapsules-io/helm-charts.git $(WORK_DIR)/charts
 	@cp $(HELM_OUTPUT_DIR)/*.tgz $(WORK_DIR)/charts/docs/
 	@git -C $(WORK_DIR)/charts add $(WORK_DIR)/charts/docs/*.tgz
 	@git -C $(WORK_DIR)/charts commit -q -m "Added $(call list-join,$(COMMA)$(SPACE),$(foreach c,$(HELM_CHARTS),$(c)-v$(HELM_CHART_VERSION)))"

@@ -20,7 +20,7 @@ import (
 
 	"github.com/blang/semver"
 
-	syncer "github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/syncer"
+	syncer "github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/syncer"
 )
 
 func TestMysqlKVConfigsForVersion_legacy80(t *testing.T) {

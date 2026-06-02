@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2/klogr"
 
-	"github.com/bitpoke/mysql-operator/pkg/sidecar"
+	"github.com/codecapsules-io/mysql-operator/pkg/sidecar"
 )
 
 var log = logf.Log.WithName("sidecar")

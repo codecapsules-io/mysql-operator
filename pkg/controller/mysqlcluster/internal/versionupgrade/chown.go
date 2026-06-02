@@ -21,7 +21,7 @@ import (
 	apps "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // DatadirChownInitContainerName is the init container that chowns PVC data for Percona 8.0→8.4 UID migration.

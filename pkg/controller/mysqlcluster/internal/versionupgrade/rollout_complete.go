@@ -22,7 +22,7 @@ import (
 	core "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // RolloutComplete is true when spec.mysqlVersion is fully running: StatefulSet template matches spec,

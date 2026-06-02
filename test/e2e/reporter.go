@@ -1,5 +1,6 @@
 /*
 Copyright 2015 The Kubernetes Authors.
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"github.com/bitpoke/mysql-operator/test/e2e/framework"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework"
 )
 
 type podLogReporter struct {

@@ -27,8 +27,8 @@ import (
 
 	"github.com/go-ini/ini"
 
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 // RunConfigCommand generates my.cnf, client.cnf and 10-dynamic.cnf files.
@@ -262,7 +262,7 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 		constants.OperatorDbName, constants.OperatorStatusTableName, "configured"))
 
 	// set server as read only
-	// https://github.com/bitpoke/mysql-operator/issues/509
+	// https://github.com/codecapsules-io/mysql-operator/issues/509
 	queries = append(queries, "SET GLOBAL READ_ONLY = 1")
 
 	// Keep root@'%' aligned with spec.secretName so pre-rollout auth-migrate Jobs can use TCP if needed.

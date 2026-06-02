@@ -35,10 +35,10 @@ import (
 
 	"github.com/presslabs/controller-util/syncer"
 
-	"github.com/bitpoke/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/mysqlversioning"
-	"github.com/bitpoke/mysql-operator/pkg/util/mysqlversion"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/mysqlversion"
 )
 
 // NewConfigMapSyncer returns config map syncer.

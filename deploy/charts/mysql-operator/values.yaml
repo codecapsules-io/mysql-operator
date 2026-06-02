@@ -11,7 +11,7 @@ replicaCount: 1
 clusterImagePullPolicy: Always
 
 image:
-  repository: docker.io/bitpoke/mysql-operator
+  repository: docker.io/codecapsules-io/mysql-operator
   # Always helps local / dev clusters pick up rebuilt operator and sidecar tags without stale node cache.
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
@@ -19,13 +19,13 @@ image:
 
 sidecar57:
   image:
-    repository: docker.io/bitpoke/mysql-operator-sidecar-5.7
+    repository: docker.io/codecapsules-io/mysql-operator-sidecar-5.7
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 
 sidecar80:
   image:
-    repository: docker.io/bitpoke/mysql-operator-sidecar-8.0
+    repository: docker.io/codecapsules-io/mysql-operator-sidecar-8.0
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 
@@ -161,9 +161,9 @@ mysqlClustersGlobalServiceMonitor:
       app.kubernetes.io/name: mysql
 
 orchestrator:
-  # Chart default image (bitpoke/mysql-operator-orchestrator) is built from Percona/orchestrator for MySQL 8.4+ SQL compatibility.
+  # Chart default image (codecapsules-io/mysql-operator-orchestrator) is built from Percona/orchestrator for MySQL 8.4+ SQL compatibility.
   image:
-    repository: docker.io/bitpoke/mysql-operator-orchestrator
+    repository: docker.io/codecapsules-io/mysql-operator-orchestrator
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""

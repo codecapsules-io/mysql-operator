@@ -25,7 +25,7 @@ import (
 
 	"github.com/blang/semver"
 
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const defaultAuthMigrateTargetPlugin = "caching_sha2_password"

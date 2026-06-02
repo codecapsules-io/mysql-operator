@@ -20,8 +20,8 @@ import (
 
 	"github.com/blang/semver"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/util/mysqlversion"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/mysqlversion"
 )
 
 // Profile describes operator-owned behavior for a Percona Server / MySQL line.

@@ -23,7 +23,7 @@ import (
 	"github.com/blang/semver"
 	yaml "gopkg.in/yaml.v2"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 )
 
 // overlayFile is the declarative schema for optional profile prepends (merged before built-ins).

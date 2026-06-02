@@ -63,7 +63,7 @@ MISSING_SPDX=()
 while IFS= read -r f; do
 	[[ -f "$f" ]] || continue
 	case "$f" in
-	*.go|go.mod|LICENSE|NOTICE|.gitignore) continue ;;
+	*.go|go.mod|LICENSE|NOTICE|.gitignore|*/CODEOWNERS) continue ;;
 	esac
 	if ! grep -q 'SPDX-License-Identifier: Apache-2.0' "$f" 2>/dev/null; then
 		if ! grep -q 'Licensed under the Apache License, Version 2.0' "$f" 2>/dev/null; then

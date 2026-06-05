@@ -95,7 +95,7 @@ const (
 
 var (
 	// MySQLDefaultVersion is the version for mysql that should be used when spec.mysqlVersion is unset.
-	MySQLDefaultVersion = MySQLVersion840.String()
+	MySQLDefaultVersion = MySQLVersion5735.String()
 	// MySQLTagsToSemVer maps simple version tags to canonical semver strings.
 	MySQLTagsToSemVer = map[string]string{
 		MySQLTag57: MySQLVersion5735.String(),

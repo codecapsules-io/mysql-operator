@@ -42,7 +42,7 @@ TEST_FILTER_PARAM += $(GO_INTEGRATION_TESTS_PARAMS)
 include build/makelib/golang.mk
 
 DOCKER_REGISTRY ?= docker.io/codecapsules-io
-IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4
+IMAGES ?= mysql-operator
 include build/makelib/image.mk
 
 KUBEBUILDER_ASSETS_VERSION := 1.23.5

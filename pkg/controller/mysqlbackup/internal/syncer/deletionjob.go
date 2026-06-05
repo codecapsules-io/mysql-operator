@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlbackup"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
@@ -43,7 +44,7 @@ import (
 
 const (
 	// RemoteStorageFinalizer is the finalizer name used when hardDelete policy is used
-	RemoteStorageFinalizer = "backups.mysql.presslabs.org/remote-storage-cleanup"
+	RemoteStorageFinalizer = domain.FinalizerRemoteStorageCleanup
 
 	// RemoteDeletionFailedEvent is the event that is set on the cluster when the cleanup job fails
 	RemoteDeletionFailedEvent = "RemoteDeletionFailed"

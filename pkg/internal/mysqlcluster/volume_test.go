@@ -56,3 +56,30 @@ func TestDesiredDataVolumeStorage(t *testing.T) {
 		t.Fatalf("DesiredDataVolumeStorage: %v", qty)
 	}
 }
+
+func TestSetDesiredDataVolumeStorage(t *testing.T) {
+	cluster := New(&api.MysqlCluster{
+		Spec: api.MysqlClusterSpec{
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{
+					Resources: core.ResourceRequirements{
+						Requests: core.ResourceList{
+							core.ResourceStorage: resource.MustParse("5Gi"),
+						},
+					},
+				},
+			},
+		},
+	})
+
+	if cluster.SetDesiredDataVolumeStorage(resource.MustParse("5Gi")) {
+		t.Fatal("same size should not change spec")
+	}
+	if !cluster.SetDesiredDataVolumeStorage(resource.MustParse("10Gi")) {
+		t.Fatal("larger size should change spec")
+	}
+	qty := cluster.DesiredDataVolumeStorage()
+	if qty == nil || qty.Cmp(resource.MustParse("10Gi")) != 0 {
+		t.Fatalf("expected 10Gi after update, got %v", qty)
+	}
+}

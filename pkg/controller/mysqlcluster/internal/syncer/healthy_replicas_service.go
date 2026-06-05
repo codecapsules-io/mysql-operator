@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
@@ -39,7 +40,7 @@ func NewHealthyReplicasSVCSyncer(c client.Client, scheme *runtime.Scheme, cluste
 	return syncer.NewObjectSyncer("HealthyReplicasSVC", cluster.Unwrap(), service, c, func() error {
 		// set service labels
 		service.Labels = cluster.GetLabels()
-		service.Labels["mysql.presslabs.org/service-type"] = "ready-replicas"
+		service.Labels[domain.LabelServiceType] = domain.ServiceTypeReadyReplicas
 
 		// set selectors for healthy replica (non-master) mysql pods only
 		service.Spec.Selector = cluster.GetSelectorLabels()

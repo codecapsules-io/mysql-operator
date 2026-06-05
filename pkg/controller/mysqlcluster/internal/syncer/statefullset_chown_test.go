@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/options"
@@ -70,7 +71,7 @@ func TestEnsureInitContainersSpec_includesDatadirChownAfterUpgradeCheck(t *testi
 			Name:      versionupgrade.JobName(cluster),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				"mysql.presslabs.org/upgrade-check-target-version": "8.4.0",
+				domain.LabelUpgradeCheckTargetVersion: "8.4.0",
 			},
 		},
 		Status: batch.JobStatus{
@@ -86,7 +87,7 @@ func TestEnsureInitContainersSpec_includesDatadirChownAfterUpgradeCheck(t *testi
 			Name:      versionupgrade.AuthMigrateJobName(cluster),
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				"mysql.presslabs.org/auth-migrate-target-version": "8.4.0",
+				domain.LabelAuthMigrateTargetVersion: "8.4.0",
 			},
 		},
 		Status: batch.JobStatus{

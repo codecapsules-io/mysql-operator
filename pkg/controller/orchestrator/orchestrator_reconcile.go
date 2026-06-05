@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
 )
@@ -681,7 +682,7 @@ func instToLog(inst *orc.Instance) map[string]string {
 }
 
 func shouldRemoveOldNode(node *api.NodeStatus, cluster *mysqlcluster.MysqlCluster) bool {
-	if version, ok := cluster.ObjectMeta.Annotations["mysql.presslabs.org/version"]; ok && version == "300" {
+	if version, ok := cluster.ObjectMeta.Annotations[domain.AnnotationVersion]; ok && version == "300" {
 		return strings.Contains(node.Name, "-mysql-nodes")
 	}
 

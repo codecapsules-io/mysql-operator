@@ -84,7 +84,7 @@ type UpgradeStep struct {
 
 // JobStepSpec configures a one-shot Kubernetes Job for an upgrade step.
 type JobStepSpec struct {
-	// JobType is the mysql.presslabs.org/job-type label (Job watch enqueues the cluster).
+	// JobType is the domain.LabelJobType label (Job watch enqueues the cluster).
 	JobType string
 	// TargetVersionLabel is the label key holding the spec target semver for this Job run.
 	TargetVersionLabel string

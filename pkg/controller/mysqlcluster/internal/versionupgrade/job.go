@@ -26,6 +26,7 @@ import (
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 	"github.com/codecapsules-io/mysql-operator/pkg/options"
@@ -43,13 +44,13 @@ const (
 func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Version, _ *options.Options, sts *apps.StatefulSet) *batch.Job {
 	online := ClusterHasRunningMySQL(cluster, sts)
 	labels := cluster.GetSelectorLabels()
-	labels["mysql.presslabs.org/job-type"] = JobTypeUpgradeCheck
-	labels["mysql.presslabs.org/cluster"] = cluster.Name
+	labels[domain.LabelJobType] = JobTypeUpgradeCheck
+	labels[domain.LabelCluster] = cluster.Name
 	labels[upgradeCheckTargetLabel] = target.String()
 	if online {
-		labels["mysql.presslabs.org/upgrade-check-mode"] = "online"
+		labels[domain.LabelUpgradeCheckMode] = domain.UpgradeCheckModeOnline
 	} else {
-		labels["mysql.presslabs.org/upgrade-check-mode"] = "offline"
+		labels[domain.LabelUpgradeCheckMode] = domain.UpgradeCheckModeOffline
 	}
 
 	backoff := int32(0)

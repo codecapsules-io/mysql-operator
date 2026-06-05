@@ -51,10 +51,6 @@ const (
 	//eventWarning   = "Warning"
 	controllerName = "controller.orchestrator"
 
-	// OrchestratorFinalizer is set when the cluster is registered in
-	// orchestrator and is removed when no nodes are in orchestrator
-	OrchestratorFinalizer = "mysql.presslabs.org/registered-in-orchestrator"
-
 	// OldOrchestratorFinalizer is the old finalizer name that is DEPRECATED
 	OldOrchestratorFinalizer = "OrchestratorFinalizer"
 )

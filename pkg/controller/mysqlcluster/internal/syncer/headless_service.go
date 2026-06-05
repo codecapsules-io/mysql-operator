@@ -26,6 +26,7 @@ import (
 
 	"github.com/presslabs/controller-util/syncer"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
@@ -42,14 +43,14 @@ func NewHeadlessSVCSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysq
 		// add general labels to this service
 		service.Labels = map[string]string{
 			"app.kubernetes.io/name":       "mysql",
-			"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+			"app.kubernetes.io/managed-by": domain.ManagedBy,
 		}
-		service.Labels["mysql.presslabs.org/service-type"] = "namespace-nodes"
+		service.Labels[domain.LabelServiceType] = domain.ServiceTypeNamespaceNodes
 
 		service.Spec.ClusterIP = "None"
 		service.Spec.Selector = labels.Set{
 			"app.kubernetes.io/name":       "mysql",
-			"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+			"app.kubernetes.io/managed-by": domain.ManagedBy,
 		}
 		// we want to be able to access pods even if the pod is not ready because the operator should update
 		// the in memory table to mark the pod ready.

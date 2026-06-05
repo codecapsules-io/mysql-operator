@@ -17,14 +17,18 @@ limitations under the License.
 
 package v1alpha1
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+)
 
 // MysqlResourceDeletionPolicy delete policy defined
 type MysqlResourceDeletionPolicy string
 
 const (
 	// MysqlResourceDeletionPolicyAnnotationKey delete policy key defined
-	MysqlResourceDeletionPolicyAnnotationKey = "mysql-operator.presslabs.org/resourceDeletionPolicy"
+	MysqlResourceDeletionPolicyAnnotationKey = domain.AnnotationResourceDeletionPolicy
 	// MysqlResourceDeletionPolicyDelete delete policy delete
 	MysqlResourceDeletionPolicyDelete = MysqlResourceDeletionPolicy("delete")
 	// MysqlResourceDeletionPolicyRetain delete policy retain

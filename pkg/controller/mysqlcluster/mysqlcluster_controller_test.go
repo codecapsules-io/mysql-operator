@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/controller/internal/testutil"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
@@ -113,7 +114,7 @@ var _ = Describe("MysqlCluster controller", func() {
 			cluster = mysqlcluster.New(&api.MysqlCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns,
 					Annotations: map[string]string{
-						"mysql.presslabs.org/version": "300",
+						domain.AnnotationVersion: "300",
 					},
 				},
 				Spec: api.MysqlClusterSpec{
@@ -437,7 +438,7 @@ var _ = Describe("MysqlCluster controller", func() {
 			cluster = mysqlcluster.New(&api.MysqlCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns,
 					Annotations: map[string]string{
-						"mysql.presslabs.org/version": "300",
+						domain.AnnotationVersion: "300",
 					},
 				},
 				Spec: api.MysqlClusterSpec{

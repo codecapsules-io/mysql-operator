@@ -40,6 +40,7 @@ import (
 	gomegatypes "github.com/onsi/gomega/types"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	pf "github.com/codecapsules-io/mysql-operator/test/e2e/framework/portforward"
 )
 
@@ -234,8 +235,8 @@ func (f *Framework) ReadSQLTest(cluster *api.MysqlCluster, pod int, pw string) s
 // GetClusterLabels returns labels.Set for the given cluster
 func GetClusterLabels(cluster *api.MysqlCluster) labels.Set {
 	labels := labels.Set{
-		"mysql.presslabs.org/cluster": cluster.Name,
-		"app.kubernetes.io/name":      "mysql",
+		domain.LabelCluster:      cluster.Name,
+		"app.kubernetes.io/name": "mysql",
 	}
 
 	return labels

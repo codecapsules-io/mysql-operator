@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	mysqlv1alpha1 "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysql"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqldatabase"
@@ -46,7 +47,7 @@ import (
 )
 
 const (
-	mysqlPreventDeletionFinalizer = "mysql-operator.presslabs.org/database"
+	mysqlPreventDeletionFinalizer = domain.FinalizerDatabase
 	controllerName                = "mysql-database"
 )
 

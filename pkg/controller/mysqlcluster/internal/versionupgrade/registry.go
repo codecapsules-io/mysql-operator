@@ -15,7 +15,11 @@ limitations under the License.
 */
 package versionupgrade
 
-import batch "k8s.io/api/batch/v1"
+import (
+	batch "k8s.io/api/batch/v1"
+
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+)
 
 // registeredSteps is the catalog of version-upgrade step implementations. Paths that run each step are in upgrade_paths.go.
 var registeredSteps = builtinUpgradeSteps()
@@ -64,7 +68,7 @@ func IsRegisteredUpgradeJob(job *batch.Job) bool {
 	if job == nil {
 		return false
 	}
-	jobType := job.Labels["mysql.presslabs.org/job-type"]
+	jobType := job.Labels[domain.LabelJobType]
 	for _, t := range RegisteredJobTypes() {
 		if jobType == t {
 			return true

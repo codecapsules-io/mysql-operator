@@ -47,3 +47,22 @@ func (c *MysqlCluster) DataPVCName(ordinal int32) string {
 func (c *MysqlCluster) DataPVCNamePrefix() string {
 	return fmt.Sprintf("data-%s-", c.GetNameForResource(StatefulSet))
 }
+
+// SetDesiredDataVolumeStorage updates spec.volumeSpec.persistentVolumeClaim storage when qty differs.
+// Returns true when the spec was changed.
+func (c *MysqlCluster) SetDesiredDataVolumeStorage(qty resource.Quantity) bool {
+	pvc := c.Spec.VolumeSpec.PersistentVolumeClaim
+	if pvc == nil {
+		return false
+	}
+	if pvc.Resources.Requests == nil {
+		pvc.Resources.Requests = core.ResourceList{}
+	}
+	current, ok := pvc.Resources.Requests[core.ResourceStorage]
+	if ok && qty.Cmp(current) == 0 {
+		return false
+	}
+	newQty := qty.DeepCopy()
+	pvc.Resources.Requests[core.ResourceStorage] = newQty
+	return true
+}

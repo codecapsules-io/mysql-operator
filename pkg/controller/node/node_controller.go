@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/options"
 	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
@@ -57,7 +58,6 @@ const mysqlReconciliationTimeout = 2 * time.Minute
 
 // skipGTIDPurgedAnnotations, if this annotations is set on the cluster then the node controller skip setting GTID_PURGED variable.
 // this is the case for the upgrade when the old cluster has already set GTID_PURGED
-const skipGTIDPurgedAnnotation = "mysql.presslabs.org/skip-gtid-purged"
 
 // Add creates a new MysqlCluster Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -84,16 +84,7 @@ func newReconciler(mgr manager.Manager, sqlI sqlFactoryFunc) reconcile.Reconcile
 }
 
 func isOwnedByMySQL(meta metav1.Object) bool {
-	if meta == nil {
-		return false
-	}
-
-	labels := meta.GetLabels()
-	if val, ok := labels["app.kubernetes.io/managed-by"]; ok {
-		return val == "mysql.presslabs.org"
-	}
-
-	return false
+	return domain.IsManagedByMySQL(meta.GetLabels())
 }
 
 func isReady(obj runtime.Object) bool {
@@ -209,7 +200,7 @@ func (r *ReconcileMysqlNode) Reconcile(ctx context.Context, request reconcile.Re
 		if cluster.Annotations == nil {
 			cluster.Annotations = make(map[string]string)
 		}
-		cluster.Annotations[skipGTIDPurgedAnnotation] = "true"
+		cluster.Annotations[domain.AnnotationSkipGTIDPurged] = "true"
 		return reconcile.Result{}, r.Update(ctx, cluster.Unwrap())
 	}
 
@@ -284,7 +275,7 @@ func (r *ReconcileMysqlNode) initializeMySQL(ctx context.Context, sql SQLInterfa
 
 	// check if the skip GTID_PURGED annotation is set on the cluster first
 	// and if it's set then mark the GTID_PURGED set in status table
-	if _, ok := cluster.Annotations[skipGTIDPurgedAnnotation]; ok {
+	if _, ok := cluster.Annotations[domain.AnnotationSkipGTIDPurged]; ok {
 		if err := sql.MarkSetGTIDPurged(ctx); err != nil {
 			return err
 		}
@@ -433,7 +424,7 @@ func podCondIndex(p *corev1.Pod, condType corev1.PodConditionType) (int, bool) {
 func shouldUpdateToVersion(cluster *mysqlcluster.MysqlCluster, targetVersion int) bool {
 	var version string
 	var ok bool
-	if version, ok = cluster.ObjectMeta.Annotations["mysql.presslabs.org/version"]; !ok {
+	if version, ok = cluster.ObjectMeta.Annotations[domain.AnnotationVersion]; !ok {
 		// no version annotation present, (it's a cluster older than 0.3.0) or it's a new cluster
 		log.Info("annotation not set on cluster", "key", cluster)
 		return true

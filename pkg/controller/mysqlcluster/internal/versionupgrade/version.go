@@ -23,26 +23,20 @@ import (
 	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (
-	// upgradeCheckTargetLabel on the check Job records which spec version the Job was created for.
-	upgradeCheckTargetLabel = "mysql.presslabs.org/upgrade-check-target-version"
+	upgradeCheckTargetLabel = domain.LabelUpgradeCheckTargetVersion
+	authMigrateTargetLabel  = domain.LabelAuthMigrateTargetVersion
 
-	// authMigrateTargetLabel on the auth migrate Job records which spec version the Job targets.
-	authMigrateTargetLabel = "mysql.presslabs.org/auth-migrate-target-version"
+	JobTypeUpgradeCheck = domain.JobTypeUpgradeCheck
+	JobTypeAuthMigrate  = domain.JobTypeAuthMigrate
 
-	// JobTypeUpgradeCheck is the mysql.presslabs.org/job-type label value for upgrade check Jobs.
-	JobTypeUpgradeCheck = "mysql-upgrade-check"
-	// JobTypeAuthMigrate is the mysql.presslabs.org/job-type label value for auth plugin migrate Jobs.
-	JobTypeAuthMigrate = "mysql-auth-migrate"
-
-	// preRolloutJobsDoneAnnotation records the spec target version for which pre-rollout Jobs succeeded.
-	preRolloutJobsDoneAnnotation = "mysql.presslabs.org/pre-rollout-jobs-done-version"
-	// postRolloutJobsDoneAnnotation records the spec target version for which post-rollout Jobs succeeded.
-	postRolloutJobsDoneAnnotation = "mysql.presslabs.org/post-rollout-jobs-done-version"
+	preRolloutJobsDoneAnnotation  = domain.AnnotationPreRolloutJobsDone
+	postRolloutJobsDoneAnnotation = domain.AnnotationPostRolloutJobsDone
 
 	DataVolumeMountPath = constants.DataVolumeMountPath
 )

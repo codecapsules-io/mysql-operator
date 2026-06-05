@@ -24,6 +24,7 @@ import (
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
@@ -42,8 +43,8 @@ const (
 
 func newAuthMigrateJob(cluster *mysqlcluster.MysqlCluster, target semver.Version) *batch.Job {
 	labels := cluster.GetSelectorLabels()
-	labels["mysql.presslabs.org/job-type"] = JobTypeAuthMigrate
-	labels["mysql.presslabs.org/cluster"] = cluster.Name
+	labels[domain.LabelJobType] = JobTypeAuthMigrate
+	labels[domain.LabelCluster] = cluster.Name
 	labels[authMigrateTargetLabel] = target.String()
 
 	backoff := int32(0)

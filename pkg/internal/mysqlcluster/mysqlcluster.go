@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 	"github.com/codecapsules-io/mysql-operator/pkg/options"
 	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
@@ -44,7 +45,7 @@ type MysqlCluster struct {
 
 // NodeInitializedConditionType is the extended new pod condition that marks the pod as initialized from MySQL
 // point of view.
-const NodeInitializedConditionType core.PodConditionType = "mysql.presslabs.org/NodeInitialized"
+const NodeInitializedConditionType core.PodConditionType = domain.NodeInitializedConditionType
 
 // New returns a wrapper for mysqlcluster
 func New(mc *api.MysqlCluster) *MysqlCluster {
@@ -72,13 +73,13 @@ func (c *MysqlCluster) GetLabels() labels.Set {
 	}
 
 	labels := labels.Set{
-		"mysql.presslabs.org/cluster": c.Name,
+		domain.LabelCluster: c.Name,
 
 		"app.kubernetes.io/name":       "mysql",
 		"app.kubernetes.io/instance":   instance,
 		"app.kubernetes.io/version":    c.GetMySQLSemVer().String(),
 		"app.kubernetes.io/component":  component,
-		"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+		"app.kubernetes.io/managed-by": domain.ManagedBy,
 	}
 
 	if part, ok := c.Annotations["app.kubernetes.io/part-of"]; ok {
@@ -91,10 +92,10 @@ func (c *MysqlCluster) GetLabels() labels.Set {
 // GetSelectorLabels returns the labels that will be used as selector
 func (c *MysqlCluster) GetSelectorLabels() labels.Set {
 	return labels.Set{
-		"mysql.presslabs.org/cluster": c.Name,
+		domain.LabelCluster: c.Name,
 
 		"app.kubernetes.io/name":       "mysql",
-		"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+		"app.kubernetes.io/managed-by": domain.ManagedBy,
 	}
 }
 

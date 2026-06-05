@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
 )
@@ -34,7 +35,7 @@ func newFinalizerSyncer(c client.Client, cluster *mysqlcluster.MysqlCluster, orc
 		out := cluster.Unwrap()
 
 		// always add finalizer, this action is idempotent
-		addFinalizer(out, OrchestratorFinalizer)
+		addFinalizer(out, domain.FinalizerOrchestrator)
 		// TODO: remove this in next version (v0.4)
 		removeFinalizer(out, OldOrchestratorFinalizer)
 
@@ -50,7 +51,7 @@ func newFinalizerSyncer(c client.Client, cluster *mysqlcluster.MysqlCluster, orc
 			}
 
 			if len(instances) == 0 {
-				removeFinalizer(out, OrchestratorFinalizer)
+				removeFinalizer(out, domain.FinalizerOrchestrator)
 			}
 		}
 

@@ -60,6 +60,14 @@ include build/makelib/kubebuilder-v3.mk
 
 include build/makelib/helm.mk
 
+.PHONY: validate-domain
+validate-domain:
+	@$(INFO) validating domain metadata consistency
+	@bash hack/validate-domain.sh
+	@$(OK) validating domain metadata consistency
+
+.lint.run: validate-domain go.fmt.verify go.lint
+
 .PHONY: .kubebuilder.update.chart
 .kubebuilder.update.chart: kubebuilder.manifests $(YQ)
 	@$(INFO) updating helm RBAC and CRDs from kubebuilder manifests

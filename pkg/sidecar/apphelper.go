@@ -16,13 +16,6 @@ limitations under the License.
 
 package sidecar
 
-// const (
-// 	// timeOut represents the number of tries to check mysql to be ready.
-// 	timeOut = 60
-// 	// connRetry represents the number of tries to connect to master server
-// 	connRetry = 10
-// )
-
 // RunSidecarCommand is the main command, and represents the runtime helper that
 // configures the mysql server
 func RunSidecarCommand(cfg *Config, stop <-chan struct{}) error {

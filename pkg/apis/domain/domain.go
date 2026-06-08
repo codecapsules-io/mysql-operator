@@ -60,7 +60,6 @@ const (
 	LabelJobType                   = APIGroup + "/job-type"
 	LabelUpgradeCheckMode          = APIGroup + "/upgrade-check-mode"
 	LabelUpgradeCheckTargetVersion = APIGroup + "/upgrade-check-target-version"
-	LabelAuthMigrateTargetVersion  = APIGroup + "/auth-migrate-target-version"
 )
 
 // Label values.
@@ -71,7 +70,6 @@ const (
 	ServiceTypeNamespaceNodes = "namespace-nodes"
 
 	JobTypeUpgradeCheck = "mysql-upgrade-check"
-	JobTypeAuthMigrate  = "mysql-auth-migrate"
 
 	UpgradeCheckModeOnline  = "online"
 	UpgradeCheckModeOffline = "offline"

@@ -56,13 +56,12 @@ func TestDeleteSucceededJobStepsForPhase_removesSucceededPreRolloutJobs(t *testi
 		},
 	}
 	upJob := upgradeCheckJobSucceeded(cluster, "8.4.0")
-	authJob := authMigrateJobSucceeded(cluster, "8.4.0")
-	c := testClientBuilder().WithObjects(upJob, authJob).Build()
+	c := testClientBuilder().WithObjects(upJob).Build()
 
 	if err := DeleteSucceededJobStepsForPhase(context.Background(), c, cluster, sts, PhasePreRollout); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	for _, name := range []string{JobName(cluster), AuthMigrateJobName(cluster)} {
+	for _, name := range []string{JobName(cluster)} {
 		j := &batch.Job{}
 		key := types.NamespacedName{Name: name, Namespace: cluster.Namespace}
 		if err := c.Get(context.Background(), key, j); !errors.IsNotFound(err) {
@@ -131,22 +130,17 @@ func TestDeleteSucceededJobStepsForPhase_keepsFailedJobs(t *testing.T) {
 			},
 		},
 	}
-	failed := &batch.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      AuthMigrateJobName(cluster),
-			Namespace: cluster.Namespace,
-			Labels:    map[string]string{authMigrateTargetLabel: "8.4.0"},
-		},
-		Status: batch.JobStatus{Failed: 1},
-	}
-	succeeded := upgradeCheckJobSucceeded(cluster, "8.4.0")
-	c := testClientBuilder().WithObjects(failed, succeeded).Build()
+	active := upgradeCheckJobSucceeded(cluster, "8.4.0")
+	active.Status.Succeeded = 0
+	active.Status.Active = 1
+	active.Status.Conditions = nil
+	c := testClientBuilder().WithObjects(active).Build()
 
-	// Phase not complete (auth migrate failed) — nothing deleted.
+	// Phase not complete while upgrade-check Job is still running — nothing deleted.
 	if err := DeleteSucceededJobStepsForPhase(context.Background(), c, cluster, sts, PhasePreRollout); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := c.Get(context.Background(), types.NamespacedName{Name: AuthMigrateJobName(cluster), Namespace: cluster.Namespace}, &batch.Job{}); err != nil {
-		t.Fatalf("failed job should remain: %v", err)
+	if err := c.Get(context.Background(), types.NamespacedName{Name: JobName(cluster), Namespace: cluster.Namespace}, &batch.Job{}); err != nil {
+		t.Fatalf("upgrade check job should remain while phase incomplete: %v", err)
 	}
 }

@@ -13,7 +13,7 @@ clusterImagePullPolicy: Always
 image:
   repository: docker.io/codecapsules-io/mysql-operator
   # Always helps local / dev clusters pick up rebuilt operator and sidecar tags without stale node cache.
-  pullPolicy: Always
+  # pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
@@ -41,13 +41,6 @@ mysqlVersionCatalog:
   mountPath: /etc/mysql-operator/catalog
   fileName: versions.properties
   data: {}
-
-# Optional YAML profile overlays (prependProfiles). See docs/mysql-version-profiles.md.
-mysqlVersionProfileOverlay:
-  enabled: false
-  mountPath: /etc/mysql-operator/profile-overlay
-  fileName: overlay.yaml
-  data: ""
 
 metricsExporter:
   image:
@@ -164,7 +157,7 @@ orchestrator:
   # Chart default image (codecapsules-io/mysql-operator-orchestrator) is built from Percona/orchestrator for MySQL 8.4+ SQL compatibility.
   image:
     repository: docker.io/codecapsules-io/mysql-operator-orchestrator
-    pullPolicy: Always
+    # pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 

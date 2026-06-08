@@ -64,7 +64,7 @@ func TestRolloutComplete_requiresInitContainers(t *testing.T) {
 		},
 	}
 	c := testClientBuilder().
-		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0"), authMigrateJobSucceeded(cluster, "8.4.0")).
+		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).
 		Build()
 	if RolloutComplete(context.Background(), c, cluster, sts, []core.Pod{pod}) {
 		t.Fatal("expected incomplete rollout when not all template init containers succeeded")

@@ -15,8 +15,6 @@ limitations under the License.
 */
 package mysqlversioning
 
-import "strings"
-
 // ProfileName is the stable identifier returned by Profile.Name() for built-in profiles.
 type ProfileName string
 
@@ -61,13 +59,4 @@ func profileUpgradeIndex(name string) (int, bool) {
 		}
 	}
 	return 0, false
-}
-
-// BuiltinProfileNamesForHelp returns built-in ProfileName values for error messages and docs.
-func BuiltinProfileNamesForHelp() string {
-	names := make([]string, len(profileUpgradeOrder))
-	for i, n := range profileUpgradeOrder {
-		names[i] = n.String()
-	}
-	return strings.Join(names, ", ")
 }

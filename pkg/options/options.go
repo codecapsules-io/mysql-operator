@@ -79,9 +79,6 @@ type Options struct {
 	// for each exact semver key (e.g. mount a ConfigMap at this path).
 	MySQLVersionCatalogFile string
 
-	// MySQLProfileOverlayFile, if set, is YAML with prependProfiles (see docs/mysql-version-profiles.md).
-	MySQLProfileOverlayFile string
-
 	// mysqlVersionCatalog is populated from MySQLVersionCatalogFile during Validate.
 	mysqlVersionCatalog map[string]string
 
@@ -218,9 +215,6 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&o.MySQLVersionCatalogFile, "mysql-version-catalog-file", "",
 		"Path to a file of lines 'semver=image' merged after built-in defaults (e.g. ConfigMap mount).")
-
-	fs.StringVar(&o.MySQLProfileOverlayFile, "mysql-profile-overlay-file", "",
-		"Path to optional YAML profile overlays (prependProfiles) merged before built-in Percona profiles.")
 
 	fs.Int32Var(&o.OrchestratorConcurrentReconciles, "orchestrator-concurrent-reconciles", 10,
 		"Set the number of workers for orchestrator reconciler.")

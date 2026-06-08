@@ -21,8 +21,8 @@ import (
 	"github.com/presslabs/controller-util/syncer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
 )

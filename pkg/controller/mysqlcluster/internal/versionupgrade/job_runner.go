@@ -46,6 +46,11 @@ func EnsureJobSteps(ctx context.Context, c client.Client, cluster *mysqlcluster.
 	return nil
 }
 
+// PhaseStepsComplete reports whether every required step in the phase has finished.
+func PhaseStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, phase Phase) bool {
+	return JobStepsComplete(ctx, c, cluster, sts, phase)
+}
+
 // JobStepsComplete reports whether every required Job step in the phase has succeeded for the current target.
 func JobStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, phase Phase) bool {
 	uctx := newUpgradeContext(ctx, c, cluster, sts, nil)
@@ -63,7 +68,7 @@ func JobStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluste
 // DeleteSucceededJobStepsForPhase removes succeeded upgrade Jobs (and their pods via foreground
 // cascade) once every required step in the phase has completed successfully.
 func DeleteSucceededJobStepsForPhase(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, phase Phase) error {
-	if sts == nil || !JobStepsComplete(ctx, c, cluster, sts, phase) {
+	if sts == nil || !PhaseStepsComplete(ctx, c, cluster, sts, phase) {
 		return nil
 	}
 	uctx := newUpgradeContext(ctx, c, cluster, sts, nil)

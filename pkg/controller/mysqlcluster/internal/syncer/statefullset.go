@@ -73,6 +73,8 @@ type sfsSyncer struct {
 	opt               *options.Options
 	scheme            *runtime.Scheme
 	client            client.Client
+	syncCtx           context.Context
+	syncSTS           *apps.StatefulSet
 	rolloutVersion    semver.Version
 }
 
@@ -102,6 +104,8 @@ func NewStatefulSetSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysq
 func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 	out := in.(*apps.StatefulSet)
 
+	s.syncCtx = ctx
+	s.syncSTS = out
 	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(ctx, s.client, s.cluster, out)
 
 	s.cluster.Status.ReadyNodes = int(out.Status.ReadyReplicas)
@@ -364,10 +368,6 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	case containerCloneAndInitName:
 		env = append(env, s.envVarFromSecret(sctOpName, "BACKUP_USER", "BACKUP_USER", true))
 		env = append(env, s.envVarFromSecret(sctOpName, "BACKUP_PASSWORD", "BACKUP_PASSWORD", true))
-		env = append(env, s.envVarFromSecret(sctName, "MYSQL_ROOT_PASSWORD", "ROOT_PASSWORD", true))
-		env = append(env, s.envVarFromSecret(sctName, "MYSQL_USER", "USER", true))
-		env = append(env, s.envVarFromSecret(sctName, "MYSQL_PASSWORD", "PASSWORD", true))
-	case containerSidecarName:
 		env = append(env, s.envVarFromSecret(sctName, "MYSQL_ROOT_PASSWORD", "ROOT_PASSWORD", true))
 		env = append(env, s.envVarFromSecret(sctName, "MYSQL_USER", "USER", true))
 		env = append(env, s.envVarFromSecret(sctName, "MYSQL_PASSWORD", "PASSWORD", true))

@@ -174,7 +174,6 @@ func TestShouldBlockRollout(t *testing.T) {
 	}
 	c = testClientBuilder().WithObjects(
 		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-		authMigrateJobSucceeded(cluster, "8.4.0"),
 	).Build()
 	if ShouldBlockRollout(context.Background(), c, cluster, sts) {
 		t.Fatal("expected rollout to proceed after pre-rollout jobs succeed")

@@ -28,8 +28,6 @@ const (
 	SidecarServerPort = 8080
 	// SidecarServerProbePath the probe path
 	SidecarServerProbePath = "/health"
-	// SidecarAuthMigratePath is the HTTP endpoint on the master sidecar for pre-rollout auth plugin migration.
-	SidecarAuthMigratePath = "/auth-migrate"
 
 	// ExporterPort is the port that metrics will be exported
 	ExporterPort = 9125

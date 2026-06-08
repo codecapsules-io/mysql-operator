@@ -89,7 +89,7 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 		return &UpgradeBlockedError{Reason: fmt.Sprintf("MySQL version upgrade blocked: %s", err.Error())}
 	}
 
-	if JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
+	if PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
 		MarkPhaseJobsDone(cluster, PhasePreRollout, DesiredSemVer(cluster))
 		if err := DeleteSucceededJobStepsForPhase(ctx, c, cluster, sts, PhasePreRollout); err != nil {
 			return fmt.Errorf("delete succeeded pre-rollout upgrade jobs: %w", err)
@@ -120,7 +120,7 @@ func ShouldBlockRollout(ctx context.Context, c client.Client, cluster *mysqlclus
 			return true
 		}
 	}
-	return !JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout)
+	return !PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout)
 }
 
 // SyncAppliedVersion sets status.appliedMysqlVersion only after rollout and all post-rollout Jobs succeed.

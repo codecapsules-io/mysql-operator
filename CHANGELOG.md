@@ -64,9 +64,6 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
   when the cluster is stopped. Patch bumps within the same profile line skip the Job.
 - **StatefulSet rollout gating:** image rollout is held until all required pre-rollout upgrade Jobs
   succeed.
-- **Auth plugin migration (8.0 → 8.4+):** pre-rollout `{cluster}-auth-migrate` Job migrates persistent
-  accounts still on `mysql_native_password` to `caching_sha2_password` (configurable) while the master
-  is still on the source version.
 - **`mysql-datadir-chown` init container:** injected for Percona 8.0 → 8.4 upgrades to fix datadir
   ownership before the new server image starts.
 - **Extensible upgrade step registry:** profile transitions (5.7→8.0, 8.0→8.4) declare ordered steps;
@@ -76,6 +73,10 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 - Add SidecarImage fields to `.Spec` to allow specifying custom sidecar image.
 
 ### Removed
+
+- **Automated auth plugin migration:** the operator no longer runs a pre-rollout auth-migrate step or
+  sidecar `auth-migrate` command. Before upgrading 8.0 → 8.4+, migrate `mysql_native_password`
+  accounts manually on the primary; see [docs/mysql-version-upgrades.md](docs/mysql-version-upgrades.md).
 
 ### Fixed
 

@@ -82,28 +82,15 @@ func TestEnsureInitContainersSpec_includesDatadirChownAfterUpgradeCheck(t *testi
 			}},
 		},
 	}
-	authJob := &batch.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      versionupgrade.AuthMigrateJobName(cluster),
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				domain.LabelAuthMigrateTargetVersion: "8.4.0",
-			},
-		},
-		Status: batch.JobStatus{
-			Succeeded: 1,
-			Conditions: []batch.JobCondition{{
-				Type:   batch.JobComplete,
-				Status: core.ConditionTrue,
-			}},
-		},
+	cluster.Annotations = map[string]string{
+		domain.AnnotationPreRolloutJobsDone: "8.4.0",
 	}
 	sch := runtime.NewScheme()
 	_ = scheme.AddToScheme(sch)
 	_ = api.SchemeBuilder.AddToScheme(sch)
 	_ = apps.AddToScheme(sch)
 	_ = batch.AddToScheme(sch)
-	c := fake.NewClientBuilder().WithScheme(sch).WithObjects(checkJob, authJob).Build()
+	c := fake.NewClientBuilder().WithScheme(sch).WithObjects(checkJob).Build()
 	s := &sfsSyncer{
 		cluster: cluster,
 		client:  c,

@@ -31,7 +31,6 @@ type StepStrategy interface {
 var (
 	_ StepStrategy = datadirUpgradeCheckStrategy{}
 	_ StepStrategy = datadirChownStrategy{}
-	_ StepStrategy = authPluginMigrateStrategy{}
 )
 
 type sourceFromUpgradeContext struct{}
@@ -73,18 +72,6 @@ func (s datadirChownStrategy) Applicable(uctx UpgradeContext) bool {
 		return false
 	}
 	return uctx.Cluster.IsPerconaImage()
-}
-
-type authPluginMigrateStrategy struct {
-	source sourceFromUpgradeContext
-}
-
-func (s authPluginMigrateStrategy) SourceVersion(uctx UpgradeContext) semver.Version {
-	return s.source.SourceVersion(uctx)
-}
-
-func (s authPluginMigrateStrategy) Applicable(uctx UpgradeContext) bool {
-	return VersionChangePending(uctx.Cluster, uctx.STS)
 }
 
 func (s *UpgradeStep) sourceVersion(uctx UpgradeContext) semver.Version {

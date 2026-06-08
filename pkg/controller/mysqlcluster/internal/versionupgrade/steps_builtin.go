@@ -26,7 +26,6 @@ func builtinUpgradeSteps() []UpgradeStep {
 	return []UpgradeStep{
 		datadirUpgradeCheckStep(),
 		datadirChownStep(),
-		authPluginMigrateStep(),
 	}
 }
 
@@ -60,41 +59,11 @@ func datadirChownStep() UpgradeStep {
 	}
 }
 
-func authPluginMigrateStep() UpgradeStep {
-	return UpgradeStep{
-		ID:       StepAuthPluginMigrate,
-		Phase:    PhasePreRollout,
-		Strategy: authPluginMigrateStrategy{},
-		Job: &JobStepSpec{
-			JobType:            JobTypeAuthMigrate,
-			TargetVersionLabel: authMigrateTargetLabel,
-			JobName:            AuthMigrateJobName,
-			Build:              buildAuthMigrateJob,
-			BeforeEnsure:       beforeAuthPluginMigrateJob,
-			WaitReason: func(target semver.Version) string {
-				return fmt.Sprintf("waiting for MySQL auth plugin migration before rollout to %s", target)
-			},
-			FailureLabel: authMigrateJobFailureMessage,
-		},
-	}
-}
-
 func buildUpgradeCheckJob(uctx UpgradeContext) (*batch.Job, error) {
 	if uctx.STS == nil {
 		return nil, fmt.Errorf("statefulset required for upgrade check job")
 	}
 	return newUpgradeCheckJob(uctx.Cluster, uctx.Target, uctx.Opt, uctx.STS), nil
-}
-
-func buildAuthMigrateJob(uctx UpgradeContext) (*batch.Job, error) {
-	return newAuthMigrateJob(uctx.Cluster, uctx.Target), nil
-}
-
-func beforeAuthPluginMigrateJob(uctx UpgradeContext) error {
-	if !ClusterHasRunningMySQL(uctx.Cluster, uctx.STS) {
-		return &HoldRolloutError{Reason: "waiting for MySQL master before pre-rollout auth plugin migration"}
-	}
-	return nil
 }
 
 // RolloutInitStepRequired reports whether an init-container step should be injected on the STS template.
@@ -103,7 +72,7 @@ func RolloutInitStepRequired(ctx UpgradeContext, stepID string) bool {
 	if step == nil || step.Init == nil || !stepRequired(ctx, stepID) {
 		return false
 	}
-	if step.Init.AfterPreRolloutJobs && !JobStepsComplete(ctx.Ctx, ctx.Client, ctx.Cluster, ctx.STS, PhasePreRollout) {
+	if step.Init.AfterPreRolloutJobs && !PhaseStepsComplete(ctx.Ctx, ctx.Client, ctx.Cluster, ctx.STS, PhasePreRollout) {
 		return false
 	}
 	return true

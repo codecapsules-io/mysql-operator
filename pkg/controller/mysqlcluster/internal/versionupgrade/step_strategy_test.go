@@ -29,7 +29,7 @@ import (
 )
 
 func TestBuiltinSteps_registerStepStrategy(t *testing.T) {
-	for _, id := range []string{StepDatadirUpgradeCheck, StepDatadirChown, StepAuthPluginMigrate} {
+	for _, id := range []string{StepDatadirUpgradeCheck, StepDatadirChown} {
 		step := StepByID(id)
 		if step == nil {
 			t.Fatalf("step %q not registered", id)

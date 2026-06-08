@@ -21,8 +21,8 @@ import (
 
 func TestUpgradeSteps_catalog(t *testing.T) {
 	steps := UpgradeSteps()
-	if len(steps) < 3 {
-		t.Fatalf("expected at least 3 builtin steps, got %d", len(steps))
+	if len(steps) < 2 {
+		t.Fatalf("expected at least 2 builtin steps, got %d", len(steps))
 	}
 	ids := map[string]Phase{}
 	for _, s := range steps {
@@ -37,14 +37,11 @@ func TestUpgradeSteps_catalog(t *testing.T) {
 	if ids[StepDatadirChown] != PhaseRolloutInit {
 		t.Fatalf("chown phase: %v", ids[StepDatadirChown])
 	}
-	if ids[StepAuthPluginMigrate] != PhasePreRollout {
-		t.Fatalf("auth migrate phase: %v", ids[StepAuthPluginMigrate])
-	}
 }
 
 func TestRegisteredJobTypes(t *testing.T) {
 	types := RegisteredJobTypes()
-	if len(types) != 2 {
+	if len(types) != 1 || types[0] != JobTypeUpgradeCheck {
 		t.Fatalf("job types: %v", types)
 	}
 }

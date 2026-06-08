@@ -55,15 +55,3 @@ func NeedsDatadirUpgradeCheck(current, target semver.Version) bool {
 	}
 	return ProfileFor(current).Name() != ProfileFor(target).Name()
 }
-
-// NeedsAuthPluginMigration is true when accounts may still use mysql_native_password on the source
-// line but the target line no longer loads that plugin (e.g. Percona 8.0 → 8.4).
-func NeedsAuthPluginMigration(current, target semver.Version) bool {
-	if current.EQ(semver.Version{}) || target.EQ(current) {
-		return false
-	}
-	if !ProfileFor(current).UseMySQL80AuthPlugin() {
-		return false
-	}
-	return !ProfileFor(target).UseMySQL80AuthPlugin()
-}

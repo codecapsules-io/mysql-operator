@@ -17,14 +17,14 @@ limitations under the License.
 # Code Capsules MySQL Operator
 
 <p align="center">
-  <a href="https://codecapsules.io/">
+  <a href="https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator">
     <img alt="Code Capsules" title="Code Capsules" src="./logo.svg" width="400" style="color: black">
   </a>
 </p>
 
 <p align="center">
   <i>The simplest way to deploy your code.</i><br/>
-  <a href="https://codecapsules.io/">https://codecapsules.io</a>
+  <a href="https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator">https://codecapsules.io</a>
 </p>
 
 The **Code Capsules MySQL Operator** is a Kubernetes controller used to run and manage MySQL workloads for **Code Capsules** hosting. It deploys highly available MySQL clusters, handles backups, failover, and day‑to‑day operations needed to host MySQL-based capsules on our platform infrastructure.
@@ -53,7 +53,7 @@ For version-specific behavior (MySQL 8.4, upgrades, catalogs, profiles), see the
 | Active maintenance scope         | [`MAINTENANCE.md`](MAINTENANCE.md)                                                 |
 | Contributing & pull requests     | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                               |
 | MySQL version catalog & upgrades | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                 |
-| Version profiles & overlays      | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                 |
+| Version profiles                 | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                 |
 | Helm chart values                | [`deploy/charts/mysql-operator/README.md`](deploy/charts/mysql-operator/README.md) |
 
 ## Deploying the controller
@@ -65,7 +65,7 @@ helm install mysql-operator ./deploy/charts/mysql-operator \
   --namespace mysql-operator --create-namespace
 ```
 
-See the [chart README](deploy/charts/mysql-operator/README.md) for configuration options (sidecars, version catalog, profile overlays, images, and RBAC).
+See the [chart README](deploy/charts/mysql-operator/README.md) for configuration options (sidecars, version catalog, images, and RBAC).
 
 **Kubernetes version:** Confirm cluster compatibility with your target operator release before upgrading; see [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md) for MySQL server upgrade behavior.
 

@@ -19,9 +19,7 @@ package mysqlcluster
 
 import (
 	"context"
-	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/presslabs/controller-util/syncer"
@@ -128,11 +126,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	err = c.Watch(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, handler.EnqueueRequestsFromMapFunc(enqueueMysqlClusterForPVC))
-	if err != nil {
-		return err
-	}
-
 	err = c.Watch(&source.Kind{Type: &batchv1.Job{}}, handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
 		job, ok := obj.(*batchv1.Job)
 		if !ok {
@@ -206,18 +199,10 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
-	// Sync volume spec from expanded PVCs before persisting other spec updates.
-	pvcSpecSyncer := cleaner.NewPVCSpecSyncer(cluster, r.opt, r.recorder, r.Client)
-	specSynced, err := pvcSpecSyncer.Sync(context.TODO())
-	if err != nil {
-		log.Error(err, "failed to sync volume spec from PVCs")
-		return reconcile.Result{}, err
-	}
-
 	// Update cluster spec that need to be saved
 	spec := *cluster.Spec.DeepCopy()
 	cluster.UpdateSpec()
-	if specSynced || !reflect.DeepEqual(spec, cluster.Spec) {
+	if !reflect.DeepEqual(spec, cluster.Spec) {
 		sErr := r.Update(context.TODO(), cluster.Unwrap())
 		if sErr != nil {
 			log.Error(sErr, "failed to update cluster spec")
@@ -394,36 +379,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func enqueueMysqlClusterForPVC(obj client.Object) []reconcile.Request {
-	pvc, ok := obj.(*corev1.PersistentVolumeClaim)
-	if !ok {
-		return nil
-	}
-
-	clusterName := pvc.Labels[domain.LabelCluster]
-	if clusterName == "" {
-		for _, ref := range pvc.OwnerReferences {
-			if ref.Kind == "MysqlCluster" {
-				clusterName = ref.Name
-				break
-			}
-		}
-	}
-	if clusterName == "" {
-		return nil
-	}
-
-	dataPrefix := fmt.Sprintf("data-%s-mysql-", clusterName)
-	if !strings.HasPrefix(pvc.Name, dataPrefix) {
-		return nil
-	}
-
-	return []reconcile.Request{{NamespacedName: types.NamespacedName{
-		Namespace: pvc.Namespace,
-		Name:      clusterName,
-	}}}
 }
 
 func (r *ReconcileMysqlCluster) persistClusterAnnotations(ctx context.Context, cluster *mysqlcluster.MysqlCluster, before map[string]string) error {

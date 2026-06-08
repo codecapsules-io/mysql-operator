@@ -30,10 +30,8 @@ import (
 
 const (
 	upgradeCheckTargetLabel = domain.LabelUpgradeCheckTargetVersion
-	authMigrateTargetLabel  = domain.LabelAuthMigrateTargetVersion
 
 	JobTypeUpgradeCheck = domain.JobTypeUpgradeCheck
-	JobTypeAuthMigrate  = domain.JobTypeAuthMigrate
 
 	preRolloutJobsDoneAnnotation  = domain.AnnotationPreRolloutJobsDone
 	postRolloutJobsDoneAnnotation = domain.AnnotationPostRolloutJobsDone
@@ -233,13 +231,5 @@ func JobName(cluster *mysqlcluster.MysqlCluster) string {
 	return cluster.GetNameForResource(mysqlcluster.StatefulSet) + "-upgrade-check"
 }
 
-// AuthMigrateJobName returns the stable Job name for auth plugin migration.
-func AuthMigrateJobName(cluster *mysqlcluster.MysqlCluster) string {
-	return cluster.GetNameForResource(mysqlcluster.StatefulSet) + "-auth-migrate"
-}
-
 // JobContainerName is the upgrade check Job container name.
 const JobContainerName = "upgrade-check"
-
-// AuthMigrateJobContainerName is the auth migrate Job container name.
-const AuthMigrateJobContainerName = "auth-migrate"

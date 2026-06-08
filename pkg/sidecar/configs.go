@@ -75,13 +75,6 @@ type Config struct {
 	HeartBeatUser     string
 	HeartBeatPassword string
 
-	// RootPassword from spec.secretName ROOT_PASSWORD (socket login for auth migration).
-	RootPassword string
-
-	// AppUser and AppPassword from spec.secretName USER/PASSWORD (optional).
-	AppUser     string
-	AppPassword string
-
 	// ExistsMySQLData checks if MySQL data is initialized by checking if the mysql dir exists
 	ExistsMySQLData bool
 
@@ -226,7 +219,7 @@ func (cfg *Config) XtrabackupPrepareArgs() []string {
 
 // NewConfig returns a pointer to Config configured from environment variables
 func NewConfig() *Config {
-	if err := mysqlversioning.InitDefault(options.GetOptions(), os.Getenv("MYSQL_OPERATOR_PROFILE_OVERLAY_FILE")); err != nil {
+	if err := mysqlversioning.InitDefault(options.GetOptions()); err != nil {
 		panic(err)
 	}
 
@@ -295,10 +288,6 @@ func NewConfig() *Config {
 
 		HeartBeatUser:     hbUser,
 		HeartBeatPassword: hbPass,
-
-		RootPassword: getEnvValue("MYSQL_ROOT_PASSWORD"),
-		AppUser:      getEnvValue("MYSQL_USER"),
-		AppPassword:  getEnvValue("MYSQL_PASSWORD"),
 
 		ExistsMySQLData: eData,
 

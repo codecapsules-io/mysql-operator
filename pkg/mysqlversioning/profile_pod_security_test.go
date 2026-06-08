@@ -16,8 +16,6 @@ limitations under the License.
 package mysqlversioning
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/blang/semver"
@@ -76,26 +74,3 @@ func boolStr(b bool) string {
 	return "false"
 }
 
-func TestProfilesWithOverlay_podSecurityDelegatesToBase(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	p := filepath.Join(dir, "overlay.yaml")
-	content := `prependProfiles:
-  - name: test-10x
-    semverRange: ">=10.0.0 <11.0.0"
-    baseProfile: ` + ProfilePercona84.String() + `
-`
-	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-	profs, err := ProfilesWithOverlay(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reg := NewRegistry(profs)
-	v := semver.MustParse("10.1.0")
-	h := reg.MustResolve(v).PodSecurityHints(true)
-	if h.FSGroup != 1001 || h.RunAsUser != nil || h.MysqlRunAsUser == nil || *h.MysqlRunAsUser != 1001 {
-		t.Fatalf("overlay on percona-8.4 base: want fsGroup 1001, nil pod RunAsUser, mysql 1001, got %+v", h)
-	}
-}

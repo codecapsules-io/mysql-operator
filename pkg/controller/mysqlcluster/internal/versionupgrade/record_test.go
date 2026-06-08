@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -63,7 +63,7 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 		},
 	}
 	c := testClientBuilder().
-		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0"), authMigrateJobSucceeded(cluster, "8.4.0")).
+		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).
 		Build()
 	if SyncAppliedVersion(context.Background(), c, cluster, sts, nil) {
 		t.Fatal("should not set applied until init containers succeed on pods")
@@ -77,8 +77,8 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "c1",
-			Namespace:   "default",
+			Name:      "c1",
+			Namespace: "default",
 		},
 		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
@@ -109,7 +109,7 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 		},
 	}
 	c := testClientBuilder().
-		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0"), authMigrateJobSucceeded(cluster, "8.4.0")).
+		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).
 		Build()
 	pod := core.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1-mysql-0"},

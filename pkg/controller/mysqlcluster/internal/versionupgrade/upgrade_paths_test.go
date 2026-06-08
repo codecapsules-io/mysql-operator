@@ -16,16 +16,10 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"context"
 	"testing"
 
 	"github.com/blang/semver"
-	apps "k8s.io/api/apps/v1"
-	core "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
 
@@ -40,7 +34,7 @@ func TestStepIDsOnPath_80To84(t *testing.T) {
 	from := semver.MustParse("8.0.34")
 	to := semver.MustParse("8.4.0")
 	got := stepIDsOnPath(from, to)
-	want := []string{StepDatadirUpgradeCheck, StepDatadirChown, StepAuthPluginMigrate}
+	want := []string{StepDatadirUpgradeCheck, StepDatadirChown}
 	if len(got) != len(want) {
 		t.Fatalf("steps: got %v want %v", got, want)
 	}
@@ -66,39 +60,6 @@ func TestStepIDsOnPath_unmappedTransition(t *testing.T) {
 	}
 }
 
-func TestStepRequired_authMigrate80To84(t *testing.T) {
-	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
-		Spec: api.MysqlClusterSpec{
-			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
-			SecretName:   "sec",
-		},
-	})
-	sts := &apps.StatefulSet{
-		Status: apps.StatefulSetStatus{ReadyReplicas: 1, Replicas: 1},
-		Spec: apps.StatefulSetSpec{
-			Template: core.PodTemplateSpec{
-				Spec: core.PodSpec{
-					Containers: []core.Container{{
-						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.4.0"}},
-					}},
-				},
-			},
-		},
-	}
-	uctx := newUpgradeContext(context.Background(), nil, cluster, sts, nil)
-	if !stepRequired(uctx, StepAuthPluginMigrate) {
-		t.Fatalf("source=%s target=%s scheduled=%v applicable=%v",
-			uctx.Source, uctx.Target,
-			stepScheduled(uctx, StepAuthPluginMigrate),
-			stepApplicable(uctx, StepAuthPluginMigrate))
-	}
-}
-
 func TestUpgradePathSteps_useProfileNames(t *testing.T) {
 	key := profileTransition{
 		From: mysqlversioning.ProfilePercona80.String(),
@@ -108,7 +69,7 @@ func TestUpgradePathSteps_useProfileNames(t *testing.T) {
 	if !ok {
 		t.Fatal("expected 8.0→8.4 path in map")
 	}
-	if len(steps) < 3 {
+	if len(steps) != 2 {
 		t.Fatalf("8.0→8.4 steps: %v", steps)
 	}
 }

@@ -61,7 +61,6 @@ func TestRolloutMySQLVersion_holdsUntilCheckPasses(t *testing.T) {
 	}
 	c = testClientBuilder().WithObjects(
 		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-		authMigrateJobSucceeded(cluster, "8.4.0"),
 	).Build()
 	got = RolloutMySQLVersion(context.Background(), c, cluster, sts)
 	if got.String() != "8.4.0" {
@@ -90,7 +89,6 @@ func TestNeedsDatadirChownInit(t *testing.T) {
 	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
 	c := testClientBuilder().WithObjects(
 		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-		authMigrateJobSucceeded(cluster, "8.4.0"),
 	).Build()
 	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
 		t.Fatal("expected chown init when upgrading 8.0 Percona to 8.4")

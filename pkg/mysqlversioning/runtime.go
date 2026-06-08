@@ -37,37 +37,13 @@ var (
 
 // InitDefault wires the process-wide runtime used by controllers and the sidecar.
 // Call once from main after options.Validate(), and from the sidecar after parsing env.
-func InitDefault(opt *options.Options, overlayPath string) error {
-	profs, err := ProfilesWithOverlay(overlayPath)
-	if err != nil {
-		return err
-	}
-	reg := NewRegistry(profs)
+func InitDefault(opt *options.Options) error {
+	reg := NewRegistry(BuiltinProfiles())
 	res := NewImageResolver(opt)
 	rt := &Runtime{Registry: reg, Resolver: res}
 	defaultRuntimeMu.Lock()
 	defaultRuntime = rt
 	defaultRuntimeMu.Unlock()
-	return nil
-}
-
-// Reload rebuilds the registry from built-ins plus overlay file and refreshes the image resolver.
-func Reload(opt *options.Options, overlayPath string) error {
-	profs, err := ProfilesWithOverlay(overlayPath)
-	if err != nil {
-		return err
-	}
-	defaultRuntimeMu.Lock()
-	defer defaultRuntimeMu.Unlock()
-	if defaultRuntime == nil {
-		defaultRuntime = &Runtime{
-			Registry: NewRegistry(profs),
-			Resolver: NewImageResolver(opt),
-		}
-		return nil
-	}
-	defaultRuntime.Registry.ReplaceProfiles(profs)
-	defaultRuntime.Resolver = NewImageResolver(opt)
 	return nil
 }
 

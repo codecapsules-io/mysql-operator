@@ -73,9 +73,6 @@ spec:
             {{- if .Values.mysqlVersionCatalog.enabled }}
             - --mysql-version-catalog-file={{ .Values.mysqlVersionCatalog.mountPath }}/{{ .Values.mysqlVersionCatalog.fileName }}
             {{- end }}
-            {{- if .Values.mysqlVersionProfileOverlay.enabled }}
-            - --mysql-profile-overlay-file={{ .Values.mysqlVersionProfileOverlay.mountPath }}/{{ .Values.mysqlVersionProfileOverlay.fileName }}
-            {{- end }}
             {{- with .Values.metricsExporter }}
             - --metrics-exporter-image={{ .image.repository }}:{{ .image.tag }}
             {{- end -}}
@@ -100,18 +97,11 @@ spec:
               port: 8081
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if or .Values.mysqlVersionCatalog.enabled .Values.mysqlVersionProfileOverlay.enabled }}
+          {{- if .Values.mysqlVersionCatalog.enabled }}
           volumeMounts:
-            {{- if .Values.mysqlVersionCatalog.enabled }}
             - name: mysql-version-catalog
               mountPath: {{ .Values.mysqlVersionCatalog.mountPath | quote }}
               readOnly: true
-            {{- end }}
-            {{- if .Values.mysqlVersionProfileOverlay.enabled }}
-            - name: mysql-profile-overlay
-              mountPath: {{ .Values.mysqlVersionProfileOverlay.mountPath | quote }}
-              readOnly: true
-            {{- end }}
           {{- end }}
         - name: orchestrator
           securityContext:
@@ -162,11 +152,6 @@ spec:
         - name: mysql-version-catalog
           configMap:
             name: {{ include "mysql-operator.fullname" . }}-mysql-versions
-        {{- end }}
-        {{- if .Values.mysqlVersionProfileOverlay.enabled }}
-        - name: mysql-profile-overlay
-          configMap:
-            name: {{ include "mysql-operator.fullname" . }}-mysql-profile-overlay
         {{- end }}
         - name: config
           configMap:

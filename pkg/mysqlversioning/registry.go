@@ -59,24 +59,6 @@ func (r *Registry) MustResolve(v semver.Version) Profile {
 	return p
 }
 
-// Snapshot returns a copy of the current profile order (for tests and reload).
-func (r *Registry) Snapshot() []Profile {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make([]Profile, len(r.profiles))
-	copy(out, r.profiles)
-	return out
-}
-
-// ReplaceProfiles swaps the active profile list (e.g. after loading overlays).
-func (r *Registry) ReplaceProfiles(profiles []Profile) {
-	cp := make([]Profile, len(profiles))
-	copy(cp, profiles)
-	r.mu.Lock()
-	r.profiles = cp
-	r.mu.Unlock()
-}
-
 type profileFallback struct{}
 
 func (profileFallback) Name() string { return ProfileFallbackUnknown.String() }

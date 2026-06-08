@@ -42,7 +42,6 @@ var upgradePathSteps = map[profileTransition][]string{
 	}: {
 		StepDatadirUpgradeCheck,
 		StepDatadirChown,
-		StepAuthPluginMigrate,
 	},
 }
 

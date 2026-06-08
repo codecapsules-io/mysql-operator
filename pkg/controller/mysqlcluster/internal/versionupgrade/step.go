@@ -32,7 +32,6 @@ import (
 const (
 	StepDatadirUpgradeCheck = "datadir-upgrade-check"
 	StepDatadirChown        = "datadir-chown"
-	StepAuthPluginMigrate   = "auth-plugin-migrate"
 )
 
 // Phase orders when a step runs relative to StatefulSet image rollout.
@@ -99,7 +98,7 @@ type JobStepSpec struct {
 // InitStepSpec configures an extra init container on the target-version StatefulSet template.
 type InitStepSpec struct {
 	ContainerName string
-	// AfterPreRolloutJobs: do not inject the init container until all PhasePreRollout Jobs succeeded.
+	// AfterPreRolloutJobs: do not inject the init container until all PhasePreRollout steps succeeded.
 	AfterPreRolloutJobs bool
 }
 

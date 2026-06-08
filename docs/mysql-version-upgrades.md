@@ -25,19 +25,19 @@ This operator resolves the Percona (or other) **server image** for a `MysqlClust
 
 **Sidecar images** are chosen by resolving the server semver to a **profile** `SidecarProfileKey` (`percona-57`, `percona-80`, `percona-84`) and mapping that to operator flags (`--sidecar-image`, `--sidecar-mysql8-image`, optional `--sidecar-mysql84-image`). You can override with `spec.sidecarImage` on a cluster.
 
-Version-specific SQL and `my.cnf` behavior is defined in built-in profiles and optional YAML overlays; see [mysql-version-profiles.md](mysql-version-profiles.md).
+Version-specific SQL and `my.cnf` behavior is defined in built-in profiles; see [mysql-version-profiles.md](mysql-version-profiles.md).
 
 ## Updating images without rebuilding the operator
 
 1. Mount a ConfigMap (or Secret) into the operator pod at a path such as `/etc/mysql-operator/catalog/versions.properties`.
 2. Pass `--mysql-version-catalog-file=/etc/mysql-operator/catalog/versions.properties`.
-3. For **catalog** changes, restart the operator pod so `Validate()` re-reads the file. For **profile overlay** YAML, you may send **SIGHUP** instead (see [mysql-version-profiles.md](mysql-version-profiles.md)).
+3. Restart the operator pod so `Validate()` re-reads the catalog file.
 
 The catalog file is a list of lines `8.4.2=percona@sha256:...` (comments with `#` and blank lines are allowed).
 
 ## Helm
 
-The chart can pass `--sidecar-mysql84-image`, optional catalog mounts, and optional profile overlay mounts via `values.yaml`. See `deploy/charts/mysql-operator/values.yaml`.
+The chart can pass `--sidecar-mysql84-image` and optional catalog mounts via `values.yaml`. See `deploy/charts/mysql-operator/values.yaml`.
 
 ## MySQL server major upgrades
 
@@ -57,23 +57,44 @@ When `spec.mysqlVersion` changes on a cluster that already has data on PVCs, the
 6. Sets `status.appliedMysqlVersion` to match `spec.mysqlVersion` only after:
    - the StatefulSet template matches spec,
    - every replica is ready,
-   - every required upgrade-check and auth-migrate Job has succeeded, and
+   - every required upgrade-check Job has succeeded, and
    - **every init container on the current pod template has completed successfully on each pod**.
 
 Patch-level bumps within the same profile line (e.g. `8.0.20` → `8.0.34`) skip the offline Job.
 
-### Auth plugin migration (8.0 → 8.4+)
-
-Percona/MySQL 8.4+ no longer loads `mysql_native_password`. Persistent accounts still using that plugin cannot authenticate after the upgrade.
-
-Before the StatefulSet image changes, the operator runs a one-shot Job (`{cluster}-auth-migrate`) on the writable **master while it is still on the source line** (e.g. 8.0). The Job calls the master pod sidecar HTTP endpoint (`POST /auth-migrate`), which migrates accounts as **root over the local Unix socket** (from `spec.secretName` `ROOT_PASSWORD`). That path can alter **root@localhost** and other `SYSTEM_USER` rows; TCP `root` from a separate pod often fails when `root@'%'` is out of sync with the secret. The sidecar runs `ALTER USER … IDENTIFIED WITH <plugin>` (default `caching_sha2_password`, overridable via `MYSQL_AUTH_MIGRATE_TARGET_PLUGIN`) for **persistent** accounts still on `mysql_native_password`: **root** (all host rows), the optional cluster secret `USER` / `PASSWORD`, and any other non-system accounts that are not recreated by the sidecar `init-file`.
-
-Operator utility users (`sys_operator`, `sys_replication`, `sys_exporter`, `sys_heartbeat`, orchestrator topology user) are `DROP USER` / `CREATE USER` on every mysqld start via `init-file`. On 8.4 the server default plugin is `caching_sha2_password` (the 8.0 `default-authentication-plugin=mysql_native_password` setting is not applied), so those accounts do **not** need pre-rollout migration. `MysqlUser` CR accounts and other app users without a known password in a secret use `RETAIN CURRENT PASSWORD` when migrated.
-
-The Job is a **pre-rollout** step (with the datadir upgrade check): the image rollout is held until it succeeds. `status.appliedMysqlVersion` advances after rollout completes; auth migration does not block that separately.
-
-Succeeded pre-rollout and post-rollout Jobs are deleted automatically once their phase completes (foreground cascade removes the Job pods too). Cluster annotations record completion so Jobs are not recreated on the next reconcile. Failed Jobs and their pods are left in place until the step succeeds so you can inspect logs.
-
-If a cluster was marked applied on 8.4 before this Job existed, patch `status.appliedMysqlVersion` back to the prior 8.0 version (or run the `ALTER USER` statements manually) so the operator can run the migration Job and set applied again.
+Succeeded pre-rollout and post-rollout Jobs are deleted automatically once their phase completes (foreground cascade removes the Job pods too). Cluster annotations record completion so steps are not recreated on the next reconcile. Failed Jobs and their pods are left in place until the step succeeds so you can inspect logs.
 
 For a clean upgrade test: deploy on the source version (e.g. `8.0`), wait until `status.appliedMysqlVersion` matches and the cluster is Ready, then change `mysqlVersion` to the target (e.g. `8.4`).
+
+### Auth plugin migration (8.0 → 8.4+, manual prerequisite)
+
+The operator **does not** migrate authentication plugins. Percona/MySQL 8.4+ no longer loads `mysql_native_password`; persistent accounts still using that plugin cannot authenticate after the upgrade.
+
+**Complete this step on the writable primary before changing `spec.mysqlVersion` to 8.4.x.**
+
+Operator utility users (`sys_operator`, `sys_replication`, `sys_exporter`, `sys_heartbeat`, orchestrator topology user) are `DROP USER` / `CREATE USER` on every mysqld start via `init-file`. On 8.4 the server default plugin is `caching_sha2_password`, so those accounts do **not** need manual migration.
+
+#### Runbook
+
+1. Take a backup (required for any major upgrade).
+2. On the **writable primary**, list persistent accounts still on `mysql_native_password`:
+
+   ```sql
+   SELECT user, host, plugin
+   FROM mysql.user
+   WHERE plugin = 'mysql_native_password'
+     AND user NOT IN ('mysql.infoschema', 'mysql.session', 'mysql.sys');
+   ```
+
+3. For each row returned, migrate on the primary (replication applies the change to secondaries):
+
+   ```sql
+   -- When you know the password:
+   ALTER USER 'user'@'host' IDENTIFIED WITH caching_sha2_password BY 'password';
+
+   -- When the password is unknown (e.g. MysqlUser CR accounts):
+   ALTER USER 'user'@'host' IDENTIFIED WITH caching_sha2_password RETAIN CURRENT PASSWORD;
+   ```
+
+4. Confirm replicas have caught up (e.g. `SHOW REPLICA STATUS`, or cluster node status `Replicating=True` and `Lagged=False`).
+5. Change `spec.mysqlVersion` to the 8.4 target. The operator runs the datadir upgrade check, then rolls out the new image.

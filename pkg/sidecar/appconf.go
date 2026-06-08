@@ -265,11 +265,6 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 	// https://github.com/codecapsules-io/mysql-operator/issues/509
 	queries = append(queries, "SET GLOBAL READ_ONLY = 1")
 
-	// Keep root@'%' aligned with spec.secretName so pre-rollout auth-migrate Jobs can use TCP if needed.
-	if mysqlversioning.ProfileFor(cfg.MySQLVersion).UseMySQL80AuthPlugin() && cfg.RootPassword != "" {
-		queries = append(queries, rootRemoteAccessQueries(cfg.RootPassword)...)
-	}
-
 	// configure operator utility user
 	queries = append(queries, createUserQuery(cfg.OperatorUser, cfg.OperatorPassword, "%",
 		[]string{"SUPER", "SHOW DATABASES", "PROCESS", "RELOAD", "CREATE", "CREATE USER", "SELECT"}, "*.*",
@@ -325,15 +320,6 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 	}
 
 	return []byte(strings.Join(queries, ";\n") + ";\n")
-}
-
-func rootRemoteAccessQueries(rootPassword string) []string {
-	escaped := strings.ReplaceAll(rootPassword, "'", "''")
-	user := "root@'%'"
-	return []string{
-		fmt.Sprintf("CREATE USER IF NOT EXISTS %s IDENTIFIED WITH mysql_native_password BY '%s'", user, escaped),
-		fmt.Sprintf("ALTER USER %s IDENTIFIED WITH mysql_native_password BY '%s'", user, escaped),
-	}
 }
 
 func createUserQuery(name, pass, host string, rights ...interface{}) []string {

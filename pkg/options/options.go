@@ -239,6 +239,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 			" It can be set to \"0\" to disable the metrics serving.")
 	fs.StringVar(&o.HealthProbeBindAddress, "healthz-addr", defaultHealthProbeBindAddress,
 		"The TCP address that the controller should bind to for serving health probes.")
+
 }
 
 var instance *Options

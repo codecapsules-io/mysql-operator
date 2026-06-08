@@ -329,6 +329,11 @@ const (
 	// ClusterConditionFailoverInProgress indicates if there is a current failover in progress
 	// done by the Orchestrator
 	ClusterConditionFailoverInProgress ClusterConditionType = "FailoverInProgress"
+
+	// ClusterConditionUpgradeBlocked indicates the requested spec.mysqlVersion change cannot proceed
+	// (invalid path: downgrade or skipping an LTS line, or a failed pre-rollout Job).
+	// The cluster remains operational on its current version; no Ready condition is affected.
+	ClusterConditionUpgradeBlocked ClusterConditionType = "UpgradeBlocked"
 )
 
 // NodeStatus defines type for status of a node into cluster.

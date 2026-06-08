@@ -43,8 +43,8 @@ import (
 
 	mysqlv1alpha1 "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	cleaner "github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/cleaner"
 	clustersyncer "github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/syncer"
 	"github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/upgrades"
@@ -268,13 +268,29 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		}
 		log.Error(err, "MySQL version upgrade blocked", "cluster", cluster)
 		r.recorder.Event(cluster.Unwrap(), corev1.EventTypeWarning, "MySQLVersionUpgradeBlocked", err.Error())
-		cluster.UpdateStatusCondition(api.ClusterConditionReady, corev1.ConditionFalse,
+		// Use a dedicated condition so Ready is not corrupted and the cluster remains HA.
+		cluster.UpdateStatusCondition(api.ClusterConditionUpgradeBlocked, corev1.ConditionTrue,
 			"MySQLVersionUpgradeBlocked", err.Error())
 		if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
 			log.Error(sErr, "failed to update cluster status")
+			return reconcile.Result{}, sErr
 		}
+		if versionupgrade.IsUpgradeBlocked(err) {
+			// Invalid upgrade path - cluster stays operational on current version.
+			// RolloutMySQLVersion and ShouldBlockRollout will hold the STS image at the current version.
+			// Requeue slowly so that if the user corrects spec.mysqlVersion we re-validate promptly.
+			if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
+				return reconcile.Result{}, annErr
+			}
+			return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		// For transient failures (e.g. failed pre-rollout Job) return the error to trigger backoff retry,
+		// but do NOT set Ready=False - the cluster remains HA while we wait for the job to be retried.
 		return reconcile.Result{}, err
 	}
+	// Upgrade path is valid (or no upgrade pending) - clear any previous UpgradeBlocked condition.
+	cluster.UpdateStatusCondition(api.ClusterConditionUpgradeBlocked, corev1.ConditionFalse,
+		"NoUpgradePending", "")
 	if cluster.Status.AppliedMysqlVersion != appliedStatusBefore {
 		if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
 			log.Error(sErr, "failed to persist applied MySQL version status")

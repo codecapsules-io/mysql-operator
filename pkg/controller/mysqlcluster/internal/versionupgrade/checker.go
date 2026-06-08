@@ -49,6 +49,23 @@ func IsHoldRollout(err error) bool {
 	return ok
 }
 
+// UpgradeBlockedError is returned when the requested MySQL version change is permanently invalid
+// (downgrade or skipping an LTS line). The cluster remains operational on its current version;
+// spec.mysqlVersion must be corrected by the user.
+type UpgradeBlockedError struct {
+	Reason string
+}
+
+func (e *UpgradeBlockedError) Error() string {
+	return e.Reason
+}
+
+// IsUpgradeBlocked returns true when the requested upgrade path is permanently invalid.
+func IsUpgradeBlocked(err error) bool {
+	_, ok := err.(*UpgradeBlockedError)
+	return ok
+}
+
 // EnsureChecked validates a MySQL version change and runs pre-rollout Jobs when required.
 func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, opt *options.Options) error {
 	sts, err := getStatefulSet(ctx, c, cluster)
@@ -69,7 +86,7 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 	}
 
 	if err := mysqlversioning.ValidateUpgradePath(source, DesiredSemVer(cluster)); err != nil {
-		return fmt.Errorf("MySQL version upgrade blocked: %w", err)
+		return &UpgradeBlockedError{Reason: fmt.Sprintf("MySQL version upgrade blocked: %s", err.Error())}
 	}
 
 	if JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
@@ -92,9 +109,16 @@ func EnsurePostRolloutJobs(ctx context.Context, c client.Client, cluster *mysqlc
 }
 
 // ShouldBlockRollout reports whether the cluster controller must not roll out a new MySQL version yet.
+// Returns true when pre-rollout Jobs are incomplete OR when the upgrade path itself is invalid.
 func ShouldBlockRollout(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
 	if !VersionChangePending(cluster, sts) {
 		return false
+	}
+	source := SourceVersionForUpgrade(cluster, sts)
+	if !source.EQ(semver.Version{}) {
+		if err := mysqlversioning.ValidateUpgradePath(source, DesiredSemVer(cluster)); err != nil {
+			return true
+		}
 	}
 	return !JobStepsComplete(ctx, c, cluster, sts, PhasePreRollout)
 }

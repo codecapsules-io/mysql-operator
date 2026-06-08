@@ -13,7 +13,7 @@ keywords:
   - codecapsules
   - database
 version: 0.0.0
-home: https://codecapsules.io/
+home: https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator
 sources:
   - https://github.com/codecapsules-io/mysql-operator.git
 annotations:

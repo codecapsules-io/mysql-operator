@@ -17,13 +17,13 @@ package mysqlcluster
 
 import (
 	"context"
+	"strings"
 
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
@@ -39,8 +39,8 @@ func listOwnedClusterPVCs(ctx context.Context, c client.Client, cluster *mysqlcl
 
 	claims := make([]core.PersistentVolumeClaim, 0, len(pvcs.Items))
 	for _, claim := range pvcs.Items {
-		if !isOwnedBy(claim, cluster.Unwrap()) {
-			logf.FromContext(ctx).V(1).Info("pvc not owned by cluster", "pvc", claim.Name, "key", cluster)
+		if !isClusterManagedPVC(claim, cluster) {
+			logf.FromContext(ctx).V(1).Info("pvc not managed by cluster", "pvc", claim.Name, "key", cluster)
 			continue
 		}
 		if claim.DeletionTimestamp != nil {
@@ -51,7 +51,9 @@ func listOwnedClusterPVCs(ctx context.Context, c client.Client, cluster *mysqlcl
 	return claims, nil
 }
 
-func isOwnedBy(pvc core.PersistentVolumeClaim, cluster *api.MysqlCluster) bool {
+// isClusterManagedPVC reports whether a label-matched PVC belongs to this cluster's data volumes.
+// With keepAfterDelete, live PVCs are owned by the StatefulSet rather than the MysqlCluster.
+func isClusterManagedPVC(pvc core.PersistentVolumeClaim, cluster *mysqlcluster.MysqlCluster) bool {
 	if pvc.Namespace != cluster.Namespace {
 		return false
 	}
@@ -59,6 +61,9 @@ func isOwnedBy(pvc core.PersistentVolumeClaim, cluster *api.MysqlCluster) bool {
 		if ref.Kind == "MysqlCluster" && ref.Name == cluster.Name {
 			return true
 		}
+		if ref.Kind == "StatefulSet" && ref.Name == cluster.GetNameForResource(mysqlcluster.StatefulSet) {
+			return true
+		}
 	}
-	return false
+	return strings.HasPrefix(pvc.Name, cluster.DataPVCNamePrefix())
 }

@@ -156,6 +156,9 @@ func createJobStep(uctx UpgradeContext, step UpgradeStep) error {
 	spec := step.Job
 	desiredJob, err := spec.Build(uctx)
 	if err != nil {
+		if IsHoldRollout(err) {
+			return err
+		}
 		return fmt.Errorf("build upgrade job %q: %w", step.ID, err)
 	}
 	if createErr := uctx.Client.Create(uctx.Ctx, desiredJob); createErr != nil && !errors.IsAlreadyExists(createErr) {

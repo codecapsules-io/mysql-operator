@@ -41,7 +41,7 @@ const (
 	mysqlUpgradeCheckTarget = "MYSQL_UPGRADE_CHECK_TARGET_VERSION"
 )
 
-func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Version, _ *options.Options, sts *apps.StatefulSet) *batch.Job {
+func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Version, _ *options.Options, sts *apps.StatefulSet) (*batch.Job, error) {
 	online := ClusterHasRunningMySQL(cluster, sts)
 	labels := cluster.GetSelectorLabels()
 	labels[domain.LabelJobType] = JobTypeUpgradeCheck
@@ -66,12 +66,16 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 	} else {
 		image = cluster.GetMysqlImage()
 		args = []string{offlineUpgradeCheckScript(target)}
+		claimName, err := MasterDataPVCName(cluster)
+		if err != nil {
+			return nil, err
+		}
 		volumeMounts = []core.VolumeMount{{Name: dataVolumeName, MountPath: DataVolumeMountPath}}
 		volumes = []core.Volume{{
 			Name: dataVolumeName,
 			VolumeSource: core.VolumeSource{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimVolumeSource{
-					ClaimName: MasterDataPVCName(cluster),
+					ClaimName: claimName,
 				},
 			},
 		}}
@@ -130,7 +134,7 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func envVarFromOperatedSecret(cluster *mysqlcluster.MysqlCluster, name, key string, optional bool) core.EnvVar {

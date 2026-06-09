@@ -198,7 +198,11 @@ func TestMasterDataPVCName(t *testing.T) {
 			}},
 		},
 	})
-	if got := MasterDataPVCName(cluster); got != "data-demo-mysql-1" {
+	got, err := MasterDataPVCName(cluster)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "data-demo-mysql-1" {
 		t.Fatalf("pvc: %s", got)
 	}
 }

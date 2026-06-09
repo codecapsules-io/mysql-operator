@@ -22,7 +22,9 @@ import (
 
 	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
+	core "k8s.io/api/core/v1"
 
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
@@ -83,24 +85,64 @@ func VersionChangePending(cluster *mysqlcluster.MysqlCluster, sts *apps.Stateful
 }
 
 // MasterDataPVCName returns the PVC name for the current master's data volume.
-func MasterDataPVCName(cluster *mysqlcluster.MysqlCluster) string {
+func MasterDataPVCName(cluster *mysqlcluster.MysqlCluster) (string, error) {
+	ord, err := ResolveMasterOrdinal(cluster)
+	if err != nil {
+		return "", err
+	}
 	stsName := cluster.GetNameForResource(mysqlcluster.StatefulSet)
-	ordinal := masterOrdinal(cluster.GetMasterHost(), stsName)
-	return fmt.Sprintf("data-%s-%d", stsName, ordinal)
+	return fmt.Sprintf("data-%s-%d", stsName, ord), nil
 }
 
-func masterOrdinal(masterHost, stsName string) int32 {
+// ResolveMasterOrdinal returns the StatefulSet pod ordinal for the writable primary.
+// On multi-replica clusters, returns HoldRolloutError when master identity is unknown.
+func ResolveMasterOrdinal(cluster *mysqlcluster.MysqlCluster) (int32, error) {
+	if !isMultiReplica(cluster) {
+		return 0, nil
+	}
+	masterHost, ok := masterHostFromStatus(cluster)
+	if !ok {
+		return 0, &HoldRolloutError{
+			Reason: "waiting for MySQL master to be identified before offline upgrade check (no Master condition in status.nodes)",
+		}
+	}
+	stsName := cluster.GetNameForResource(mysqlcluster.StatefulSet)
+	ord, ok := parseMasterOrdinal(masterHost, stsName)
+	if !ok {
+		return 0, &HoldRolloutError{
+			Reason: fmt.Sprintf("waiting for MySQL master identity: cannot resolve master ordinal from host %q", masterHost),
+		}
+	}
+	return ord, nil
+}
+
+func isMultiReplica(cluster *mysqlcluster.MysqlCluster) bool {
+	replicas := cluster.Spec.Replicas
+	return replicas != nil && *replicas > 1
+}
+
+func masterHostFromStatus(cluster *mysqlcluster.MysqlCluster) (string, bool) {
+	for _, ns := range cluster.Status.Nodes {
+		if cond := cluster.GetNodeCondition(ns.Name, api.NodeConditionMaster); cond != nil &&
+			cond.Status == core.ConditionTrue {
+			return ns.Name, true
+		}
+	}
+	return "", false
+}
+
+func parseMasterOrdinal(masterHost, stsName string) (int32, bool) {
 	podName := strings.Split(masterHost, ".")[0]
 	prefix := stsName + "-"
 	if !strings.HasPrefix(podName, prefix) {
-		return 0
+		return 0, false
 	}
 	raw := strings.TrimPrefix(podName, prefix)
 	n, err := strconv.ParseInt(raw, 10, 32)
 	if err != nil {
-		return 0
+		return 0, false
 	}
-	return int32(n)
+	return int32(n), true
 }
 
 // HasPersistentDataVolume reports whether the cluster stores MySQL data on PVCs.

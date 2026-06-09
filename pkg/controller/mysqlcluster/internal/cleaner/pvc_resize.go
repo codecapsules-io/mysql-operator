@@ -34,6 +34,7 @@ const (
 	reasonPVCResizeSuccessful  = "SuccessfulPVCResize"
 	reasonPVCResizeFailed      = "FailedPVCResize"
 	reasonPVCResizeUnsupported = "PVCResizeUnsupported"
+	reasonPVCResizeNoTargets   = "PVCResizeNoTargets"
 )
 
 var resizeLog = logf.Log.WithName("mysqlcluster.pvcresizer")
@@ -73,14 +74,19 @@ func (p *PVCResizer) Run(ctx context.Context) error {
 	}
 
 	prefix := p.cluster.DataPVCNamePrefix()
+	var dataPVCCount int
 	for i := range pvcs {
 		pvc := &pvcs[i]
 		if !strings.HasPrefix(pvc.Name, prefix) {
 			continue
 		}
+		dataPVCCount++
 		if err := p.resizePVCIfNeeded(ctx, pvc, desired); err != nil {
 			return err
 		}
+	}
+	if dataPVCCount == 0 && p.clusterHasRunningReplicas() {
+		p.warnNoDataPVCsToResize(desired)
 	}
 	return nil
 }
@@ -139,5 +145,16 @@ func StorageNeedsExpansion(desired, current resource.Quantity) bool {
 func (p *PVCResizer) warnResizeUnsupported(pvcName, reason string) {
 	msg := fmt.Sprintf("cannot expand Claim %s: %s", pvcName, reason)
 	p.recorder.Event(p.cluster, core.EventTypeWarning, reasonPVCResizeUnsupported, msg)
+	resizeLog.Info(msg, "key", p.cluster)
+}
+
+func (p *PVCResizer) clusterHasRunningReplicas() bool {
+	replicas := p.cluster.Spec.Replicas
+	return replicas != nil && *replicas > 0
+}
+
+func (p *PVCResizer) warnNoDataPVCsToResize(desired *resource.Quantity) {
+	msg := fmt.Sprintf("desired data storage is %s but no cluster data PVCs were found to expand", desired.String())
+	p.recorder.Event(p.cluster, core.EventTypeWarning, reasonPVCResizeNoTargets, msg)
 	resizeLog.Info(msg, "key", p.cluster)
 }

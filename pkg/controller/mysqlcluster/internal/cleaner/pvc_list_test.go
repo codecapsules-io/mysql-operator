@@ -65,14 +65,14 @@ func TestIsClusterManagedPVC(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "data pvc name prefix without owner reference",
+			name: "data pvc name without owner reference",
 			pvc: core.PersistentVolumeClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      dataPVC,
 					Namespace: "default",
 				},
 			},
-			want: true,
+			want: false,
 		},
 		{
 			name: "wrong namespace",

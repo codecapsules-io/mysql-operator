@@ -17,7 +17,6 @@ package mysqlcluster
 
 import (
 	"context"
-	"strings"
 
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -57,13 +56,14 @@ func isClusterManagedPVC(pvc core.PersistentVolumeClaim, cluster *mysqlcluster.M
 	if pvc.Namespace != cluster.Namespace {
 		return false
 	}
+	stsName := cluster.GetNameForResource(mysqlcluster.StatefulSet)
 	for _, ref := range pvc.OwnerReferences {
 		if ref.Kind == "MysqlCluster" && ref.Name == cluster.Name {
 			return true
 		}
-		if ref.Kind == "StatefulSet" && ref.Name == cluster.GetNameForResource(mysqlcluster.StatefulSet) {
+		if ref.Kind == "StatefulSet" && ref.Name == stsName {
 			return true
 		}
 	}
-	return strings.HasPrefix(pvc.Name, cluster.DataPVCNamePrefix())
+	return false
 }

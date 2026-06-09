@@ -30,20 +30,8 @@ func rolloutCompleteOnVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.Stat
 	if replicas == 0 {
 		return false
 	}
-	if !semVerFromStatefulSet(sts).EQ(version) {
+	if !mysqlcluster.SemVerFromStatefulSet(sts).EQ(version) {
 		return false
 	}
 	return int(sts.Status.ReadyReplicas) >= int(replicas)
-}
-
-// laggingStatefulSetVersion returns the MySQL version on the STS template when it still lags spec.mysqlVersion.
-func laggingStatefulSetVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	if sts == nil {
-		return semver.Version{}
-	}
-	desired := DesiredSemVer(cluster)
-	if v := semVerFromStatefulSet(sts); !v.EQ(semver.Version{}) && !v.EQ(desired) {
-		return v
-	}
-	return semver.Version{}
 }

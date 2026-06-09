@@ -34,7 +34,7 @@ func (c *MysqlCluster) Validate() error {
 		return fmt.Errorf("%s is not a valid MySQL version", c.Spec.MysqlVersion)
 	}
 
-	if err := mysqlversioning.ProfileFor(c.GetMySQLSemVer()).Validate(&c.Spec); err != nil {
+	if err := mysqlversioning.ProfileFor(c.DesiredVersion()).Validate(&c.Spec); err != nil {
 		return err
 	}
 

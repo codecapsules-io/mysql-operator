@@ -19,6 +19,7 @@ package mysqlcluster
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"path"
 	"sort"
@@ -55,7 +56,7 @@ func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlc
 		cm.ObjectMeta.Labels = cluster.GetLabels()
 		cm.ObjectMeta.Labels["generated"] = "true"
 
-		data, err := buildMysqlConfData(cluster)
+		data, err := buildMysqlConfData(c, cluster, sts)
 		if err != nil {
 			return fmt.Errorf("failed to create mysql configs: %s", err)
 		}
@@ -73,8 +74,8 @@ func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlc
 }
 
 func buildBashPreStop(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) string {
-	// preStop runs on pods still serving the data-plane version; spec.mysqlVersion may already target an upgrade.
-	v := versionupgrade.SourceVersionForUpgrade(cluster, sts)
+	// preStop runs against the mysqld process on this pod; applied status lags during rollout.
+	v := cluster.EffectiveVersion(sts)
 	d := mysqlversioning.ProfileFor(v).Replication()
 	replicaStatusCmd := d.ShowReplicaStatusCmd
 	replicaHostsCmd := d.ShowReplicasCmd
@@ -110,11 +111,12 @@ fi
 	return strings.Replace(data, "ConfClientPathHolder", confClientPath, -1)
 }
 
-func buildMysqlConfData(cluster *mysqlcluster.MysqlCluster) (string, error) {
+func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) (string, error) {
 	cfg := ini.Empty()
 	sec := cfg.Section("mysqld")
 
-	v := cluster.GetMySQLSemVer()
+	// my.cnf is mounted by pods still on the data-plane version; spec.mysqlVersion may already target an upgrade.
+	v := mysqlConfVersion(c, cluster, sts)
 	prof := mysqlversioning.ProfileFor(v)
 
 	if prof.UseMySQL5xConfigs() {
@@ -162,6 +164,14 @@ func buildMysqlConfData(cluster *mysqlcluster.MysqlCluster) (string, error) {
 
 	return data, nil
 
+}
+
+// mysqlConfVersion follows RolloutMySQLVersion so my.cnf tracks the StatefulSet rollout gate.
+func mysqlConfVersion(c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
+	if c != nil {
+		return versionupgrade.RolloutMySQLVersion(context.Background(), c, cluster, sts)
+	}
+	return cluster.EffectiveVersion(sts)
 }
 
 func convertMapToKVConfig(m map[string]string) map[string]intstr.IntOrString {

@@ -47,7 +47,7 @@ func RolloutMySQLVersion(ctx context.Context, c client.Client, cluster *mysqlclu
 	if v := AppliedDataPlaneVersion(cluster); !v.EQ(semver.Version{}) {
 		return v
 	}
-	if v := laggingStatefulSetVersion(cluster, sts); !v.EQ(semver.Version{}) {
+	if v := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !v.EQ(semver.Version{}) {
 		return v
 	}
 	return desired

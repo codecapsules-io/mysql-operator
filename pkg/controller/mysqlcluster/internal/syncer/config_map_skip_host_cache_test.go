@@ -45,7 +45,7 @@ func TestBuildMysqlConfData_skipHostCacheByVersion(t *testing.T) {
 					SecretName:   "sec",
 				},
 			})
-			data, err := buildMysqlConfData(c)
+			data, err := buildMysqlConfData(nil, c, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

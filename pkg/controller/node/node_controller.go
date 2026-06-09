@@ -40,6 +40,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/blang/semver"
+	apps "k8s.io/api/apps/v1"
+
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
@@ -210,8 +213,13 @@ func (r *ReconcileMysqlNode) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	sts, stsErr := r.getClusterStatefulSet(ctx, cluster)
+	if stsErr != nil {
+		return reconcile.Result{}, stsErr
+	}
+
 	// initialize SQL interface
-	sql := r.getMySQLConnection(cluster, pod, creds)
+	sql := r.getMySQLConnection(cluster, pod, creds, sts)
 
 	// wait for mysql to be ready
 	if err = sql.Wait(ctx); err != nil {
@@ -320,8 +328,9 @@ func (r *ReconcileMysqlNode) getNodeCluster(ctx context.Context, pod *corev1.Pod
 	return cluster, err
 }
 
-// getMySQLConnectionString returns the DSN that contains credentials to connect to given pod from a MySQL cluster
-func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, c *credentials) SQLInterface {
+// getMySQLConnection returns a SQL runner for the pod's mysqld. Replication dialect follows the
+// data-plane version because spec.mysqlVersion may already target an upgrade while mysqld is still on the prior line.
+func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, c *credentials, sts *apps.StatefulSet) SQLInterface {
 	host := fmt.Sprintf("%s.%s.%s", pod.Spec.Hostname,
 		cluster.GetNameForResource(mysqlcluster.HeadlessSVC), pod.Namespace)
 
@@ -329,7 +338,28 @@ func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlClust
 		c.User, c.Password, host, constants.MysqlPort,
 	)
 
-	return r.sqlFactory(dsn, host, cluster.GetMySQLSemVer())
+	return r.sqlFactory(dsn, host, replicationSQLVersion(cluster, pod, sts))
+}
+
+// replicationSQLVersion prefers the pod's MY_MYSQL_VERSION (accurate during rollout), then cluster effective.
+func replicationSQLVersion(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, sts *apps.StatefulSet) semver.Version {
+	if v := mysqlcluster.SemVerFromPod(pod); !v.EQ(semver.Version{}) {
+		return v
+	}
+	return cluster.EffectiveVersion(sts)
+}
+
+func (r *ReconcileMysqlNode) getClusterStatefulSet(ctx context.Context, cluster *mysqlcluster.MysqlCluster) (*apps.StatefulSet, error) {
+	sts := &apps.StatefulSet{}
+	key := types.NamespacedName{
+		Name:      cluster.GetNameForResource(mysqlcluster.StatefulSet),
+		Namespace: cluster.Namespace,
+	}
+	err := r.Get(ctx, key, sts)
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	return sts, err
 }
 
 type credentials struct {

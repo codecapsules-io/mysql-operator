@@ -13,39 +13,132 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package mysqlcluster_test
+package mysqlcluster
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/blang/semver"
+	apps "k8s.io/api/apps/v1"
+	batch "k8s.io/api/batch/v1"
+	core "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	syncer "github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/syncer"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
-func TestMysqlKVConfigsForVersion_legacy80(t *testing.T) {
-	m := syncer.MysqlKVConfigsForVersion(semver.MustParse("8.0.20"))
-	if _, ok := m["skip-slave-start"]; !ok {
-		t.Fatalf("expected skip-slave-start for 8.0.20")
+func TestBuildMysqlConfData_holdsSourceVersionDuringUpgrade(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.0"}},
+					}},
+				},
+			},
+		},
 	}
-	if _, ok := m["innodb-log-files-in-group"]; !ok {
-		t.Fatalf("expected innodb-log-files-in-group for 8.0.20")
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = api.SchemeBuilder.AddToScheme(s)
+	_ = apps.AddToScheme(s)
+	_ = batch.AddToScheme(s)
+	c := fake.NewClientBuilder().WithScheme(s).Build()
+
+	data, err := buildMysqlConfData(c, cluster, sts)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := m["skip-replica-start"]; ok {
-		t.Fatalf("did not expect skip-replica-start for 8.0.20")
+	if strings.Contains(data, "skip-replica-start") {
+		t.Fatalf("expected 8.0 my.cnf during pre-rollout hold, got 8.4 profile:\n%s", data)
+	}
+	if !strings.Contains(data, "skip-slave-start") {
+		t.Fatalf("expected 8.0 skip-slave-start during hold, got:\n%s", data)
+	}
+	if !strings.Contains(data, "default-authentication-plugin") {
+		t.Fatalf("expected 8.0 auth plugin during hold, got:\n%s", data)
 	}
 }
 
-func TestMysqlKVConfigsForVersion_sourceReplica84(t *testing.T) {
-	m := syncer.MysqlKVConfigsForVersion(semver.MustParse("8.4.0"))
-	if _, ok := m["skip-replica-start"]; !ok {
-		t.Fatalf("expected skip-replica-start for 8.4")
+func TestBuildMysqlConfData_usesTargetAfterPreRolloutCheck(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.0"}},
+					}},
+				},
+			},
+		},
 	}
-	if _, ok := m["skip-slave-start"]; ok {
-		t.Fatalf("did not expect skip-slave-start for 8.4")
+	succeededJob := &batch.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.GetNameForResource(mysqlcluster.StatefulSet) + "-upgrade-check",
+			Namespace: cluster.Namespace,
+			Labels:    map[string]string{domain.LabelUpgradeCheckTargetVersion: "8.4.0"},
+		},
+		Status: batch.JobStatus{
+			Succeeded: 1,
+			Conditions: []batch.JobCondition{{
+				Type:   batch.JobComplete,
+				Status: core.ConditionTrue,
+			}},
+		},
 	}
-	if _, ok := m["innodb-log-files-in-group"]; ok {
-		t.Fatalf("did not expect innodb-log-files-in-group for 8.4")
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = api.SchemeBuilder.AddToScheme(s)
+	_ = apps.AddToScheme(s)
+	_ = batch.AddToScheme(s)
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(succeededJob).Build()
+
+	data, err := buildMysqlConfData(c, cluster, sts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(data, "skip-replica-start") {
+		t.Fatalf("expected 8.4 profile after pre-rollout check, got:\n%s", data)
+	}
+	if strings.Contains(data, "default-authentication-plugin") {
+		t.Fatalf("expected no 8.0 auth plugin after pre-rollout check, got:\n%s", data)
 	}
 }
-

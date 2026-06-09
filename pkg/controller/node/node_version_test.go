@@ -13,12 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package versionupgrade
+package node
 
 import (
-	"context"
+	"strings"
 	"testing"
 
+	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +28,8 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
-func TestRolloutMySQLVersion_holdsUntilCheckPasses(t *testing.T) {
+func TestReplicationSQLVersion_usesAppliedDuringUpgrade(t *testing.T) {
+	t.Parallel()
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -36,13 +38,9 @@ func TestRolloutMySQLVersion_holdsUntilCheckPasses(t *testing.T) {
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
 			SecretName:   "sec",
-			VolumeSpec: api.VolumeSpec{
-				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
-			},
 		},
 	})
 	sts := &apps.StatefulSet{
-		Status: apps.StatefulSetStatus{Replicas: 1},
 		Spec: apps.StatefulSetSpec{
 			Template: core.PodTemplateSpec{
 				Spec: core.PodSpec{
@@ -54,48 +52,16 @@ func TestRolloutMySQLVersion_holdsUntilCheckPasses(t *testing.T) {
 			},
 		},
 	}
-	c := testClientBuilder().Build()
-	got := RolloutMySQLVersion(context.Background(), c, cluster, sts)
+	pod := &core.Pod{}
+
+	got := replicationSQLVersion(cluster, pod, sts)
 	if got.String() != "8.0.20" {
-		t.Fatalf("rollout version: %s", got)
-	}
-	c = testClientBuilder().WithObjects(
-		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-	).Build()
-	got = RolloutMySQLVersion(context.Background(), c, cluster, sts)
-	if got.String() != "8.4.0" {
-		t.Fatalf("after check: %s", got)
+		t.Fatalf("effective version during upgrade: %s", got)
 	}
 }
 
-func TestNeedsDatadirChownInit(t *testing.T) {
-	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "c1",
-			Namespace: "default",
-		},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
-		Spec: api.MysqlClusterSpec{
-			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
-			SecretName:   "sec",
-			Image:        "percona/percona-server:8.4",
-			VolumeSpec: api.VolumeSpec{
-				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
-			},
-		},
-	})
-	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
-	c := testClientBuilder().WithObjects(
-		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-	).Build()
-	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
-		t.Fatal("expected chown init when upgrading 8.0 Percona to 8.4")
-	}
-}
-
-func TestNeedsDatadirChownInit_requiresPersistentData(t *testing.T) {
+func TestReplicationSQLVersion_prefersPodEnvDuringRollout(t *testing.T) {
+	t.Parallel()
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -104,11 +70,55 @@ func TestNeedsDatadirChownInit_requiresPersistentData(t *testing.T) {
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
 			SecretName:   "sec",
-			Image:        "percona/percona-server:8.4",
 		},
 	})
-	c := testClientBuilder().WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).Build()
-	if NeedsDatadirChownInit(context.Background(), c, cluster, nil) {
-		t.Fatal("expected no chown without a persistent volume")
+	pod := &core.Pod{
+		Spec: core.PodSpec{
+			Containers: []core.Container{{
+				Name: "mysql",
+				Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+			}},
+		},
 	}
+
+	got := replicationSQLVersion(cluster, pod, nil)
+	if got.String() != "8.4.0" {
+		t.Fatalf("pod env should win during rollout: %s", got)
+	}
+}
+
+func TestReplicationSQLVersion_fallsBackToDesiredOnFreshInstall(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	pod := &core.Pod{}
+
+	got := replicationSQLVersion(cluster, pod, nil)
+	if got.String() != "8.4.0" {
+		t.Fatalf("fresh install version: %s", got)
+	}
+}
+
+func TestNewNodeConn_usesDataPlaneDialectDuringUpgrade(t *testing.T) {
+	t.Parallel()
+	runner := newNodeConn("dsn", "host", mustParseVer(t, "8.0.20"))
+	if !strings.Contains(runner.(*nodeSQLRunner).rep.StopReplication, "STOP SLAVE") {
+		t.Fatalf("expected master/slave dialect for 8.0, got %q", runner.(*nodeSQLRunner).rep.StopReplication)
+	}
+}
+
+func mustParseVer(t *testing.T, s string) semver.Version {
+	t.Helper()
+	v, err := semver.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }

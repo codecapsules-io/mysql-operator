@@ -46,7 +46,7 @@ func TestRolloutComplete_requiresInitContainers(t *testing.T) {
 					InitContainers: []core.Container{{Name: "init"}, {Name: "mysql-init-only"}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
 					}},
 				},
 			},

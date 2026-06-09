@@ -95,7 +95,7 @@ func (cluster *MysqlCluster) SetDefaults(opt *options.Options) {
 
 	if mem := cluster.Spec.PodSpec.Resources.Requests.Memory(); mem != nil {
 		perFile := computeInnodbLogFileSize(mem)
-		v := cluster.GetMySQLSemVer()
+		v := cluster.DesiredVersion()
 		key, sizeBytes := mysqlversioning.ProfileFor(v).InnoDBOperatorLogSizing(v, perFile)
 		setConfigIfNotSet(cluster.Spec.MysqlConf, key, humanizeSize(sizeBytes))
 	}

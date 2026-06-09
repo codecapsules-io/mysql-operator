@@ -77,7 +77,7 @@ func (c *MysqlCluster) GetLabels() labels.Set {
 
 		"app.kubernetes.io/name":       "mysql",
 		"app.kubernetes.io/instance":   instance,
-		"app.kubernetes.io/version":    c.GetMySQLSemVer().String(),
+		"app.kubernetes.io/version":    c.DesiredVersion().String(),
 		"app.kubernetes.io/component":  component,
 		"app.kubernetes.io/managed-by": domain.ManagedBy,
 	}
@@ -182,30 +182,18 @@ func (c *MysqlCluster) GetMasterServiceHost() string {
 	return fmt.Sprintf("%s.%s.svc", c.GetNameForResource(MasterService), c.Namespace)
 }
 
-// GetMySQLSemVer returns the MySQL server version in semver format, or the default one
+// GetMySQLSemVer returns the desired MySQL server version (spec → default). Prefer DesiredVersion.
 func (c *MysqlCluster) GetMySQLSemVer() semver.Version {
-	version := c.Spec.MysqlVersion
-	// lookup for an alias, usually this will solve 5.7 to 5.7.x
-	if v, ok := constants.MySQLTagsToSemVer[version]; ok {
-		version = v
-	}
-
-	sv, err := semver.Make(version)
-	if err != nil {
-		log.Error(err, "failed to parse given MySQL version", "input", version)
-	}
-
-	// if there is an error will return 0.0.0
-	return sv
+	return c.DesiredVersion()
 }
 
 // GetMysqlImage returns the mysql image for current mysql cluster
 func (c *MysqlCluster) GetMysqlImage() string {
 	opt := options.GetOptions()
-	img, err := mysqlversioning.ServerImage(opt, c.GetMySQLSemVer(), &c.Spec)
+	img, err := mysqlversioning.ServerImage(opt, c.DesiredVersion(), &c.Spec)
 	if err != nil {
 		log.Error(err, "no image found with given MySQL version, the image can manually be set by setting .spec.image on cluster",
-			"version", c.GetMySQLSemVer())
+			"version", c.DesiredVersion())
 		return ""
 	}
 	return img
@@ -226,7 +214,7 @@ func (c *MysqlCluster) IsPerconaImage() bool {
 
 // ShouldHaveInitContainerForMysql checks the MySQL version and returns true or false if the docker image supports or not init only
 func (c *MysqlCluster) ShouldHaveInitContainerForMysql() bool {
-	return c.IsPerconaImage() && mysqlversioning.ProfileFor(c.GetMySQLSemVer()).WantsPerconaInitContainer(c.GetMySQLSemVer())
+	return c.WantsPerconaInitContainerFor(c.DesiredVersion())
 }
 
 // String returns the cluster name and namespace
@@ -265,7 +253,7 @@ func (c *MysqlCluster) GetNamespacedName() types.NamespacedName {
 
 // GetSidecarImage selects the sidecar docker image based on mysql version
 func (c *MysqlCluster) GetSidecarImage() string {
-	return mysqlversioning.SidecarImageFor(c.GetMySQLSemVer(), &c.Spec, c.Spec.SidecarImage)
+	return mysqlversioning.SidecarImageFor(c.DesiredVersion(), &c.Spec, c.Spec.SidecarImage)
 }
 
 // IsClusterReady checks if the cluster is ready or not.

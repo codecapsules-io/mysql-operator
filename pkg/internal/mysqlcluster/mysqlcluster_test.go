@@ -74,7 +74,9 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 
 		Expect(cluster.Spec.PodSpec.Resources.Requests.Memory()).To(PointTo(Equal(resource.MustParse("1Gi"))))
 		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-buffer-pool-size")))
-		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-redo-log-capacity")))
+		// Default version is 5.7.35; InnoDB log sizing uses innodb-log-file-size before MySQL 8.0.30+.
+		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-log-file-size")))
+		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("innodb-redo-log-capacity")))
 		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("max-binlog-size")))
 	})
 

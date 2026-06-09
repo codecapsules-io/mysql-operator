@@ -39,18 +39,9 @@ const (
 	DataVolumeMountPath = constants.DataVolumeMountPath
 )
 
-const mySQLVersionEnv = "MY_MYSQL_VERSION"
-
 // AppliedDataPlaneVersion is the operator-recorded MySQL version on the data plane (status.appliedMysqlVersion).
 func AppliedDataPlaneVersion(cluster *mysqlcluster.MysqlCluster) semver.Version {
-	if cluster.Status.AppliedMysqlVersion == "" {
-		return semver.Version{}
-	}
-	v, err := semver.Parse(cluster.Status.AppliedMysqlVersion)
-	if err != nil {
-		return semver.Version{}
-	}
-	return v
+	return mysqlcluster.AppliedDataPlaneVersion(cluster)
 }
 
 // AppliedSemVer returns the MySQL version currently applied on the cluster, or semver zero when unknown.
@@ -59,7 +50,7 @@ func AppliedSemVer(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) se
 		return v
 	}
 	if sts != nil {
-		if v := semVerFromStatefulSet(sts); !v.EQ(semver.Version{}) {
+		if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.EQ(semver.Version{}) {
 			return v
 		}
 	}
@@ -69,43 +60,12 @@ func AppliedSemVer(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) se
 // SourceVersionForUpgrade returns the MySQL version to treat as "current" for upgrade checks.
 // Prefer status.appliedMysqlVersion; fall back to a lagging STS template for clusters not yet recorded.
 func SourceVersionForUpgrade(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	if v := AppliedDataPlaneVersion(cluster); !v.EQ(semver.Version{}) {
-		return v
-	}
-	return laggingStatefulSetVersion(cluster, sts)
+	return mysqlcluster.SourceVersionForUpgrade(cluster, sts)
 }
 
-func semVerFromStatefulSet(sts *apps.StatefulSet) semver.Version {
-	for _, c := range sts.Spec.Template.Spec.Containers {
-		if c.Name != "mysql" {
-			continue
-		}
-		for _, e := range c.Env {
-			if e.Name == mySQLVersionEnv && e.Value != "" {
-				if v, err := semver.Parse(e.Value); err == nil {
-					return v
-				}
-			}
-		}
-	}
-	for _, c := range sts.Spec.Template.Spec.InitContainers {
-		if c.Name != "mysql-init-only" {
-			continue
-		}
-		for _, e := range c.Env {
-			if e.Name == mySQLVersionEnv && e.Value != "" {
-				if v, err := semver.Parse(e.Value); err == nil {
-					return v
-				}
-			}
-		}
-	}
-	return semver.Version{}
-}
-
-// DesiredSemVer is the MySQL version from the cluster spec.
+// DesiredSemVer is the user-requested MySQL version (spec → operator default).
 func DesiredSemVer(cluster *mysqlcluster.MysqlCluster) semver.Version {
-	return cluster.GetMySQLSemVer()
+	return cluster.DesiredVersion()
 }
 
 // VersionChangePending reports whether spec.mysqlVersion differs from status.appliedMysqlVersion.
@@ -115,7 +75,7 @@ func VersionChangePending(cluster *mysqlcluster.MysqlCluster, sts *apps.Stateful
 	if !applied.EQ(semver.Version{}) {
 		return !applied.EQ(desired)
 	}
-	lag := laggingStatefulSetVersion(cluster, sts)
+	lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts)
 	if lag.EQ(semver.Version{}) {
 		return false
 	}

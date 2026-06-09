@@ -85,7 +85,7 @@ func TestEnsureChecked_freshClusterNoAppliedDoesNotDeadlock(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
 					}},
 				},
 			},
@@ -162,7 +162,7 @@ func TestShouldBlockRollout(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.0.20"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.20"}},
 					}},
 				},
 			},
@@ -225,7 +225,7 @@ func TestSyncAppliedVersion(t *testing.T) {
 					InitContainers: []core.Container{{Name: "init"}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.0.34"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.34"}},
 					}},
 				},
 			},

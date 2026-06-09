@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package versionupgrade
+package mysqlcluster
 
 import (
 	"testing"
@@ -23,12 +23,32 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
+
+func TestDesiredVersion_specThenDefault(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	c := New(&api.MysqlCluster{
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	if got := c.DesiredVersion().String(); got != "8.4.0" {
+		t.Fatalf("desired: %s", got)
+	}
+
+	c.Spec.MysqlVersion = ""
+	if got := c.DesiredVersion().String(); got != constants.MySQLDefaultVersion {
+		t.Fatalf("empty spec should use default: %s", got)
+	}
+}
 
 func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T) {
 	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
+	cluster := New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "c1",
 			Namespace: "default",
@@ -46,7 +66,7 @@ func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T)
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: MySQLVersionEnv, Value: "8.4.0"}},
 					}},
 				},
 			},
@@ -58,11 +78,10 @@ func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T)
 	}
 }
 
-func TestVersionChangePending_appliedBehindSpecDespiteSTS(t *testing.T) {
+func TestEffectiveVersion_usesLaggingSTSBeforeDesired(t *testing.T) {
+	t.Parallel()
 	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+	cluster := New(&api.MysqlCluster{
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
@@ -75,13 +94,46 @@ func TestVersionChangePending_appliedBehindSpecDespiteSTS(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: MySQLVersionEnv, Value: "8.0.20"}},
 					}},
 				},
 			},
 		},
 	}
-	if !VersionChangePending(cluster, sts) {
-		t.Fatal("expected upgrade pending when applied lags spec")
+	got := cluster.EffectiveVersion(sts)
+	if got.String() != "8.0.20" {
+		t.Fatalf("effective with lagging STS: %s", got)
+	}
+}
+
+func TestEffectiveVersion_fallsBackToDesiredOnFreshInstall(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	cluster := New(&api.MysqlCluster{
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	got := cluster.EffectiveVersion(nil)
+	if got.String() != "8.4.0" {
+		t.Fatalf("fresh install effective: %s", got)
+	}
+}
+
+func TestSemVerFromPod_prefersPodEnv(t *testing.T) {
+	t.Parallel()
+	pod := &core.Pod{
+		Spec: core.PodSpec{
+			Containers: []core.Container{{
+				Name: "mysql",
+				Env:  []core.EnvVar{{Name: MySQLVersionEnv, Value: "8.4.8"}},
+			}},
+		},
+	}
+	got := SemVerFromPod(pod)
+	if got.String() != "8.4.8" {
+		t.Fatalf("pod version: %s", got)
 	}
 }

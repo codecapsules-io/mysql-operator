@@ -56,7 +56,7 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 					}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
 					}},
 				},
 			},
@@ -102,7 +102,7 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 					}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
 					}},
 				},
 			},

@@ -383,7 +383,7 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	}
 
 	// set MySQL root and application credentials
-	if name == containerMySQLInitName || (!s.cluster.ShouldHaveInitContainerForMysql() && name == containerMysqlName) {
+	if name == containerMySQLInitName || (!s.cluster.WantsPerconaInitContainerFor(s.rolloutVersion) && name == containerMysqlName) {
 		env = append(env, s.envVarFromSecret(sctName, "MYSQL_ROOT_PASSWORD", "ROOT_PASSWORD", false))
 		env = append(env, s.envVarFromSecret(sctName, "MYSQL_USER", "USER", true))
 		env = append(env, s.envVarFromSecret(sctName, "MYSQL_PASSWORD", "PASSWORD", true))
@@ -438,7 +438,7 @@ func (s *sfsSyncer) ensureDatadirChownInitContainer() core.Container {
 	root := int64(0)
 	return core.Container{
 		Name:            containerDatadirChownName,
-		Image:           s.cluster.GetMysqlImage(),
+		Image:           s.serverImageForVersion(s.rolloutVersion),
 		ImagePullPolicy: s.cluster.Spec.PodSpec.ImagePullPolicy,
 		Command:         []string{"/bin/sh", "-ec"},
 		Args: []string{fmt.Sprintf(
@@ -561,7 +561,7 @@ func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container
 	// PT-HEARTBEAT container (explicit --socket: pt-heartbeat's DSN defaults to TCP 127.0.0.1, which
 	// ignores socket-only defaults for Perl DBD::mysql and breaks caching_sha2 / host-matched grants.)
 	heartbeat := s.ensureContainer(containerHeartBeatName,
-		s.cluster.GetSidecarImage(),
+		s.sidecarImageForVersion(s.rolloutVersion),
 		[]string{
 			"pt-heartbeat",
 			"--update", "--replace",
@@ -597,7 +597,7 @@ func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container
 		command = append(command, getCliOptionsFromQueryLimits(s.cluster.Spec.QueryLimits)...)
 
 		killer := s.ensureContainer(containerKillerName,
-			s.cluster.GetSidecarImage(),
+			s.sidecarImageForVersion(s.rolloutVersion),
 			command,
 		)
 

@@ -43,7 +43,7 @@ import (
 )
 
 // NewConfigMapSyncer returns config map syncer.
-// sts may be nil; when status.appliedMysqlVersion is unset, a lagging StatefulSet template is used for preStop SQL.
+// sts may be nil; when status.appliedMysqlVersion is unset, a lagging StatefulSet template is used for my.cnf version.
 func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) syncer.Interface {
 	cm := &core.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,32 +66,49 @@ func NewConfigMapSyncer(c client.Client, scheme *runtime.Scheme, cluster *mysqlc
 		}
 
 		if cluster.Spec.PodSpec.MysqlLifecycle == nil {
-			cm.Data[shPreStopFile] = buildBashPreStop(cluster, sts)
+			cm.Data[shPreStopFile] = buildBashPreStop()
 		}
 
 		return nil
 	})
 }
 
-func buildBashPreStop(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) string {
-	// preStop runs against the mysqld process on this pod; applied status lags during rollout.
-	v := cluster.EffectiveVersion(sts)
-	d := mysqlversioning.ProfileFor(v).Replication()
-	replicaStatusCmd := d.ShowReplicaStatusCmd
-	replicaHostsCmd := d.ShowReplicasCmd
-	logLabel := d.LogLabelPreStop
+func buildBashPreStop() string {
+	// preStop runs against the mysqld on this pod; MY_MYSQL_VERSION is per-pod and accurate during rollout.
+	masterSlavePhrases := mysqlversioning.MasterSlaveReplication()
+	sourceReplicaPhrases := mysqlversioning.SourceReplicaReplication()
 	data := `#!/bin/bash
 set -ex
+
+# Source/replica terminology from MySQL 8.4+ (major > 8, or 8.x with minor >= 4).
+use_source_replica_terms=0
+if [ -n "${MY_MYSQL_VERSION}" ]; then
+  mysql_major="${MY_MYSQL_VERSION%%.*}"
+  mysql_minor="${MY_MYSQL_VERSION#*.}"
+  mysql_minor="${mysql_minor%%.*}"
+  if [ "${mysql_major}" -gt 8 ] || { [ "${mysql_major}" -eq 8 ] && [ "${mysql_minor}" -ge 4 ]; }; then
+    use_source_replica_terms=1
+  fi
+fi
+if [ "${use_source_replica_terms}" -eq 1 ]; then
+  replica_status_cmd='__SR_STATUS__'
+  replica_hosts_cmd='__SR_HOSTS__'
+  log_label='__SR_LABEL__'
+else
+  replica_status_cmd='__MS_STATUS__'
+  replica_hosts_cmd='__MS_HOSTS__'
+  log_label='__MS_LABEL__'
+fi
 
 current=$(date "+%Y-%m-%d %H:%M:%S")
 echo "[${current}]preStop is ongoing"
 read_only_status=$(mysql --defaults-file=ConfClientPathHolder -NB -e 'SELECT @@read_only')
-replica_status=$(mysql --defaults-file=ConfClientPathHolder -NB -e '__REPLICA_STATUS_CMD__')
+replica_status=$(mysql --defaults-file=ConfClientPathHolder -NB -e "${replica_status_cmd}")
 # orchestrator will isolate old master during failover
-has_replica_hosts=$(mysql --defaults-file=ConfClientPathHolder -NB -e '__REPLICA_HOSTS_CMD__')
+has_replica_hosts=$(mysql --defaults-file=ConfClientPathHolder -NB -e "${replica_hosts_cmd}")
 replica_status_count=$(echo -n "$replica_status" | wc -l )
 has_replica_count=$(echo -n "$has_replica_hosts" | wc -l )
-echo "hostname=$(hostname) readonly=${read_only_status} __LOG_LABEL__=${replica_status_count}"
+echo "hostname=$(hostname) readonly=${read_only_status} ${log_label}=${replica_status_count}"
 echo "has_replica_hosts=${has_replica_count}"
 if [ ${read_only_status} -eq 0  ] && [ ${replica_status_count} -eq 0 ] && [ ${has_replica_count} -gt 0 ]
 then
@@ -105,9 +122,17 @@ then
         fi
 fi
 `
-	data = strings.Replace(data, "__REPLICA_STATUS_CMD__", replicaStatusCmd, 1)
-	data = strings.Replace(data, "__REPLICA_HOSTS_CMD__", replicaHostsCmd, 1)
-	data = strings.Replace(data, "__LOG_LABEL__", logLabel, 1)
+	replacements := []struct{ old, new string }{
+		{"__SR_STATUS__", sourceReplicaPhrases.ShowReplicaStatusCmd},
+		{"__SR_HOSTS__", sourceReplicaPhrases.ShowReplicasCmd},
+		{"__SR_LABEL__", sourceReplicaPhrases.LogLabelPreStop},
+		{"__MS_STATUS__", masterSlavePhrases.ShowReplicaStatusCmd},
+		{"__MS_HOSTS__", masterSlavePhrases.ShowReplicasCmd},
+		{"__MS_LABEL__", masterSlavePhrases.LogLabelPreStop},
+	}
+	for _, r := range replacements {
+		data = strings.Replace(data, r.old, r.new, 1)
+	}
 	return strings.Replace(data, "ConfClientPathHolder", confClientPath, -1)
 }
 

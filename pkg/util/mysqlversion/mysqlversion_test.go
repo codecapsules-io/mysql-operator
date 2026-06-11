@@ -40,13 +40,22 @@ func TestAtLeastMySQL8030(t *testing.T) {
 }
 
 func TestAtLeastMySQL84(t *testing.T) {
-	if !AtLeastMySQL84(semver.MustParse("8.4.0")) {
-		t.Fatal()
+	cases := []struct {
+		v   string
+		exp bool
+	}{
+		{"8.0.34", false},
+		{"8.3.9", false},
+		{"8.4.0", true},
+		{"8.4.1", true},
+		{"9.0.0", true},
+		{"9.10.0", true},
+		{"10.5.3", true},
 	}
-	if AtLeastMySQL84(semver.MustParse("8.3.9")) {
-		t.Fatal()
-	}
-	if !AtLeastMySQL84(semver.MustParse("9.0.0")) {
-		t.Fatal()
+	for _, tc := range cases {
+		if got := AtLeastMySQL84(semver.MustParse(tc.v)); got != tc.exp {
+			t.Fatalf("%s: got %v want %v", tc.v, got, tc.exp)
+		}
 	}
 }
+

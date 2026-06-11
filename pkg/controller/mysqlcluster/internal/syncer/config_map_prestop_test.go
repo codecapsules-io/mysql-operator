@@ -16,44 +16,107 @@ limitations under the License.
 package mysqlcluster
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/blang/semver"
+
+	"github.com/codecapsules-io/mysql-operator/pkg/util/mysqlversion"
 )
 
-func TestBuildBashPreStop_usesAppliedVersionDuringUpgrade(t *testing.T) {
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		Spec: api.MysqlClusterSpec{
-			MysqlVersion: "8.4.0",
-		},
-		Status: api.MysqlClusterStatus{
-			AppliedMysqlVersion: "8.0.20",
-		},
-	})
+func TestBuildBashPreStop_branchesOnMySQLVersion(t *testing.T) {
+	script := buildBashPreStop()
 
-	script := buildBashPreStop(cluster, nil)
-	if !strings.Contains(script, "SHOW SLAVE STATUS") {
-		t.Fatalf("expected master/slave preStop SQL while applied is 8.0, got: %s", script)
+	required := []string{
+		"MY_MYSQL_VERSION",
+		"use_source_replica_terms",
+		"mysql_major",
+		"mysql_minor",
+		"SHOW SLAVE STATUS",
+		"SHOW REPLICA STATUS",
+		"SHOW SLAVE HOSTS",
+		"SHOW REPLICAS",
+		"show_slave_status",
+		"show_replica_status",
+		"${replica_status_cmd}",
+		"${replica_hosts_cmd}",
 	}
-	if strings.Contains(script, "SHOW REPLICA STATUS") {
-		t.Fatalf("did not expect replica terminology preStop while applied is 8.0")
+	for _, s := range required {
+		if !strings.Contains(script, s) {
+			t.Fatalf("expected script to contain %q, got: %s", s, script)
+		}
 	}
 }
 
-func TestBuildBashPreStop_usesSpecWhenAppliedMatches(t *testing.T) {
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		Spec: api.MysqlClusterSpec{
-			MysqlVersion: "8.4.0",
-		},
-		Status: api.MysqlClusterStatus{
-			AppliedMysqlVersion: "8.4.0",
-		},
-	})
+func TestBuildBashPreStop_versionGateMatchesAtLeastMySQL84(t *testing.T) {
+	gate := preStopVersionGateScript(t, buildBashPreStop())
+	cases := []struct {
+		version string
+		exp     bool
+	}{
+		{"", false},
+		{"8.0.34", false},
+		{"8.3.9", false},
+		{"8.4.0", true},
+		{"8.4.1", true},
+		{"9.0.0", true},
+		{"9.10.0", true},
+		{"10.5.3", true},
+	}
+	for _, tc := range cases {
+		goWant := false
+		if tc.version != "" {
+			goWant = mysqlversion.AtLeastMySQL84(semver.MustParse(tc.version))
+		}
+		got, err := runPreStopVersionGate(gate, tc.version)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.version, err)
+		}
+		if got != goWant || got != tc.exp {
+			t.Fatalf("%q: gate=%v AtLeastMySQL84=%v want %v", tc.version, got, goWant, tc.exp)
+		}
+	}
+}
 
-	script := buildBashPreStop(cluster, nil)
-	if !strings.Contains(script, "SHOW REPLICA STATUS") {
-		t.Fatalf("expected replica preStop SQL when applied is 8.4, got: %s", script)
+func preStopVersionGateScript(t *testing.T, script string) string {
+	t.Helper()
+	start := strings.Index(script, "use_source_replica_terms=0")
+	end := strings.Index(script, `if [ "${use_source_replica_terms}" -eq 1 ]; then`)
+	if start < 0 || end <= start {
+		t.Fatal("could not extract version gate from preStop script")
+	}
+	return script[start:end]
+}
+
+func runPreStopVersionGate(gate, version string) (bool, error) {
+	script := gate + `
+if [ "${use_source_replica_terms}" -eq 1 ]; then exit 0; else exit 1; fi`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = []string{"MY_MYSQL_VERSION=" + version}
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	if exit, ok := err.(*exec.ExitError); ok && exit.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
+}
+
+func TestBuildBashPreStop_preservesOrchestratorLogic(t *testing.T) {
+	script := buildBashPreStop()
+
+	required := []string{
+		"graceful-master-takeover-auto",
+		"MY_FQDN",
+		"read_only_status",
+		"ORCH_HTTP_API",
+		"ORCH_CLUSTER_ALIAS",
+	}
+	for _, s := range required {
+		if !strings.Contains(script, s) {
+			t.Fatalf("expected script to contain %q, got: %s", s, script)
+		}
 	}
 }

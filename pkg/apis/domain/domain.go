@@ -71,8 +71,7 @@ const (
 
 	JobTypeUpgradeCheck = "mysql-upgrade-check"
 
-	UpgradeCheckModeOnline  = "online"
-	UpgradeCheckModeOffline = "offline"
+	UpgradeCheckModeOnline = "online"
 )
 
 // Annotation keys.

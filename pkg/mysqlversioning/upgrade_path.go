@@ -47,8 +47,8 @@ func ValidateUpgradePath(current, target semver.Version) error {
 	return nil
 }
 
-// NeedsDatadirUpgradeCheck is true when the target version line differs from the current line and an
-// offline datadir check with the target server binary should run before changing the StatefulSet image.
+// NeedsDatadirUpgradeCheck is true when the target version line differs from the current line and a
+// pre-rollout upgrade check should run before changing the StatefulSet image.
 func NeedsDatadirUpgradeCheck(current, target semver.Version) bool {
 	if target.EQ(current) {
 		return false

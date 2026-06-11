@@ -24,10 +24,9 @@ import (
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (
@@ -37,8 +36,6 @@ const (
 
 	preRolloutJobsDoneAnnotation  = domain.AnnotationPreRolloutJobsDone
 	postRolloutJobsDoneAnnotation = domain.AnnotationPostRolloutJobsDone
-
-	DataVolumeMountPath = constants.DataVolumeMountPath
 )
 
 // AppliedDataPlaneVersion is the operator-recorded MySQL version on the data plane (status.appliedMysqlVersion).
@@ -84,16 +81,6 @@ func VersionChangePending(cluster *mysqlcluster.MysqlCluster, sts *apps.Stateful
 	return !lag.EQ(desired)
 }
 
-// MasterDataPVCName returns the PVC name for the current master's data volume.
-func MasterDataPVCName(cluster *mysqlcluster.MysqlCluster) (string, error) {
-	ord, err := ResolveMasterOrdinal(cluster)
-	if err != nil {
-		return "", err
-	}
-	stsName := cluster.GetNameForResource(mysqlcluster.StatefulSet)
-	return fmt.Sprintf("data-%s-%d", stsName, ord), nil
-}
-
 // ResolveMasterOrdinal returns the StatefulSet pod ordinal for the writable primary.
 // On multi-replica clusters, returns HoldRolloutError when master identity is unknown.
 func ResolveMasterOrdinal(cluster *mysqlcluster.MysqlCluster) (int32, error) {
@@ -103,7 +90,7 @@ func ResolveMasterOrdinal(cluster *mysqlcluster.MysqlCluster) (int32, error) {
 	masterHost, ok := masterHostFromStatus(cluster)
 	if !ok {
 		return 0, &HoldRolloutError{
-			Reason: "waiting for MySQL master to be identified before offline upgrade check (no Master condition in status.nodes)",
+			Reason: "waiting for MySQL master to be identified before upgrade check (no Master condition in status.nodes)",
 		}
 	}
 	stsName := cluster.GetNameForResource(mysqlcluster.StatefulSet)
@@ -164,7 +151,7 @@ func ClusterHasMySQLData(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulS
 	return false
 }
 
-// ClusterHasRunningMySQL is true when a mysqld pod is up (online upgrade checks must not mount the data PVC).
+// ClusterHasRunningMySQL is true when a mysqld pod is up (required before running the upgrade check).
 func ClusterHasRunningMySQL(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
 	if cluster.Status.ReadyNodes > 0 {
 		return true

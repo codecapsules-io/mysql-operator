@@ -39,7 +39,7 @@ func datadirUpgradeCheckStep() UpgradeStep {
 			TargetVersionLabel: upgradeCheckTargetLabel,
 			JobName:            JobName,
 			Build:              buildUpgradeCheckJob,
-			BeforeEnsure:       requireKnownMasterForOfflineUpgradeCheck,
+			BeforeEnsure:       requireKnownMasterForUpgradeCheck,
 			WaitReason: func(target semver.Version) string {
 				return fmt.Sprintf("waiting for MySQL upgrade check to %s", target)
 			},
@@ -64,13 +64,16 @@ func buildUpgradeCheckJob(uctx UpgradeContext) (*batch.Job, error) {
 	if uctx.STS == nil {
 		return nil, fmt.Errorf("statefulset required for upgrade check job")
 	}
-	return newUpgradeCheckJob(uctx.Cluster, uctx.Target, uctx.Opt, uctx.STS)
+	return newUpgradeCheckJob(uctx.Cluster, uctx.Target, uctx.Opt)
 }
 
-// requireKnownMasterForOfflineUpgradeCheck blocks offline datadir checks until the writable primary is known.
-func requireKnownMasterForOfflineUpgradeCheck(uctx UpgradeContext) error {
-	if ClusterHasRunningMySQL(uctx.Cluster, uctx.STS) {
-		return nil
+// requireKnownMasterForUpgradeCheck blocks upgrade checks until at least one mysqld pod is running
+// and the writable primary is known on multi-replica clusters.
+func requireKnownMasterForUpgradeCheck(uctx UpgradeContext) error {
+	if !ClusterHasRunningMySQL(uctx.Cluster, uctx.STS) {
+		return &HoldRolloutError{
+			Reason: "waiting for at least one running MySQL pod before upgrade check",
+		}
 	}
 	_, err := ResolveMasterOrdinal(uctx.Cluster)
 	return err

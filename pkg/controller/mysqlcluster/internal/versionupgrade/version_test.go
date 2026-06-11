@@ -19,7 +19,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
+	batch "k8s.io/api/batch/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -100,7 +102,48 @@ func TestResolveMasterOrdinal_multiReplicaUnparseableMasterHostHolds(t *testing.
 	}
 }
 
-func TestEnsureJobSteps_holdsWhenOfflineMultiReplicaMasterUnknown(t *testing.T) {
+func TestEnsureJobSteps_holdsWhenOnlineMultiReplicaMasterUnknown(t *testing.T) {
+	replicas := int32(2)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status: api.MysqlClusterStatus{
+			AppliedMysqlVersion: "8.0.20",
+			ReadyNodes:          2,
+		},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.GetNameForResource(mysqlcluster.StatefulSet),
+			Namespace: cluster.Namespace,
+		},
+		Status: apps.StatefulSetStatus{ReadyReplicas: 2},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.20"}},
+					}},
+				},
+			},
+		},
+	}
+	c := testClientBuilder().WithObjects(sts).Build()
+	err := EnsureJobSteps(context.Background(), c, cluster, sts, options.GetOptions(), PhasePreRollout)
+	if !IsHoldRollout(err) {
+		t.Fatalf("expected hold rollout, got: %v", err)
+	}
+}
+
+func TestEnsureJobSteps_holdsWhenNoRunningPods(t *testing.T) {
 	replicas := int32(2)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -136,6 +179,73 @@ func TestEnsureJobSteps_holdsWhenOfflineMultiReplicaMasterUnknown(t *testing.T) 
 	if !IsHoldRollout(err) {
 		t.Fatalf("expected hold rollout, got: %v", err)
 	}
+	if err.Error() != "waiting for at least one running MySQL pod before upgrade check" {
+		t.Fatalf("unexpected hold reason: %v", err)
+	}
+}
+
+func TestNewUpgradeCheckJob_onlineMultiReplicaUsesMasterServiceHost(t *testing.T) {
+	replicas := int32(3)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status: api.MysqlClusterStatus{
+			ReadyNodes: 2,
+			Nodes: []api.NodeStatus{{
+				Name: "c1-mysql-2.mysql.default",
+				Conditions: []api.NodeCondition{{
+					Type:   api.NodeConditionMaster,
+					Status: core.ConditionTrue,
+				}},
+			}},
+		},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	target := semver.MustParse("8.4.0")
+	job, err := newUpgradeCheckJob(cluster, target, options.GetOptions())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := upgradeCheckJobHost(job)
+	want := cluster.GetMasterServiceHost()
+	if got != want {
+		t.Fatalf("host: got %q want %q", got, want)
+	}
+}
+
+func TestNewUpgradeCheckJob_onlineSingleReplicaUsesPodHost(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{ReadyNodes: 1},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	target := semver.MustParse("8.4.0")
+	job, err := newUpgradeCheckJob(cluster, target, options.GetOptions())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := upgradeCheckJobHost(job)
+	want := cluster.GetMasterHost()
+	if got != want {
+		t.Fatalf("host: got %q want %q", got, want)
+	}
+}
+
+func upgradeCheckJobHost(job *batch.Job) string {
+	for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == mysqlUpgradeCheckHost {
+			return e.Value
+		}
+	}
+	return ""
 }
 
 func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T) {

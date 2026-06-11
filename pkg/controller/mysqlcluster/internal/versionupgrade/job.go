@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/blang/semver"
-	apps "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,55 +30,22 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 	"github.com/codecapsules-io/mysql-operator/pkg/options"
 	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
-	"github.com/codecapsules-io/mysql-operator/pkg/util/mysqlversion"
 )
 
 const (
-	dataVolumeName          = "data"
 	mysqlUpgradeCheckHost   = "MYSQL_UPGRADE_CHECK_HOST"
 	mysqlUpgradeCheckPort   = "MYSQL_UPGRADE_CHECK_PORT"
 	mysqlUpgradeCheckTarget = "MYSQL_UPGRADE_CHECK_TARGET_VERSION"
 )
 
-func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Version, _ *options.Options, sts *apps.StatefulSet) (*batch.Job, error) {
-	online := ClusterHasRunningMySQL(cluster, sts)
+func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Version, _ *options.Options) (*batch.Job, error) {
 	labels := cluster.GetSelectorLabels()
 	labels[domain.LabelJobType] = JobTypeUpgradeCheck
 	labels[domain.LabelCluster] = cluster.Name
 	labels[upgradeCheckTargetLabel] = target.String()
-	if online {
-		labels[domain.LabelUpgradeCheckMode] = domain.UpgradeCheckModeOnline
-	} else {
-		labels[domain.LabelUpgradeCheckMode] = domain.UpgradeCheckModeOffline
-	}
+	labels[domain.LabelUpgradeCheckMode] = domain.UpgradeCheckModeOnline
 
 	backoff := int32(0)
-
-	var image string
-	var args []string
-	var volumeMounts []core.VolumeMount
-	var volumes []core.Volume
-
-	if online {
-		image = cluster.GetSidecarImage()
-		args = []string{onlineUpgradeCheckScript()}
-	} else {
-		image = cluster.GetMysqlImage()
-		args = []string{offlineUpgradeCheckScript(target)}
-		claimName, err := MasterDataPVCName(cluster)
-		if err != nil {
-			return nil, err
-		}
-		volumeMounts = []core.VolumeMount{{Name: dataVolumeName, MountPath: DataVolumeMountPath}}
-		volumes = []core.Volume{{
-			Name: dataVolumeName,
-			VolumeSource: core.VolumeSource{
-				PersistentVolumeClaim: &core.PersistentVolumeClaimVolumeSource{
-					ClaimName: claimName,
-				},
-			},
-		}}
-	}
 
 	h := mysqlversioning.ProfileFor(target).PodSecurityHints(cluster.IsPerconaImage())
 	runAsUser := int64(999)
@@ -91,16 +57,17 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 		fsGroup = h.FSGroup
 	}
 
+	host := cluster.GetMasterHost()
+	if isMultiReplica(cluster) {
+		host = cluster.GetMasterServiceHost()
+	}
+
 	env := []core.EnvVar{
 		{Name: mysqlUpgradeCheckTarget, Value: target.String()},
-	}
-	if online {
-		env = append(env,
-			core.EnvVar{Name: mysqlUpgradeCheckHost, Value: cluster.GetMasterHost()},
-			core.EnvVar{Name: mysqlUpgradeCheckPort, Value: strconv.Itoa(constants.MysqlPort)},
-			envVarFromOperatedSecret(cluster, "OPERATOR_USER", "OPERATOR_USER", false),
-			envVarFromOperatedSecret(cluster, "OPERATOR_PASSWORD", "OPERATOR_PASSWORD", false),
-		)
+		{Name: mysqlUpgradeCheckHost, Value: host},
+		{Name: mysqlUpgradeCheckPort, Value: strconv.Itoa(constants.MysqlPort)},
+		envVarFromOperatedSecret(cluster, "OPERATOR_USER", "OPERATOR_USER", false),
+		envVarFromOperatedSecret(cluster, "OPERATOR_PASSWORD", "OPERATOR_PASSWORD", false),
 	}
 
 	return &batch.Job{
@@ -122,15 +89,13 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 					Affinity:           cluster.Spec.PodSpec.Affinity,
 					Containers: []core.Container{{
 						Name:            JobContainerName,
-						Image:           image,
+						Image:           cluster.GetSidecarImage(),
 						ImagePullPolicy: cluster.Spec.PodSpec.ImagePullPolicy,
 						Command:         []string{"/bin/sh", "-ec"},
-						Args:            args,
+						Args:            []string{upgradeCheckScript()},
 						Env:             env,
 						SecurityContext: &core.SecurityContext{RunAsUser: &runAsUser},
-						VolumeMounts:    volumeMounts,
 					}},
-					Volumes: volumes,
 				},
 			},
 		},
@@ -152,9 +117,8 @@ func envVarFromOperatedSecret(cluster *mysqlcluster.MysqlCluster, name, key stri
 	}
 }
 
-// onlineUpgradeCheckScript validates the live master before changing the StatefulSet image.
-// MySQL 8.4+ removed --upgrade=CHECK; an online check avoids mounting the PVC while mysqld holds locks.
-func onlineUpgradeCheckScript() string {
+// upgradeCheckScript validates the live master before changing the StatefulSet image.
+func upgradeCheckScript() string {
 	return strings.TrimSpace(`
 set -eu
 host="${MYSQL_UPGRADE_CHECK_HOST:?}"
@@ -162,7 +126,7 @@ port="${MYSQL_UPGRADE_CHECK_PORT:-3306}"
 user="${OPERATOR_USER:?}"
 pass="${OPERATOR_PASSWORD:?}"
 target="${MYSQL_UPGRADE_CHECK_TARGET_VERSION:?}"
-echo "online MySQL upgrade check against ${host}:${port} (target ${target})"
+echo "MySQL upgrade check against ${host}:${port} (target ${target})"
 ready=0
 for i in $(seq 1 60); do
   if mysqladmin --protocol=TCP -h "$host" -P "$port" -u "$user" -p"$pass" ping 2>/dev/null; then
@@ -179,86 +143,6 @@ current="$(mysql --protocol=TCP -h "$host" -P "$port" -u "$user" -p"$pass" -NBe 
 echo "current server version: ${current:-unknown}"
 mysqlcheck --protocol=TCP -h "$host" -P "$port" -u "$user" -p"$pass" --all-databases --check
 `)
-}
-
-// offlineUpgradeCheckScript opens the datadir with the target mysqld when no instance is running.
-// MySQL 8.4+ does not support --upgrade=CHECK; use --upgrade=NONE (fail if upgrade required is OK).
-func offlineUpgradeCheckScript(target semver.Version) string {
-	useNONEOnly := "false"
-	if mysqlversion.AtLeastMySQL84(target) {
-		useNONEOnly = "true"
-	}
-	return strings.TrimSpace(fmt.Sprintf(`
-set -eu
-datadir="%s"
-use_none_only=%s
-if [ ! -d "$datadir/mysql" ] && [ ! -f "$datadir/ibdata1" ]; then
-  echo "no MySQL datadir on volume; skipping offline upgrade check"
-  exit 0
-fi
-run_offline_none() {
-  "$1" --datadir="$datadir" --user=mysql --upgrade=NONE --skip-networking \
-    --socket=/tmp/mysql-upgrade-check.sock --pid-file=/tmp/mysql-upgrade-check.pid 2>&1
-}
-run_offline_check() {
-  "$1" --datadir="$datadir" --user=mysql --upgrade=CHECK \
-    --skip-networking --socket=/tmp/mysql-upgrade-check.sock --pid-file=/tmp/mysql-upgrade-check.pid 2>&1
-}
-for mysqld in /usr/sbin/mysqld /usr/sbin/mysqld-debug; do
-  [ -x "$mysqld" ] || continue
-  if [ "$use_none_only" = "true" ]; then
-    set +e
-    out="$(run_offline_none "$mysqld")"
-    code=$?
-    set -e
-    echo "$out"
-    if [ "$code" -eq 0 ]; then
-      exit 0
-    fi
-    if echo "$out" | grep -qiE 'upgrade.*required|must upgrade|needs upgrade|not upgrade'; then
-      echo "datadir requires upgrade for target version (expected)"
-      exit 0
-    fi
-    if echo "$out" | grep -qiE 'incompatible|cannot upgrade|not supported|corrupt'; then
-      echo "datadir incompatible with target version"
-      exit 1
-    fi
-    exit "$code"
-  fi
-  set +e
-  out="$(run_offline_check "$mysqld")"
-  code=$?
-  set -e
-  echo "$out"
-  if [ "$code" -eq 0 ]; then
-    exit 0
-  fi
-  if echo "$out" | grep -qiE "setting value 'CHECK' to 'upgrade'|unknown variable 'upgrade=CHECK'"; then
-    echo "mysqld does not support --upgrade=CHECK, falling back to --upgrade=NONE"
-    set +e
-    out="$(run_offline_none "$mysqld")"
-    code=$?
-    set -e
-    echo "$out"
-    if [ "$code" -eq 0 ]; then
-      exit 0
-    fi
-    if echo "$out" | grep -qiE 'upgrade.*required|must upgrade|needs upgrade|not upgrade'; then
-      exit 0
-    fi
-    if echo "$out" | grep -qiE 'incompatible|cannot upgrade|not supported|corrupt'; then
-      exit 1
-    fi
-    exit "$code"
-  fi
-  if echo "$out" | grep -qiE 'upgrade required|check identifies|not required'; then
-    exit 0
-  fi
-  exit "$code"
-done
-echo "mysqld binary not found in target image"
-exit 1
-`, DataVolumeMountPath, useNONEOnly))
 }
 
 func jobFailed(job *batch.Job) (bool, string) {

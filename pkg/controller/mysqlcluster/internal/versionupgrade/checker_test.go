@@ -180,33 +180,6 @@ func TestShouldBlockRollout(t *testing.T) {
 	}
 }
 
-func TestMasterDataPVCName(t *testing.T) {
-	replicas := int32(2)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "ns"},
-		Spec: api.MysqlClusterSpec{
-			Replicas:   &replicas,
-			SecretName: "sec",
-		},
-		Status: api.MysqlClusterStatus{
-			Nodes: []api.NodeStatus{{
-				Name: "demo-mysql-1.mysql.ns",
-				Conditions: []api.NodeCondition{{
-					Type:   api.NodeConditionMaster,
-					Status: core.ConditionTrue,
-				}},
-			}},
-		},
-	})
-	got, err := MasterDataPVCName(cluster)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "data-demo-mysql-1" {
-		t.Fatalf("pvc: %s", got)
-	}
-}
-
 func TestSyncAppliedVersion(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{

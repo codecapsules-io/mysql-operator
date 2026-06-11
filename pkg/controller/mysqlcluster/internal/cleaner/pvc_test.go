@@ -157,8 +157,10 @@ var _ = Describe("PVC cleaner", func() {
 					Labels:    cluster.GetSelectorLabels(),
 					OwnerReferences: []metav1.OwnerReference{
 						{
+							APIVersion: "apps/v1",
 							Kind:       "StatefulSet",
 							Name:       stsName,
+							UID:        "test-sts-uid",
 							Controller: &trueVar,
 						},
 					},

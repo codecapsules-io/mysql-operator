@@ -147,6 +147,40 @@ var _ = Describe("PVC cleaner", func() {
 			Expect(listClaimsForCluster(c, cluster)).To(HaveLen(3))
 		})
 
+		It("should not remove non-data StatefulSet-owned PVCs on scale-down", func() {
+			trueVar := true
+			stsName := cluster.GetNameForResource(mysqlcluster.StatefulSet)
+			extraPVC := corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("logs-%s-4", stsName),
+					Namespace: cluster.Namespace,
+					Labels:    cluster.GetSelectorLabels(),
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Kind:       "StatefulSet",
+							Name:       stsName,
+							Controller: &trueVar,
+						},
+					},
+				},
+				Spec: pvcSpec,
+			}
+			Expect(c.Create(context.TODO(), &extraPVC)).To(Succeed())
+			defer deletePVC(&extraPVC)
+
+			pvcCleaner := NewPVCCleaner(cluster, options.GetOptions(), rec, c)
+			Expect(pvcCleaner.Run(context.TODO())).To(Succeed())
+
+			claims := listClaimsForCluster(c, cluster)
+			Expect(claims).To(HaveLen(4))
+
+			names := make([]string, len(claims))
+			for i, claim := range claims {
+				names[i] = claim.Name
+			}
+			Expect(names).To(ContainElement(extraPVC.Name))
+		})
+
 		It("should not remove pvc with 0 index", func() {
 			// scale to 0
 			zero := int32(0)

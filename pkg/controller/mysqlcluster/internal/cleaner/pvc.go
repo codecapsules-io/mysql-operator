@@ -75,7 +75,11 @@ func (p *PVCCleaner) Run(ctx context.Context) error {
 		return err
 	}
 
+	prefix := p.cluster.DataPVCNamePrefix()
 	for _, pvc := range pvcs {
+		if !strings.HasPrefix(pvc.Name, prefix) {
+			continue
+		}
 		ord, parseErr := getOrdinal(pvc.Name)
 		if parseErr == nil && ord >= *cluster.Spec.Replicas && ord != 0 {
 			log.Info("cleaning up PVC", "pvc", pvc.Name, "key", p.cluster)

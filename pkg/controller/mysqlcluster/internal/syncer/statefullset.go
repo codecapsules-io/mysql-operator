@@ -106,7 +106,7 @@ func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 
 	s.syncCtx = ctx
 	s.syncSTS = out
-	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(ctx, s.client, s.cluster, out)
+	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(s.cluster, out)
 
 	s.cluster.Status.ReadyNodes = int(out.Status.ReadyReplicas)
 

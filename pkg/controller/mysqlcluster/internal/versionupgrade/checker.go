@@ -25,14 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
-	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
-
-var log = logf.Log.WithName("versionupgrade")
 
 // HoldRolloutError is returned when reconciliation must wait for an upgrade step.
 type HoldRolloutError struct {
@@ -66,8 +62,8 @@ func IsUpgradeBlocked(err error) bool {
 	return ok
 }
 
-// EnsureChecked validates a MySQL version change and runs pre-rollout Jobs when required.
-func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, opt *options.Options) error {
+// EnsureChecked validates a pending MySQL version change.
+func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster) error {
 	sts, err := getStatefulSet(ctx, c, cluster)
 	if err != nil {
 		return err
@@ -89,69 +85,17 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 		return &UpgradeBlockedError{Reason: fmt.Sprintf("MySQL version upgrade blocked: %s", err.Error())}
 	}
 
-	if PreRolloutStepsComplete(ctx, c, cluster, sts) {
-		MarkPhaseJobsDone(cluster, PhasePreRollout, DesiredSemVer(cluster))
-		return nil
-	}
-
-	if err := EnsureJobSteps(ctx, c, cluster, sts, opt, PhasePreRollout); err != nil {
-		return err
-	}
-	if PreRolloutStepsComplete(ctx, c, cluster, sts) {
-		MarkPhaseJobsDone(cluster, PhasePreRollout, DesiredSemVer(cluster))
-	}
 	return nil
 }
 
-// PreRolloutStepsComplete reports whether every required pre-rollout Job succeeded for the
-// current target (live Job status or the durable phase-done annotation).
-func PreRolloutStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
-	target := DesiredSemVer(cluster)
-	if PhaseJobsDoneForTarget(cluster, PhasePreRollout, target) {
-		return true
-	}
-	return PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout)
-}
-
-// EnsurePostRolloutJobs runs Jobs that must succeed after pods are on spec.mysqlVersion.
-func EnsurePostRolloutJobs(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, opt *options.Options) error {
-	if sts == nil {
-		return nil
-	}
-	return EnsureJobSteps(ctx, c, cluster, sts, opt, PhasePostRollout)
-}
-
-// ShouldBlockRollout reports whether the cluster controller must not roll out a new MySQL version yet.
-// Returns true when pre-rollout Jobs are incomplete OR when the upgrade path itself is invalid.
-func ShouldBlockRollout(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
-	if !VersionChangePending(cluster, sts) {
-		return false
-	}
-	source := SourceVersionForUpgrade(cluster, sts)
-	if !source.EQ(semver.Version{}) {
-		if err := mysqlversioning.ValidateUpgradePath(source, DesiredSemVer(cluster)); err != nil {
-			return true
-		}
-	}
-	return !PreRolloutStepsComplete(ctx, c, cluster, sts)
-}
-
-// SyncAppliedVersion reports when rollout and all post-rollout Jobs have succeeded and records the
-// post-rollout phase-done marker in memory. The controller must persist that annotation and delete
-// succeeded Jobs before calling MarkAppliedVersion.
-func SyncAppliedVersion(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) bool {
+// SyncAppliedVersion reports when rollout has succeeded and the cluster is ready for
+// status.appliedMysqlVersion to advance.
+func SyncAppliedVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) bool {
 	desired := DesiredSemVer(cluster)
 	if AppliedDataPlaneVersion(cluster).EQ(desired) {
 		return false
 	}
-	if !RolloutComplete(ctx, c, cluster, sts, pods) {
-		return false
-	}
-	if !JobStepsComplete(ctx, c, cluster, sts, PhasePostRollout) {
-		return false
-	}
-	MarkPhaseJobsDone(cluster, PhasePostRollout, desired)
-	return true
+	return RolloutComplete(cluster, sts, pods)
 }
 
 // GetStatefulSetForRollout loads the cluster StatefulSet if it exists.

@@ -31,16 +31,9 @@ type profileTransition struct {
 // Add a new transition here when supporting another LTS hop; register step implementations in steps_builtin.go.
 var upgradePathSteps = map[profileTransition][]string{
 	{
-		From: mysqlversioning.ProfilePercona57.String(),
-		To:   mysqlversioning.ProfilePercona80.String(),
-	}: {
-		StepDatadirUpgradeCheck,
-	},
-	{
 		From: mysqlversioning.ProfilePercona80.String(),
 		To:   mysqlversioning.ProfilePercona84.String(),
 	}: {
-		StepDatadirUpgradeCheck,
 		StepDatadirChown,
 	},
 }

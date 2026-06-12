@@ -34,7 +34,7 @@ func TestStepIDsOnPath_80To84(t *testing.T) {
 	from := semver.MustParse("8.0.34")
 	to := semver.MustParse("8.4.0")
 	got := stepIDsOnPath(from, to)
-	want := []string{StepDatadirUpgradeCheck, StepDatadirChown}
+	want := []string{StepDatadirChown}
 	if len(got) != len(want) {
 		t.Fatalf("steps: got %v want %v", got, want)
 	}
@@ -47,8 +47,8 @@ func TestStepIDsOnPath_80To84(t *testing.T) {
 
 func TestStepIDsOnPath_57To80(t *testing.T) {
 	got := stepIDsOnPath(semver.MustParse("5.7.44"), semver.MustParse("8.0.34"))
-	if len(got) != 1 || got[0] != StepDatadirUpgradeCheck {
-		t.Fatalf("57→80: got %v", got)
+	if got != nil {
+		t.Fatalf("57→80: expected no rollout init steps, got %v", got)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestUpgradePathSteps_useProfileNames(t *testing.T) {
 	if !ok {
 		t.Fatal("expected 8.0→8.4 path in map")
 	}
-	if len(steps) != 2 {
+	if len(steps) != 1 || steps[0] != StepDatadirChown {
 		t.Fatalf("8.0→8.4 steps: %v", steps)
 	}
 }

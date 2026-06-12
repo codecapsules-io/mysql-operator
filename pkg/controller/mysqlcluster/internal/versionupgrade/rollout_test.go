@@ -27,7 +27,7 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
-func TestRolloutMySQLVersion_holdsUntilCheckPasses(t *testing.T) {
+func TestRolloutMySQLVersion_usesTargetWhenUpgradePathValid(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -54,17 +54,9 @@ func TestRolloutMySQLVersion_holdsUntilCheckPasses(t *testing.T) {
 			},
 		},
 	}
-	c := testClientBuilder().Build()
-	got := RolloutMySQLVersion(context.Background(), c, cluster, sts)
-	if got.String() != "8.0.20" {
-		t.Fatalf("rollout version: %s", got)
-	}
-	c = testClientBuilder().WithObjects(
-		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-	).Build()
-	got = RolloutMySQLVersion(context.Background(), c, cluster, sts)
+	got := RolloutMySQLVersion(cluster, sts)
 	if got.String() != "8.4.0" {
-		t.Fatalf("after check: %s", got)
+		t.Fatalf("rollout version: %s", got)
 	}
 }
 
@@ -87,9 +79,7 @@ func TestNeedsDatadirChownInit(t *testing.T) {
 		},
 	})
 	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
-	c := testClientBuilder().WithObjects(
-		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-	).Build()
+	c := testClientBuilder().Build()
 	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
 		t.Fatal("expected chown init when upgrading 8.0 Percona to 8.4")
 	}
@@ -107,7 +97,7 @@ func TestNeedsDatadirChownInit_requiresPersistentData(t *testing.T) {
 			Image:        "percona/percona-server:8.4",
 		},
 	})
-	c := testClientBuilder().WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).Build()
+	c := testClientBuilder().Build()
 	if NeedsDatadirChownInit(context.Background(), c, cluster, nil) {
 		t.Fatal("expected no chown without a persistent volume")
 	}

@@ -16,39 +16,25 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"context"
-
 	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
 
-// RolloutMySQLVersion is the MySQL version the StatefulSet must run until the upgrade check passes.
-// After the check passes it matches spec.mysqlVersion so chown init and the new image roll out together.
+// RolloutMySQLVersion is the MySQL version the StatefulSet must run during an upgrade.
 // When the upgrade path is invalid the StatefulSet is held at the current running version indefinitely.
-func RolloutMySQLVersion(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
+func RolloutMySQLVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
 	desired := DesiredSemVer(cluster)
 	if !VersionChangePending(cluster, sts) {
 		return desired
 	}
-	// Hold at the current version if the upgrade path is permanently invalid.
 	source := SourceVersionForUpgrade(cluster, sts)
 	if !source.EQ(semver.Version{}) {
 		if err := mysqlversioning.ValidateUpgradePath(source, desired); err != nil {
 			return source
 		}
-	}
-	if PreRolloutStepsComplete(ctx, c, cluster, sts) {
-		return desired
-	}
-	if v := AppliedDataPlaneVersion(cluster); !v.EQ(semver.Version{}) {
-		return v
-	}
-	if v := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !v.EQ(semver.Version{}) {
-		return v
 	}
 	return desired
 }

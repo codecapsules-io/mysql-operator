@@ -16,19 +16,16 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"context"
-
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // RolloutComplete is true when spec.mysqlVersion is fully running: StatefulSet template matches spec,
-// every replica is ready, any required pre-upgrade check has passed, and every init container on the
-// current pod template has completed successfully on each pod.
-func RolloutComplete(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) bool {
+// every replica is ready, and every init container on the current pod template has completed
+// successfully on each pod.
+func RolloutComplete(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) bool {
 	if sts == nil || cluster.Spec.Replicas == nil {
 		return false
 	}
@@ -38,9 +35,6 @@ func RolloutComplete(ctx context.Context, c client.Client, cluster *mysqlcluster
 	}
 	desired := DesiredSemVer(cluster)
 	if !rolloutCompleteOnVersion(cluster, sts, desired) {
-		return false
-	}
-	if !PreRolloutStepsComplete(ctx, c, cluster, sts) {
 		return false
 	}
 	return podTemplateInitContainersSucceeded(sts, pods, replicas)

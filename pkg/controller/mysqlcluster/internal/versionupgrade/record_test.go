@@ -16,7 +16,6 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"context"
 	"testing"
 
 	apps "k8s.io/api/apps/v1"
@@ -62,10 +61,7 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 			},
 		},
 	}
-	c := testClientBuilder().
-		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).
-		Build()
-	if SyncAppliedVersion(context.Background(), c, cluster, sts, nil) {
+	if SyncAppliedVersion(cluster, sts, nil) {
 		t.Fatal("should not set applied until init containers succeed on pods")
 	}
 	if cluster.Status.AppliedMysqlVersion != "8.0.20" {
@@ -108,9 +104,6 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 			},
 		},
 	}
-	c := testClientBuilder().
-		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).
-		Build()
 	pod := core.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1-mysql-0"},
 		Spec: core.PodSpec{
@@ -136,7 +129,7 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 			},
 		},
 	}
-	if !SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod}) {
+	if !SyncAppliedVersion(cluster, sts, []core.Pod{pod}) {
 		t.Fatal("expected rollout to be ready for applied version update")
 	}
 	MarkAppliedVersion(cluster, DesiredSemVer(cluster))

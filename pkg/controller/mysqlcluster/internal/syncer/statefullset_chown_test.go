@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	apps "k8s.io/api/apps/v1"
-	batch "k8s.io/api/batch/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,13 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
 	"github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
 
-func TestEnsureInitContainersSpec_includesDatadirChownAfterUpgradeCheck(t *testing.T) {
+func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,38 +64,18 @@ func TestEnsureInitContainersSpec_includesDatadirChownAfterUpgradeCheck(t *testi
 			},
 		},
 	}
-	checkJob := &batch.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      versionupgrade.JobName(cluster),
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				domain.LabelUpgradeCheckTargetVersion: "8.4.0",
-			},
-		},
-		Status: batch.JobStatus{
-			Succeeded: 1,
-			Conditions: []batch.JobCondition{{
-				Type:   batch.JobComplete,
-				Status: core.ConditionTrue,
-			}},
-		},
-	}
-	cluster.Annotations = map[string]string{
-		domain.AnnotationPreRolloutJobsDone: "8.4.0",
-	}
 	sch := runtime.NewScheme()
 	_ = scheme.AddToScheme(sch)
 	_ = api.SchemeBuilder.AddToScheme(sch)
 	_ = apps.AddToScheme(sch)
-	_ = batch.AddToScheme(sch)
-	c := fake.NewClientBuilder().WithScheme(sch).WithObjects(checkJob).Build()
+	c := fake.NewClientBuilder().WithScheme(sch).Build()
 	s := &sfsSyncer{
 		cluster: cluster,
 		client:  c,
 		opt:     &options.Options{},
 	}
 	ctx := context.Background()
-	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(ctx, c, cluster, sts)
+	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(cluster, sts)
 	inits := s.ensureInitContainersSpec(ctx, sts)
 	found := false
 	for _, ic := range inits {

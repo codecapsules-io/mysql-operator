@@ -31,30 +31,8 @@ type StepStrategy interface {
 }
 
 var (
-	_ StepStrategy = datadirUpgradeCheckStrategy{}
 	_ StepStrategy = datadirChownStrategy{}
 )
-
-type sourceFromUpgradeContext struct{}
-
-func (sourceFromUpgradeContext) SourceVersion(uctx UpgradeContext) semver.Version {
-	return uctx.Source
-}
-
-type datadirUpgradeCheckStrategy struct {
-	source sourceFromUpgradeContext
-}
-
-func (s datadirUpgradeCheckStrategy) SourceVersion(uctx UpgradeContext) semver.Version {
-	return s.source.SourceVersion(uctx)
-}
-
-func (s datadirUpgradeCheckStrategy) Applicable(uctx UpgradeContext) bool {
-	if !VersionChangePending(uctx.Cluster, uctx.STS) {
-		return false
-	}
-	return ClusterHasMySQLData(uctx.Cluster, uctx.STS)
-}
 
 type datadirChownStrategy struct{}
 

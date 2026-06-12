@@ -15,12 +15,6 @@ limitations under the License.
 */
 package versionupgrade
 
-import (
-	batch "k8s.io/api/batch/v1"
-
-	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
-)
-
 // registeredSteps is the catalog of version-upgrade step implementations. Paths that run each step are in upgrade_paths.go.
 var registeredSteps = builtinUpgradeSteps()
 
@@ -44,35 +38,4 @@ func StepByID(id string) *UpgradeStep {
 // StepsForUpgrade returns steps on the current source→target path in the given phase.
 func StepsForUpgrade(uctx UpgradeContext, phase Phase) []UpgradeStep {
 	return stepsForPhase(uctx, phase)
-}
-
-// RegisteredJobTypes returns job-type label values for all Job-based upgrade steps (controller Job watch).
-func RegisteredJobTypes() []string {
-	seen := make(map[string]struct{})
-	var types []string
-	for _, s := range registeredSteps {
-		if s.Job == nil || s.Job.JobType == "" {
-			continue
-		}
-		if _, ok := seen[s.Job.JobType]; ok {
-			continue
-		}
-		seen[s.Job.JobType] = struct{}{}
-		types = append(types, s.Job.JobType)
-	}
-	return types
-}
-
-// IsRegisteredUpgradeJob reports whether the Job was created by a registered upgrade step.
-func IsRegisteredUpgradeJob(job *batch.Job) bool {
-	if job == nil {
-		return false
-	}
-	jobType := job.Labels[domain.LabelJobType]
-	for _, t := range RegisteredJobTypes() {
-		if jobType == t {
-			return true
-		}
-	}
-	return false
 }

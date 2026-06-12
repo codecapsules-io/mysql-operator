@@ -35,11 +35,11 @@ const MySQLVersionEnv = "MY_MYSQL_VERSION"
 //   - EffectiveVersion: best estimate of what mysqld is running now (status.appliedMysqlVersion →
 //     lagging StatefulSet template → DesiredVersion). Use for SQL dialect, GTID helpers, and any
 //     logic executed against a live server. status.appliedMysqlVersion lags during rollout until
-//     post-rollout jobs finish; the StatefulSet template step covers clusters not yet recorded.
+//     pods are fully updated; the StatefulSet template step covers clusters not yet recorded.
 //
 //   - RolloutVersion (versionupgrade.RolloutMySQLVersion): version the StatefulSet template and
-//     my.cnf should emit during upgrade transitions. Holds at the effective line until pre-rollout
-//     checks pass, then advances to DesiredVersion together with the image roll.
+//     my.cnf should emit during upgrade transitions. Holds at the current line when the upgrade
+//     path is invalid, otherwise advances to DesiredVersion together with the image roll.
 
 // DesiredVersion returns the MySQL version the user requested (spec → alias → operator default).
 func (c *MysqlCluster) DesiredVersion() semver.Version {

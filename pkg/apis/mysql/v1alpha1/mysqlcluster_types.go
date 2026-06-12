@@ -331,7 +331,7 @@ const (
 	ClusterConditionFailoverInProgress ClusterConditionType = "FailoverInProgress"
 
 	// ClusterConditionUpgradeBlocked indicates the requested spec.mysqlVersion change cannot proceed
-	// (invalid path: downgrade or skipping an LTS line, or a failed pre-rollout Job).
+	// (invalid path: downgrade or skipping an LTS line).
 	// The cluster remains operational on its current version; no Ready condition is affected.
 	ClusterConditionUpgradeBlocked ClusterConditionType = "UpgradeBlocked"
 )

@@ -19,7 +19,6 @@ package mysqlcluster
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"path"
 	"sort"
@@ -205,7 +204,7 @@ func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts
 // mysqlConfVersion follows RolloutMySQLVersion so my.cnf tracks the StatefulSet rollout gate.
 func mysqlConfVersion(c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
 	if c != nil {
-		return versionupgrade.RolloutMySQLVersion(context.Background(), c, cluster, sts)
+		return versionupgrade.RolloutMySQLVersion(cluster, sts)
 	}
 	return cluster.EffectiveVersion(sts)
 }

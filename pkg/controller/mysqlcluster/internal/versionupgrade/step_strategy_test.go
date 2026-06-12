@@ -29,14 +29,12 @@ import (
 )
 
 func TestBuiltinSteps_registerStepStrategy(t *testing.T) {
-	for _, id := range []string{StepDatadirUpgradeCheck, StepDatadirChown} {
-		step := StepByID(id)
-		if step == nil {
-			t.Fatalf("step %q not registered", id)
-		}
-		if step.Strategy == nil {
-			t.Fatalf("step %q missing Strategy", id)
-		}
+	step := StepByID(StepDatadirChown)
+	if step == nil {
+		t.Fatalf("step %q not registered", StepDatadirChown)
+	}
+	if step.Strategy == nil {
+		t.Fatalf("step %q missing Strategy", StepDatadirChown)
 	}
 }
 
@@ -67,13 +65,5 @@ func TestDatadirChownStrategy_sourceVersionPrefersApplied(t *testing.T) {
 	got := step.Strategy.SourceVersion(uctx)
 	if !got.EQ(semver.MustParse("8.0.34")) {
 		t.Fatalf("SourceVersion: got %s want 8.0.34", got)
-	}
-}
-
-func TestDatadirUpgradeCheckStrategy_usesUpgradeContextSource(t *testing.T) {
-	uctx := UpgradeContext{Source: semver.MustParse("8.0.20")}
-	s := datadirUpgradeCheckStrategy{}
-	if !s.SourceVersion(uctx).EQ(uctx.Source) {
-		t.Fatalf("expected SourceVersion to delegate to uctx.Source")
 	}
 }

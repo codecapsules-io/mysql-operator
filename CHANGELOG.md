@@ -53,21 +53,15 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
   `caching_sha2_password` authentication, and Percona 8.4 pod security context (`fsGroup` /
   `runAsUser` 1001).
 - **MySQL server version upgrades:** orchestrated upgrade pipeline when `spec.mysqlVersion` changes on
-  clusters with existing data, including pre-rollout and post-rollout phases.
+  clusters with existing data, including path validation, StatefulSet rollout, and completion gates.
 - **`status.appliedMysqlVersion`:** tracks the MySQL version fully running on the data plane; rollout
   and completion gates compare spec against applied status, not spec alone.
 - **Pre-upgrade path validation:** blocks downgrades and skipping LTS lines (e.g. must upgrade
   5.7 → 8.0 → 8.4 one step at a time).
-- **Pre-upgrade datadir checks:** cross-line upgrades run a `{cluster}-upgrade-check` Job before
-  StatefulSet rollout — online `mysqlsh util.checkForServerUpgrade` against the target version on the
-  master when pods are running (cluster `my.cnf` ConfigMap mounted for config checks). Patch bumps
-  within the same profile line skip the Job.
-- **StatefulSet rollout gating:** image rollout is held until all required pre-rollout upgrade Jobs
-  succeed.
 - **`mysql-datadir-chown` init container:** injected for Percona 8.0 → 8.4 upgrades to fix datadir
   ownership before the new server image starts.
-- **Extensible upgrade step registry:** profile transitions (5.7→8.0, 8.0→8.4) declare ordered steps;
-  succeeded Jobs are cleaned up automatically and completion is recorded on cluster annotations.
+- **Extensible upgrade step registry:** profile transitions (e.g. 8.0→8.4) declare ordered rollout
+  init steps such as datadir chown.
 - Add `KeepAfterDelete` in `.Spec.VolumeSpec` to keep pvc after mysql cluster been deleted.
 - Add default resource to init container.
 - Add SidecarImage fields to `.Spec` to allow specifying custom sidecar image.

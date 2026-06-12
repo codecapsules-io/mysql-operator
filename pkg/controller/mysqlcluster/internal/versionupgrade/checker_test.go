@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	apps "k8s.io/api/apps/v1"
-	batch "k8s.io/api/batch/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,7 +28,6 @@ import (
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
 
 func testClientBuilder() *fake.ClientBuilder {
@@ -37,7 +35,6 @@ func testClientBuilder() *fake.ClientBuilder {
 	_ = scheme.AddToScheme(s)
 	_ = api.SchemeBuilder.AddToScheme(s)
 	_ = apps.AddToScheme(s)
-	_ = batch.AddToScheme(s)
 	return fake.NewClientBuilder().WithScheme(s)
 }
 
@@ -56,7 +53,7 @@ func TestEnsureChecked_noChange(t *testing.T) {
 		},
 	})
 	c := testClientBuilder().Build()
-	if err := EnsureChecked(context.Background(), c, cluster, options.GetOptions()); err != nil {
+	if err := EnsureChecked(context.Background(), c, cluster); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -92,12 +89,12 @@ func TestEnsureChecked_freshClusterNoAppliedDoesNotDeadlock(t *testing.T) {
 		},
 	}
 	c := testClientBuilder().WithObjects(sts).Build()
-	if err := EnsureChecked(context.Background(), c, cluster, options.GetOptions()); err != nil {
+	if err := EnsureChecked(context.Background(), c, cluster); err != nil {
 		t.Fatalf("fresh install must not block on unknown source: %v", err)
 	}
 }
 
-func TestEnsureChecked_patchBumpSkipsJob(t *testing.T) {
+func TestEnsureChecked_patchBumpSucceeds(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -112,11 +109,8 @@ func TestEnsureChecked_patchBumpSkipsJob(t *testing.T) {
 		},
 	})
 	c := testClientBuilder().Build()
-	if err := EnsureChecked(context.Background(), c, cluster, options.GetOptions()); err != nil {
+	if err := EnsureChecked(context.Background(), c, cluster); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !JobStepsComplete(context.Background(), c, cluster, &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}, PhasePreRollout) {
-		t.Fatal("expected patch bump to skip upgrade check job")
 	}
 }
 
@@ -135,89 +129,9 @@ func TestEnsureChecked_blocksSkipLine(t *testing.T) {
 		},
 	})
 	c := testClientBuilder().Build()
-	err := EnsureChecked(context.Background(), c, cluster, options.GetOptions())
+	err := EnsureChecked(context.Background(), c, cluster)
 	if err == nil {
 		t.Fatal("expected error for skipped LTS line")
-	}
-}
-
-func TestEnsureChecked_marksPhaseDoneAfterJobSucceeds(t *testing.T) {
-	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20", ReadyNodes: 1},
-		Spec: api.MysqlClusterSpec{
-			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
-			SecretName:   "sec",
-			VolumeSpec: api.VolumeSpec{
-				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
-			},
-		},
-	})
-	sts := &apps.StatefulSet{
-		Status: apps.StatefulSetStatus{Replicas: 1, ReadyReplicas: 1},
-		Spec: apps.StatefulSetSpec{
-			Template: core.PodTemplateSpec{
-				Spec: core.PodSpec{
-					Containers: []core.Container{{
-						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.20"}},
-					}},
-				},
-			},
-		},
-	}
-	c := testClientBuilder().WithObjects(
-		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-	).Build()
-	if err := EnsureChecked(context.Background(), c, cluster, options.GetOptions()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !PhaseJobsDoneForTarget(cluster, PhasePreRollout, cluster.DesiredVersion()) {
-		t.Fatal("expected pre-rollout phase-done annotation after upgrade check job succeeded")
-	}
-	if ShouldBlockRollout(context.Background(), c, cluster, sts) {
-		t.Fatal("rollout should proceed after upgrade check job succeeded")
-	}
-}
-
-func TestShouldBlockRollout(t *testing.T) {
-	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
-		Spec: api.MysqlClusterSpec{
-			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
-			SecretName:   "sec",
-			VolumeSpec: api.VolumeSpec{
-				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
-			},
-		},
-	})
-	sts := &apps.StatefulSet{
-		Status: apps.StatefulSetStatus{Replicas: 1},
-		Spec: apps.StatefulSetSpec{
-			Template: core.PodTemplateSpec{
-				Spec: core.PodSpec{
-					Containers: []core.Container{{
-						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.20"}},
-					}},
-				},
-			},
-		},
-	}
-	c := testClientBuilder().Build()
-	if !ShouldBlockRollout(context.Background(), c, cluster, sts) {
-		t.Fatal("expected rollout to be blocked before check job succeeds")
-	}
-	c = testClientBuilder().WithObjects(
-		upgradeCheckJobSucceeded(cluster, "8.4.0"),
-	).Build()
-	if ShouldBlockRollout(context.Background(), c, cluster, sts) {
-		t.Fatal("expected rollout to proceed after pre-rollout jobs succeed")
 	}
 }
 
@@ -260,8 +174,7 @@ func TestSyncAppliedVersion(t *testing.T) {
 			}},
 		},
 	}
-	c := testClientBuilder().Build()
-	if !SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod}) {
+	if !SyncAppliedVersion(cluster, sts, []core.Pod{pod}) {
 		t.Fatal("expected rollout to be ready for applied version update")
 	}
 	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
@@ -269,4 +182,3 @@ func TestSyncAppliedVersion(t *testing.T) {
 		t.Fatalf("applied status: %q", cluster.Status.AppliedMysqlVersion)
 	}
 }
-

@@ -16,7 +16,6 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"context"
 	"testing"
 
 	apps "k8s.io/api/apps/v1"
@@ -31,7 +30,7 @@ func TestRolloutComplete_requiresInitContainers(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1"},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
@@ -63,10 +62,7 @@ func TestRolloutComplete_requiresInitContainers(t *testing.T) {
 			}},
 		},
 	}
-	c := testClientBuilder().
-		WithObjects(upgradeCheckJobSucceeded(cluster, "8.4.0")).
-		Build()
-	if RolloutComplete(context.Background(), c, cluster, sts, []core.Pod{pod}) {
+	if RolloutComplete(cluster, sts, []core.Pod{pod}) {
 		t.Fatal("expected incomplete rollout when not all template init containers succeeded")
 	}
 }

@@ -15,36 +15,9 @@ limitations under the License.
 */
 package versionupgrade
 
-import (
-	"fmt"
-
-	"github.com/blang/semver"
-	batch "k8s.io/api/batch/v1"
-)
-
 func builtinUpgradeSteps() []UpgradeStep {
 	return []UpgradeStep{
-		datadirUpgradeCheckStep(),
 		datadirChownStep(),
-	}
-}
-
-func datadirUpgradeCheckStep() UpgradeStep {
-	return UpgradeStep{
-		ID:       StepDatadirUpgradeCheck,
-		Phase:    PhasePreRollout,
-		Strategy: datadirUpgradeCheckStrategy{},
-		Job: &JobStepSpec{
-			JobType:            JobTypeUpgradeCheck,
-			TargetVersionLabel: upgradeCheckTargetLabel,
-			JobName:            JobName,
-			Build:              buildUpgradeCheckJob,
-			BeforeEnsure:       requireKnownMasterForUpgradeCheck,
-			WaitReason: func(target semver.Version) string {
-				return fmt.Sprintf("waiting for MySQL upgrade check to %s", target)
-			},
-			FailureLabel: jobFailureMessage,
-		},
 	}
 }
 
@@ -54,38 +27,15 @@ func datadirChownStep() UpgradeStep {
 		Phase:    PhaseRolloutInit,
 		Strategy: datadirChownStrategy{},
 		Init: &InitStepSpec{
-			ContainerName:       DatadirChownInitContainerName,
-			AfterPreRolloutJobs: true,
+			ContainerName: DatadirChownInitContainerName,
 		},
 	}
-}
-
-func buildUpgradeCheckJob(uctx UpgradeContext) (*batch.Job, error) {
-	if uctx.STS == nil {
-		return nil, fmt.Errorf("statefulset required for upgrade check job")
-	}
-	return newUpgradeCheckJob(uctx.Cluster, uctx.Target, uctx.Opt)
-}
-
-// requireKnownMasterForUpgradeCheck blocks upgrade checks until at least one mysqld pod is running
-// and the writable primary is known on multi-replica clusters.
-func requireKnownMasterForUpgradeCheck(uctx UpgradeContext) error {
-	if !ClusterHasRunningMySQL(uctx.Cluster, uctx.STS) {
-		return &HoldRolloutError{
-			Reason: "waiting for at least one running MySQL pod before upgrade check",
-		}
-	}
-	_, err := ResolveMasterOrdinal(uctx.Cluster)
-	return err
 }
 
 // RolloutInitStepRequired reports whether an init-container step should be injected on the STS template.
 func RolloutInitStepRequired(ctx UpgradeContext, stepID string) bool {
 	step := StepByID(stepID)
 	if step == nil || step.Init == nil || !stepRequired(ctx, stepID) {
-		return false
-	}
-	if step.Init.AfterPreRolloutJobs && !PhaseStepsComplete(ctx.Ctx, ctx.Client, ctx.Cluster, ctx.STS, PhasePreRollout) {
 		return false
 	}
 	return true

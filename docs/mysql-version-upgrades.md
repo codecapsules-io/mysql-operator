@@ -43,24 +43,21 @@ The chart can pass `--sidecar-mysql84-image` and optional catalog mounts via `va
 
 Changing `mysqlVersion` / `image` on an existing cluster is a **data plane** operation: follow Percona’s upgrade documentation, take backups, and roll instances in a safe order. The operator’s `mysql.presslabs.org/version` annotation refers to **operator** schema upgrades, not the MySQL server version.
 
-### Pre-upgrade checks (operator)
+### Upgrade orchestration (operator)
 
 When `spec.mysqlVersion` changes on a cluster that already has data on PVCs, the cluster controller:
 
 1. Compares the desired version to `status.appliedMysqlVersion` (the version **fully running** on the data plane, not the spec alone).
-2. Validates the upgrade path (no downgrades; one LTS line at a time, e.g. 8.0.x before 8.4.x).
-3. For cross-line upgrades, runs a short-lived Job once at least one MySQL pod is running: the sidecar connects to the master and runs `mysqlsh util.checkForServerUpgrade` against the target version (including `CHECK TABLE ... FOR UPGRADE` and other compatibility checks; mounts the cluster `my.cnf` ConfigMap but not the data PVC while mysqld is up). On multi-replica clusters, the job waits until the writable primary is identified in `status.nodes` before running. Upgrades are held until a pod is ready.
-4. **Blocks** StatefulSet rollout until the `{cluster}-upgrade-check` Job succeeds (cross-line upgrades only).
-5. Rolls out the new pod template (including any required init containers, e.g. `mysql-datadir-chown` for Percona 8.0→8.4).
-6. Sets `status.appliedMysqlVersion` to match `spec.mysqlVersion` only after:
+2. Validates the upgrade path (no downgrades; one LTS line at a time, e.g. 8.0.x before 8.4.x). Invalid paths set the `UpgradeBlocked` condition and keep the cluster on its current version until `spec.mysqlVersion` is corrected.
+3. Rolls out the new pod template for valid paths (including any required init containers, e.g. `mysql-datadir-chown` for Percona 8.0→8.4).
+4. Sets `status.appliedMysqlVersion` to match `spec.mysqlVersion` only after:
    - the StatefulSet template matches spec,
-   - every replica is ready,
-   - every required upgrade-check Job has succeeded, and
+   - every replica is ready, and
    - **every init container on the current pod template has completed successfully on each pod**.
 
-Patch-level bumps within the same profile line (e.g. `8.0.20` → `8.0.34`) skip the upgrade check Job.
+Patch-level bumps within the same profile line (e.g. `8.0.20` → `8.0.34`) follow the same rollout and completion gates without extra steps.
 
-Succeeded pre-rollout and post-rollout Jobs are deleted automatically once their phase completes (foreground cascade removes the Job pods too). Cluster annotations record completion so steps are not recreated on the next reconcile. Failed Jobs and their pods are left in place until the step succeeds so you can inspect logs.
+The operator does **not** run pre-upgrade compatibility Jobs (such as `mysqlsh util.checkForServerUpgrade`). Run Percona’s upgrade checks and take backups yourself before changing `spec.mysqlVersion`.
 
 For a clean upgrade test: deploy on the source version (e.g. `8.0`), wait until `status.appliedMysqlVersion` matches and the cluster is Ready, then change `mysqlVersion` to the target (e.g. `8.4`).
 
@@ -95,4 +92,4 @@ Operator utility users (`sys_operator`, `sys_replication`, `sys_exporter`, `sys_
    ```
 
 4. Confirm replicas have caught up (e.g. `SHOW REPLICA STATUS`, or cluster node status `Replicating=True` and `Lagged=False`).
-5. Change `spec.mysqlVersion` to the 8.4 target. The operator runs the datadir upgrade check, then rolls out the new image.
+5. Change `spec.mysqlVersion` to the 8.4 target. The operator rolls out the new image (including `mysql-datadir-chown` when upgrading Percona 8.0→8.4).

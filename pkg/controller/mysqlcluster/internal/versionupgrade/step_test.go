@@ -21,27 +21,13 @@ import (
 
 func TestUpgradeSteps_catalog(t *testing.T) {
 	steps := UpgradeSteps()
-	if len(steps) < 2 {
-		t.Fatalf("expected at least 2 builtin steps, got %d", len(steps))
+	if len(steps) != 1 {
+		t.Fatalf("expected 1 builtin step, got %d", len(steps))
 	}
-	ids := map[string]Phase{}
-	for _, s := range steps {
-		if _, dup := ids[s.ID]; dup {
-			t.Fatalf("duplicate step id %q", s.ID)
-		}
-		ids[s.ID] = s.Phase
+	if steps[0].ID != StepDatadirChown {
+		t.Fatalf("unexpected step id %q", steps[0].ID)
 	}
-	if ids[StepDatadirUpgradeCheck] != PhasePreRollout {
-		t.Fatalf("datadir check phase: %v", ids[StepDatadirUpgradeCheck])
-	}
-	if ids[StepDatadirChown] != PhaseRolloutInit {
-		t.Fatalf("chown phase: %v", ids[StepDatadirChown])
-	}
-}
-
-func TestRegisteredJobTypes(t *testing.T) {
-	types := RegisteredJobTypes()
-	if len(types) != 1 || types[0] != JobTypeUpgradeCheck {
-		t.Fatalf("job types: %v", types)
+	if steps[0].Phase != PhaseRolloutInit {
+		t.Fatalf("chown phase: %v", steps[0].Phase)
 	}
 }

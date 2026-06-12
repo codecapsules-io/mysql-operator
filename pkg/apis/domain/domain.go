@@ -55,11 +55,8 @@ var SchemeGroupVersion = schema.GroupVersion{Group: APIGroup, Version: Version}
 
 // Label keys.
 const (
-	LabelCluster                   = APIGroup + "/cluster"
-	LabelServiceType               = APIGroup + "/service-type"
-	LabelJobType                   = APIGroup + "/job-type"
-	LabelUpgradeCheckMode          = APIGroup + "/upgrade-check-mode"
-	LabelUpgradeCheckTargetVersion = APIGroup + "/upgrade-check-target-version"
+	LabelCluster     = APIGroup + "/cluster"
+	LabelServiceType = APIGroup + "/service-type"
 )
 
 // Label values.
@@ -68,18 +65,12 @@ const (
 	ServiceTypeReadyNodes     = "ready-nodes"
 	ServiceTypeReadyReplicas  = "ready-replicas"
 	ServiceTypeNamespaceNodes = "namespace-nodes"
-
-	JobTypeUpgradeCheck = "mysql-upgrade-check"
-
-	UpgradeCheckModeOnline = "online"
 )
 
 // Annotation keys.
 const (
 	AnnotationVersion                = APIGroup + "/version"
 	AnnotationSkipGTIDPurged         = APIGroup + "/skip-gtid-purged"
-	AnnotationPreRolloutJobsDone     = APIGroup + "/pre-rollout-jobs-done-version"
-	AnnotationPostRolloutJobsDone    = APIGroup + "/post-rollout-jobs-done-version"
 	AnnotationResourceDeletionPolicy = OperatorPrefix + "/resourceDeletionPolicy"
 )
 

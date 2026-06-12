@@ -20,7 +20,9 @@ RUN apt-get update \
 
 RUN groupadd -g 999 mysql
 RUN useradd -u 999 -r -g 999 -s /sbin/nologin \
-    -c "Default Application User" mysql
+    -c "Default Application User" mysql \
+    && mkdir -p /home/mysql \
+    && chown mysql:mysql /home/mysql
 
 COPY rootfs/ /
 

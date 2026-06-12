@@ -316,7 +316,7 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, stsErr
 	}
 	if sts != nil {
-		if err := versionupgrade.DeleteSucceededJobStepsForPhase(ctx, r.Client, cluster, sts, versionupgrade.PhasePreRollout); err != nil {
+		if err = versionupgrade.DeleteSucceededJobStepsForPhase(ctx, r.Client, cluster, sts, versionupgrade.PhasePreRollout); err != nil {
 			return reconcile.Result{}, err
 		}
 	}

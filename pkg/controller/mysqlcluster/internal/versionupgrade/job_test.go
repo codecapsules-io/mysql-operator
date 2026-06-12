@@ -33,8 +33,12 @@ func TestUpgradeCheckScript_usesTargetAwareMysqlshCheck(t *testing.T) {
 	for _, want := range []string{
 		"MYSQL_UPGRADE_CHECK_TARGET_VERSION",
 		"util.checkForServerUpgrade",
-		"--target-version=\"${target}\"",
-		"--config-path=\"${config_path}\"",
+		"--no-defaults",
+		"MYSQLSH_USER",
+		"MYSQLSH_PASS",
+		"targetVersion",
+		"configPath",
+		"outputFormat: 'JSON'",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("upgrade check script missing %q:\n%s", want, script)
@@ -63,17 +67,47 @@ func TestNewUpgradeCheckJob_mountsClusterConfigMap(t *testing.T) {
 	}
 
 	wantConfigMap := cluster.GetNameForResource(mysqlcluster.ConfigMap)
-	if len(job.Spec.Template.Spec.Volumes) != 1 {
-		t.Fatalf("expected one volume, got %d", len(job.Spec.Template.Spec.Volumes))
+	if len(job.Spec.Template.Spec.Volumes) != 2 {
+		t.Fatalf("expected two volumes, got %d", len(job.Spec.Template.Spec.Volumes))
 	}
 	vol := job.Spec.Template.Spec.Volumes[0]
 	if vol.ConfigMap == nil || vol.ConfigMap.Name != wantConfigMap {
 		t.Fatalf("config map volume: got %#v want name %q", vol.ConfigMap, wantConfigMap)
 	}
+	if job.Spec.Template.Spec.Volumes[1].EmptyDir == nil {
+		t.Fatalf("expected emptyDir mysqlsh home volume, got %#v", job.Spec.Template.Spec.Volumes[1])
+	}
 
 	mounts := job.Spec.Template.Spec.Containers[0].VolumeMounts
-	if len(mounts) != 1 || mounts[0].MountPath != constants.ConfMapVolumeMountPath {
-		t.Fatalf("unexpected volume mounts: %#v", mounts)
+	if len(mounts) != 2 {
+		t.Fatalf("expected two volume mounts, got %#v", mounts)
+	}
+	if mounts[0].MountPath != constants.ConfMapVolumeMountPath {
+		t.Fatalf("config map mount: got %q want %q", mounts[0].MountPath, constants.ConfMapVolumeMountPath)
+	}
+	if mounts[1].MountPath != mysqlshHomeMount {
+		t.Fatalf("mysqlsh home mount: got %q want %q", mounts[1].MountPath, mysqlshHomeMount)
+	}
+
+	var gotHome, gotLCAll, gotConfigHome string
+	for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+		switch e.Name {
+		case "HOME":
+			gotHome = e.Value
+		case "LC_ALL":
+			gotLCAll = e.Value
+		case "MYSQLSH_USER_CONFIG_HOME":
+			gotConfigHome = e.Value
+		}
+	}
+	if gotHome != mysqlshHomeMount {
+		t.Fatalf("HOME env: got %q want %q", gotHome, mysqlshHomeMount)
+	}
+	if gotLCAll != "C.UTF-8" {
+		t.Fatalf("LC_ALL env: got %q want C.UTF-8", gotLCAll)
+	}
+	if gotConfigHome != mysqlshHomeMount+"/"+mysqlshConfigSubdir {
+		t.Fatalf("MYSQLSH_USER_CONFIG_HOME env: got %q want %q", gotConfigHome, mysqlshHomeMount+"/"+mysqlshConfigSubdir)
 	}
 
 	var gotConfigPath string

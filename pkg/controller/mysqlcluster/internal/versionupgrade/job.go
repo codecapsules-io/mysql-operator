@@ -33,7 +33,10 @@ import (
 )
 
 const (
-	confMapVolumeName = "config-map"
+	confMapVolumeName   = "config-map"
+	mysqlshHomeVolume   = "mysqlsh-home"
+	mysqlshHomeMount    = "/home/mysql"
+	mysqlshConfigSubdir = ".mysqlsh"
 
 	mysqlUpgradeCheckHost       = "MYSQL_UPGRADE_CHECK_HOST"
 	mysqlUpgradeCheckPort       = "MYSQL_UPGRADE_CHECK_PORT"
@@ -98,26 +101,45 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 					NodeSelector:       cluster.Spec.PodSpec.NodeSelector,
 					Tolerations:        cluster.Spec.PodSpec.Tolerations,
 					Affinity:           cluster.Spec.PodSpec.Affinity,
-					Volumes: []core.Volume{{
-						Name: confMapVolumeName,
-						VolumeSource: core.VolumeSource{
-							ConfigMap: &core.ConfigMapVolumeSource{
-								LocalObjectReference: core.LocalObjectReference{Name: configMapName},
-								DefaultMode:          &fileMode,
+					Volumes: []core.Volume{
+						{
+							Name: confMapVolumeName,
+							VolumeSource: core.VolumeSource{
+								ConfigMap: &core.ConfigMapVolumeSource{
+									LocalObjectReference: core.LocalObjectReference{Name: configMapName},
+									DefaultMode:          &fileMode,
+								},
 							},
 						},
-					}},
+						{
+							Name: mysqlshHomeVolume,
+							VolumeSource: core.VolumeSource{
+								EmptyDir: &core.EmptyDirVolumeSource{},
+							},
+						},
+					},
 					Containers: []core.Container{{
 						Name:            JobContainerName,
 						Image:           cluster.GetSidecarImage(),
 						ImagePullPolicy: cluster.Spec.PodSpec.ImagePullPolicy,
 						Command:         []string{"/bin/sh", "-ec"},
 						Args:            []string{upgradeCheckScript()},
-						Env:             env,
-						VolumeMounts: []core.VolumeMount{{
-							Name:      confMapVolumeName,
-							MountPath: constants.ConfMapVolumeMountPath,
-						}},
+						Env: append(env,
+							core.EnvVar{Name: "HOME", Value: mysqlshHomeMount},
+							core.EnvVar{Name: "LC_ALL", Value: "C.UTF-8"},
+							core.EnvVar{Name: "MYSQLSH_USER_CONFIG_HOME", Value: mysqlshHomeMount + "/" + mysqlshConfigSubdir},
+							core.EnvVar{Name: "MYSQL_TEST_LOGIN_FILE", Value: "/dev/null"},
+						),
+						VolumeMounts: []core.VolumeMount{
+							{
+								Name:      confMapVolumeName,
+								MountPath: constants.ConfMapVolumeMountPath,
+							},
+							{
+								Name:      mysqlshHomeVolume,
+								MountPath: mysqlshHomeMount,
+							},
+						},
 						SecurityContext: &core.SecurityContext{RunAsUser: &runAsUser},
 					}},
 				},
@@ -170,13 +192,29 @@ if [ ! -f "$config_path" ]; then
   echo "upgrade check config not found at ${config_path}"
   exit 1
 fi
+mkdir -p "${MYSQLSH_USER_CONFIG_HOME:-$HOME/.mysqlsh}"
+export MYSQLSH_USER="${user}"
+export MYSQLSH_PASS="${pass}"
+export MYSQLSH_HOST="${host}"
+export MYSQLSH_PORT="${port}"
+export MYSQLSH_TARGET="${target}"
+export MYSQLSH_CONFIG="${config_path}"
 echo "running mysqlsh util.checkForServerUpgrade for target ${target}"
-mysqlsh --js -- util checkForServerUpgrade \
-  "{ --user=${user} --host=${host} --port=${port} }" \
-  --password="${pass}" \
-  --target-version="${target}" \
-  --output-format=JSON \
-  --config-path="${config_path}"
+if ! mysqlsh --no-defaults --js -e "
+util.checkForServerUpgrade(
+  os.getenv('MYSQLSH_USER') + '@' + os.getenv('MYSQLSH_HOST') + ':' + os.getenv('MYSQLSH_PORT'),
+  {
+    password: os.getenv('MYSQLSH_PASS'),
+    targetVersion: os.getenv('MYSQLSH_TARGET'),
+    outputFormat: 'JSON',
+    configPath: os.getenv('MYSQLSH_CONFIG'),
+  }
+);
+"; then
+  rc=$?
+  echo "mysqlsh util.checkForServerUpgrade failed with exit status ${rc}"
+  exit "${rc}"
+fi
 `)
 }
 

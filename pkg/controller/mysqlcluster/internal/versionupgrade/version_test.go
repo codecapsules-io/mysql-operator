@@ -102,6 +102,46 @@ func TestResolveMasterOrdinal_multiReplicaUnparseableMasterHostHolds(t *testing.
 	}
 }
 
+func TestEnsureJobSteps_returnsAfterSucceededJobWithoutBeforeEnsureHold(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status: api.MysqlClusterStatus{
+			AppliedMysqlVersion: "8.0.20",
+			ReadyNodes:          0,
+		},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.GetNameForResource(mysqlcluster.StatefulSet),
+			Namespace: cluster.Namespace,
+		},
+		Status: apps.StatefulSetStatus{Replicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.20"}},
+					}},
+				},
+			},
+		},
+	}
+	c := testClientBuilder().WithObjects(sts, upgradeCheckJobSucceeded(cluster, "8.4.0")).Build()
+	if err := EnsureJobSteps(context.Background(), c, cluster, sts, options.GetOptions(), PhasePreRollout); err != nil {
+		t.Fatalf("expected succeeded job to complete step without BeforeEnsure hold, got: %v", err)
+	}
+}
+
 func TestEnsureJobSteps_holdsWhenOnlineMultiReplicaMasterUnknown(t *testing.T) {
 	replicas := int32(2)
 	cluster := mysqlcluster.New(&api.MysqlCluster{

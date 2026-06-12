@@ -315,11 +315,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	if stsErr != nil {
 		return reconcile.Result{}, stsErr
 	}
-	if sts != nil {
-		if err = versionupgrade.DeleteSucceededJobStepsForPhase(ctx, r.Client, cluster, sts, versionupgrade.PhasePreRollout); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
 	configMapSyncer := clustersyncer.NewConfigMapSyncer(r.Client, r.scheme, cluster, sts)
 	if err = syncer.Sync(context.TODO(), configMapSyncer, r.recorder); err != nil {
 		return reconcile.Result{}, err
@@ -355,6 +350,12 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 
 	for _, sync := range syncers {
 		if err = syncer.Sync(context.TODO(), sync, r.recorder); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	if sts != nil {
+		if err = versionupgrade.DeleteSucceededJobStepsForPhase(ctx, r.Client, cluster, sts, versionupgrade.PhasePreRollout); err != nil {
 			return reconcile.Result{}, err
 		}
 	}

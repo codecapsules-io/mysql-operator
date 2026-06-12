@@ -105,34 +105,49 @@ func DeleteSucceededJobStepsForPhase(ctx context.Context, c client.Client, clust
 
 func ensureJobStep(uctx UpgradeContext, step UpgradeStep) error {
 	spec := step.Job
+	target := uctx.Target
+	job := &batch.Job{}
+	key := types.NamespacedName{Name: spec.JobName(uctx.Cluster), Namespace: uctx.Cluster.Namespace}
+	err := uctx.Client.Get(uctx.Ctx, key, job)
+	if err == nil {
+		if jobTarget := job.Labels[spec.TargetVersionLabel]; jobTarget != "" && !jobMatchesTarget(job, spec.TargetVersionLabel, target) {
+			if delErr := uctx.Client.Delete(uctx.Ctx, job); delErr != nil && !errors.IsNotFound(delErr) {
+				return fmt.Errorf("delete stale MySQL upgrade job %q: %w", step.ID, delErr)
+			}
+			return ensureJobStepCreate(uctx, step)
+		}
+		if jobSucceeded(job) {
+			if jobMatchesTarget(job, spec.TargetVersionLabel, target) {
+				log.Info("MySQL upgrade step completed", "cluster", uctx.Cluster, "step", step.ID, "target", target.String())
+				return nil
+			}
+			if delErr := uctx.Client.Delete(uctx.Ctx, job); delErr != nil && !errors.IsNotFound(delErr) {
+				return fmt.Errorf("delete stale MySQL upgrade job %q: %w", step.ID, delErr)
+			}
+			return ensureJobStepCreate(uctx, step)
+		}
+		return waitOnActiveJob(uctx, step, spec, job, target)
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+	if PhaseJobsDoneForTarget(uctx.Cluster, step.Phase, target) {
+		return nil
+	}
+	return ensureJobStepCreate(uctx, step)
+}
+
+func ensureJobStepCreate(uctx UpgradeContext, step UpgradeStep) error {
+	spec := step.Job
 	if spec.BeforeEnsure != nil {
 		if err := spec.BeforeEnsure(uctx); err != nil {
 			return err
 		}
 	}
-	target := uctx.Target
-	job := &batch.Job{}
-	key := types.NamespacedName{Name: spec.JobName(uctx.Cluster), Namespace: uctx.Cluster.Namespace}
-	err := uctx.Client.Get(uctx.Ctx, key, job)
-	if errors.IsNotFound(err) {
-		return createJobStep(uctx, step)
-	}
-	if err != nil {
-		return err
-	}
+	return createJobStep(uctx, step)
+}
 
-	if jobTarget := job.Labels[spec.TargetVersionLabel]; jobTarget != "" && !jobMatchesTarget(job, spec.TargetVersionLabel, target) {
-		if delErr := uctx.Client.Delete(uctx.Ctx, job); delErr != nil && !errors.IsNotFound(delErr) {
-			return fmt.Errorf("delete stale MySQL upgrade job %q: %w", step.ID, delErr)
-		}
-		return createJobStep(uctx, step)
-	}
-
-	if jobSucceeded(job) {
-		log.Info("MySQL upgrade step completed", "cluster", uctx.Cluster, "step", step.ID, "target", target.String())
-		return nil
-	}
-
+func waitOnActiveJob(uctx UpgradeContext, step UpgradeStep, spec *JobStepSpec, job *batch.Job, target semver.Version) error {
 	failMsg := spec.FailureLabel
 	if failMsg == nil {
 		failMsg = func(*batch.Job) string { return step.ID + " job failed" }
@@ -148,9 +163,7 @@ func ensureJobStep(uctx UpgradeContext, step UpgradeStep) error {
 			return fmt.Errorf("MySQL version upgrade blocked: %s", failMsg(job))
 		}
 	}
-
-	reason := spec.WaitReason(target)
-	return &HoldRolloutError{Reason: reason}
+	return &HoldRolloutError{Reason: spec.WaitReason(target)}
 }
 
 func createJobStep(uctx UpgradeContext, step UpgradeStep) error {

@@ -89,12 +89,28 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 		return &UpgradeBlockedError{Reason: fmt.Sprintf("MySQL version upgrade blocked: %s", err.Error())}
 	}
 
-	if PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
+	if PreRolloutStepsComplete(ctx, c, cluster, sts) {
 		MarkPhaseJobsDone(cluster, PhasePreRollout, DesiredSemVer(cluster))
 		return nil
 	}
 
-	return EnsureJobSteps(ctx, c, cluster, sts, opt, PhasePreRollout)
+	if err := EnsureJobSteps(ctx, c, cluster, sts, opt, PhasePreRollout); err != nil {
+		return err
+	}
+	if PreRolloutStepsComplete(ctx, c, cluster, sts) {
+		MarkPhaseJobsDone(cluster, PhasePreRollout, DesiredSemVer(cluster))
+	}
+	return nil
+}
+
+// PreRolloutStepsComplete reports whether every required pre-rollout Job succeeded for the
+// current target (live Job status or the durable phase-done annotation).
+func PreRolloutStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
+	target := DesiredSemVer(cluster)
+	if PhaseJobsDoneForTarget(cluster, PhasePreRollout, target) {
+		return true
+	}
+	return PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout)
 }
 
 // EnsurePostRolloutJobs runs Jobs that must succeed after pods are on spec.mysqlVersion.
@@ -117,7 +133,7 @@ func ShouldBlockRollout(ctx context.Context, c client.Client, cluster *mysqlclus
 			return true
 		}
 	}
-	return !PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout)
+	return !PreRolloutStepsComplete(ctx, c, cluster, sts)
 }
 
 // SyncAppliedVersion reports when rollout and all post-rollout Jobs have succeeded and records the

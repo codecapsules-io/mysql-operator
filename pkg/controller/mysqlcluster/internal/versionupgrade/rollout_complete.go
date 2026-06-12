@@ -40,7 +40,7 @@ func RolloutComplete(ctx context.Context, c client.Client, cluster *mysqlcluster
 	if !rolloutCompleteOnVersion(cluster, sts, desired) {
 		return false
 	}
-	if !PhaseStepsComplete(ctx, c, cluster, sts, PhasePreRollout) {
+	if !PreRolloutStepsComplete(ctx, c, cluster, sts) {
 		return false
 	}
 	return podTemplateInitContainersSucceeded(sts, pods, replicas)

@@ -141,6 +141,47 @@ func TestEnsureChecked_blocksSkipLine(t *testing.T) {
 	}
 }
 
+func TestEnsureChecked_marksPhaseDoneAfterJobSucceeds(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20", ReadyNodes: 1},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1, ReadyReplicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.20"}},
+					}},
+				},
+			},
+		},
+	}
+	c := testClientBuilder().WithObjects(
+		upgradeCheckJobSucceeded(cluster, "8.4.0"),
+	).Build()
+	if err := EnsureChecked(context.Background(), c, cluster, options.GetOptions()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !PhaseJobsDoneForTarget(cluster, PhasePreRollout, cluster.DesiredVersion()) {
+		t.Fatal("expected pre-rollout phase-done annotation after upgrade check job succeeded")
+	}
+	if ShouldBlockRollout(context.Background(), c, cluster, sts) {
+		t.Fatal("rollout should proceed after upgrade check job succeeded")
+	}
+}
+
 func TestShouldBlockRollout(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{

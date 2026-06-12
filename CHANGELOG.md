@@ -59,9 +59,9 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 - **Pre-upgrade path validation:** blocks downgrades and skipping LTS lines (e.g. must upgrade
   5.7 → 8.0 → 8.4 one step at a time).
 - **Pre-upgrade datadir checks:** cross-line upgrades run a `{cluster}-upgrade-check` Job before
-  StatefulSet rollout — online `mysqlcheck --check` against the master when pods are running, or
-  offline `mysqld --upgrade=CHECK` (8.0.x) / `mysqld --upgrade=NONE` (8.4+) against the master PVC
-  when the cluster is stopped. Patch bumps within the same profile line skip the Job.
+  StatefulSet rollout — online `mysqlsh util.checkForServerUpgrade` against the target version on the
+  master when pods are running (cluster `my.cnf` ConfigMap mounted for config checks). Patch bumps
+  within the same profile line skip the Job.
 - **StatefulSet rollout gating:** image rollout is held until all required pre-rollout upgrade Jobs
   succeed.
 - **`mysql-datadir-chown` init container:** injected for Percona 8.0 → 8.4 upgrades to fix datadir
@@ -81,6 +81,9 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 ### Fixed
 
 - Avoid set read_only conflict when graceful takeover
+- preStop replication SQL dialect: when `MY_MYSQL_VERSION` is unset (e.g. operator rollout before
+  pod recreate), detect the running server via `SELECT VERSION()` so MySQL 8.4+ pods use
+  `SHOW REPLICA STATUS` / `SHOW REPLICAS` instead of removed `SHOW SLAVE` commands
 
 ## [0.6.3] - 2023-05-22
 

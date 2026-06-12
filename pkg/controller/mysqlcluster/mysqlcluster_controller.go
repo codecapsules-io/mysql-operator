@@ -246,6 +246,18 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	if err = versionupgrade.EnsureChecked(ctx, r.Client, cluster, r.opt); err != nil {
 		if versionupgrade.IsHoldRollout(err) {
 			log.Info("waiting for MySQL version upgrade pre-rollout steps", "cluster", cluster, "reason", err.Error())
+			// Upgrade path is valid; clear a stale UpgradeBlocked from a prior invalid spec.
+			if blocked := cluster.GetClusterCondition(api.ClusterConditionUpgradeBlocked); blocked != nil && blocked.Status == corev1.ConditionTrue {
+				cluster.UpdateStatusCondition(api.ClusterConditionUpgradeBlocked, corev1.ConditionFalse,
+					"NoUpgradePending", "")
+				if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
+					log.Error(sErr, "failed to clear upgrade blocked condition")
+					return reconcile.Result{}, sErr
+				}
+			}
+			if syncErr := r.syncRolloutHold(ctx, cluster); syncErr != nil {
+				return reconcile.Result{}, syncErr
+			}
 			if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
 				return reconcile.Result{}, annErr
 			}
@@ -262,8 +274,11 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		}
 		if versionupgrade.IsUpgradeBlocked(err) {
 			// Invalid upgrade path - cluster stays operational on current version.
-			// RolloutMySQLVersion and ShouldBlockRollout will hold the STS image at the current version.
+			// syncRolloutHold pins the STS image/env at the current version via RolloutMySQLVersion.
 			// Requeue slowly so that if the user corrects spec.mysqlVersion we re-validate promptly.
+			if syncErr := r.syncRolloutHold(ctx, cluster); syncErr != nil {
+				return reconcile.Result{}, syncErr
+			}
 			if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
 				return reconcile.Result{}, annErr
 			}
@@ -299,6 +314,11 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster)
 	if stsErr != nil {
 		return reconcile.Result{}, stsErr
+	}
+	if sts != nil {
+		if err := versionupgrade.DeleteSucceededJobStepsForPhase(ctx, r.Client, cluster, sts, versionupgrade.PhasePreRollout); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 	configMapSyncer := clustersyncer.NewConfigMapSyncer(r.Client, r.scheme, cluster, sts)
 	if err = syncer.Sync(context.TODO(), configMapSyncer, r.recorder); err != nil {
@@ -370,7 +390,19 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		if listErr := r.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); listErr != nil {
 			return reconcile.Result{}, listErr
 		}
+		annBeforePostRollout := cloneStringMap(cluster.Annotations)
 		if versionupgrade.SyncAppliedVersion(ctx, r.Client, cluster, sts, podList.Items) {
+			if annErr := r.persistClusterAnnotations(ctx, cluster, annBeforePostRollout); annErr != nil {
+				return reconcile.Result{}, annErr
+			}
+			if err := versionupgrade.DeleteSucceededJobStepsForPhase(ctx, r.Client, cluster, sts, versionupgrade.PhasePostRollout); err != nil {
+				return reconcile.Result{}, err
+			}
+			annBeforeFinalize := cloneStringMap(cluster.Annotations)
+			versionupgrade.MarkAppliedVersion(cluster, versionupgrade.DesiredSemVer(cluster))
+			if annErr := r.persistClusterAnnotations(ctx, cluster, annBeforeFinalize); annErr != nil {
+				return reconcile.Result{}, annErr
+			}
 			if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
 				log.Error(sErr, "failed to persist applied MySQL version status")
 				return reconcile.Result{}, sErr
@@ -379,6 +411,27 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// syncRolloutHold runs ConfigMap and StatefulSet sync so RolloutMySQLVersion can pin the
+// data-plane image/env while pre-rollout Jobs run or the upgrade path is invalid.
+func (r *ReconcileMysqlCluster) syncRolloutHold(ctx context.Context, cluster *mysqlcluster.MysqlCluster) error {
+	sts, err := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster)
+	if err != nil {
+		return err
+	}
+	configMapSyncer := clustersyncer.NewConfigMapSyncer(r.Client, r.scheme, cluster, sts)
+	if err = syncer.Sync(ctx, configMapSyncer, r.recorder); err != nil {
+		return err
+	}
+	secretSyncer := clustersyncer.NewOperatedSecretSyncer(r.Client, r.scheme, cluster, r.opt)
+	if err = syncer.Sync(ctx, secretSyncer, r.recorder); err != nil {
+		return err
+	}
+	cmRev := configMapSyncer.Object().(*corev1.ConfigMap).ResourceVersion
+	sctRev := secretSyncer.Object().(*corev1.Secret).ResourceVersion
+	stsSyncer := clustersyncer.NewStatefulSetSyncer(r.Client, r.scheme, cluster, cmRev, sctRev, r.opt)
+	return syncer.Sync(ctx, stsSyncer, r.recorder)
 }
 
 func (r *ReconcileMysqlCluster) persistClusterAnnotations(ctx context.Context, cluster *mysqlcluster.MysqlCluster, before map[string]string) error {

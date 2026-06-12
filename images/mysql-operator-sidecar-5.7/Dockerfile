@@ -49,6 +49,7 @@ RUN wget -nv -O /tmp/percona-release.deb https://repo.percona.com/apt/percona-re
     && dpkg -i /tmp/percona-release.deb \
     && rm -f /tmp/percona-release.deb \
     && percona-release enable pt release \
+    && percona-release enable mysql-shell release \
     && case "${XTRABACKUP_PKG}" in \
     percona-xtrabackup-24) percona-release enable tools release ;; \
     percona-xtrabackup-80) percona-release enable pxb-80 release ;; \
@@ -57,7 +58,7 @@ RUN wget -nv -O /tmp/percona-release.deb https://repo.percona.com/apt/percona-re
     esac \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-    percona-toolkit ${XTRABACKUP_PKG} unzip default-mysql-client \
+    percona-toolkit percona-mysql-shell ${XTRABACKUP_PKG} unzip default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
 USER mysql

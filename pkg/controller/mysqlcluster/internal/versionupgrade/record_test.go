@@ -137,8 +137,9 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 		},
 	}
 	if !SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod}) {
-		t.Fatal("expected applied version after full rollout")
+		t.Fatal("expected rollout to be ready for applied version update")
 	}
+	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
 	if cluster.Status.AppliedMysqlVersion != "8.4.0" {
 		t.Fatalf("applied version: %q", cluster.Status.AppliedMysqlVersion)
 	}

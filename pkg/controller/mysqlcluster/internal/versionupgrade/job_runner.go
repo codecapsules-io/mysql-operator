@@ -66,9 +66,10 @@ func JobStepsComplete(ctx context.Context, c client.Client, cluster *mysqlcluste
 }
 
 // DeleteSucceededJobStepsForPhase removes succeeded upgrade Jobs (and their pods via foreground
-// cascade) once every required step in the phase has completed successfully.
+// cascade) after the phase-done annotation is durably recorded on the cluster.
 func DeleteSucceededJobStepsForPhase(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, phase Phase) error {
-	if sts == nil || !PhaseStepsComplete(ctx, c, cluster, sts, phase) {
+	target := DesiredSemVer(cluster)
+	if sts == nil || !PhaseJobsDoneForTarget(cluster, phase, target) {
 		return nil
 	}
 	uctx := newUpgradeContext(ctx, c, cluster, sts, nil)

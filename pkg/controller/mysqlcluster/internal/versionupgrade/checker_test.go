@@ -221,8 +221,9 @@ func TestSyncAppliedVersion(t *testing.T) {
 	}
 	c := testClientBuilder().Build()
 	if !SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod}) {
-		t.Fatal("expected applied version to be updated after rollout complete")
+		t.Fatal("expected rollout to be ready for applied version update")
 	}
+	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
 	if cluster.Status.AppliedMysqlVersion != "8.0.34" {
 		t.Fatalf("applied status: %q", cluster.Status.AppliedMysqlVersion)
 	}

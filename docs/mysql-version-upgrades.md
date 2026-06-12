@@ -49,7 +49,7 @@ When `spec.mysqlVersion` changes on a cluster that already has data on PVCs, the
 
 1. Compares the desired version to `status.appliedMysqlVersion` (the version **fully running** on the data plane, not the spec alone).
 2. Validates the upgrade path (no downgrades; one LTS line at a time, e.g. 8.0.x before 8.4.x).
-3. For cross-line upgrades, runs a short-lived Job once at least one MySQL pod is running: the sidecar connects to the master and runs `mysqlcheck --check` (does not mount the data PVC while mysqld is up). On multi-replica clusters, the job waits until the writable primary is identified in `status.nodes` before running. Upgrades are held until a pod is ready.
+3. For cross-line upgrades, runs a short-lived Job once at least one MySQL pod is running: the sidecar connects to the master and runs `mysqlsh util.checkForServerUpgrade` against the target version (including `CHECK TABLE ... FOR UPGRADE` and other compatibility checks; mounts the cluster `my.cnf` ConfigMap but not the data PVC while mysqld is up). On multi-replica clusters, the job waits until the writable primary is identified in `status.nodes` before running. Upgrades are held until a pod is ready.
 4. **Blocks** StatefulSet rollout until the `{cluster}-upgrade-check` Job succeeds (cross-line upgrades only).
 5. Rolls out the new pod template (including any required init containers, e.g. `mysql-datadir-chown` for Percona 8.0→8.4).
 6. Sets `status.appliedMysqlVersion` to match `spec.mysqlVersion` only after:

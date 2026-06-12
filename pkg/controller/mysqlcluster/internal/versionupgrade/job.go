@@ -33,10 +33,17 @@ import (
 )
 
 const (
-	mysqlUpgradeCheckHost   = "MYSQL_UPGRADE_CHECK_HOST"
-	mysqlUpgradeCheckPort   = "MYSQL_UPGRADE_CHECK_PORT"
-	mysqlUpgradeCheckTarget = "MYSQL_UPGRADE_CHECK_TARGET_VERSION"
+	confMapVolumeName = "config-map"
+
+	mysqlUpgradeCheckHost       = "MYSQL_UPGRADE_CHECK_HOST"
+	mysqlUpgradeCheckPort       = "MYSQL_UPGRADE_CHECK_PORT"
+	mysqlUpgradeCheckTarget     = "MYSQL_UPGRADE_CHECK_TARGET_VERSION"
+	mysqlUpgradeCheckConfigPath = "MYSQL_UPGRADE_CHECK_CONFIG_PATH"
 )
+
+func upgradeCheckMyCnfPath() string {
+	return constants.ConfMapVolumeMountPath + "/my.cnf"
+}
 
 func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Version, _ *options.Options) (*batch.Job, error) {
 	labels := cluster.GetSelectorLabels()
@@ -62,10 +69,14 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 		host = cluster.GetMasterServiceHost()
 	}
 
+	fileMode := int32(0o644)
+	configMapName := cluster.GetNameForResource(mysqlcluster.ConfigMap)
+
 	env := []core.EnvVar{
 		{Name: mysqlUpgradeCheckTarget, Value: target.String()},
 		{Name: mysqlUpgradeCheckHost, Value: host},
 		{Name: mysqlUpgradeCheckPort, Value: strconv.Itoa(constants.MysqlPort)},
+		{Name: mysqlUpgradeCheckConfigPath, Value: upgradeCheckMyCnfPath()},
 		envVarFromOperatedSecret(cluster, "OPERATOR_USER", "OPERATOR_USER", false),
 		envVarFromOperatedSecret(cluster, "OPERATOR_PASSWORD", "OPERATOR_PASSWORD", false),
 	}
@@ -87,6 +98,15 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 					NodeSelector:       cluster.Spec.PodSpec.NodeSelector,
 					Tolerations:        cluster.Spec.PodSpec.Tolerations,
 					Affinity:           cluster.Spec.PodSpec.Affinity,
+					Volumes: []core.Volume{{
+						Name: confMapVolumeName,
+						VolumeSource: core.VolumeSource{
+							ConfigMap: &core.ConfigMapVolumeSource{
+								LocalObjectReference: core.LocalObjectReference{Name: configMapName},
+								DefaultMode:          &fileMode,
+							},
+						},
+					}},
 					Containers: []core.Container{{
 						Name:            JobContainerName,
 						Image:           cluster.GetSidecarImage(),
@@ -94,6 +114,10 @@ func newUpgradeCheckJob(cluster *mysqlcluster.MysqlCluster, target semver.Versio
 						Command:         []string{"/bin/sh", "-ec"},
 						Args:            []string{upgradeCheckScript()},
 						Env:             env,
+						VolumeMounts: []core.VolumeMount{{
+							Name:      confMapVolumeName,
+							MountPath: constants.ConfMapVolumeMountPath,
+						}},
 						SecurityContext: &core.SecurityContext{RunAsUser: &runAsUser},
 					}},
 				},
@@ -117,7 +141,7 @@ func envVarFromOperatedSecret(cluster *mysqlcluster.MysqlCluster, name, key stri
 	}
 }
 
-// upgradeCheckScript validates the live master before changing the StatefulSet image.
+// upgradeCheckScript validates the live master is ready to upgrade to the target MySQL line.
 func upgradeCheckScript() string {
 	return strings.TrimSpace(`
 set -eu
@@ -126,6 +150,7 @@ port="${MYSQL_UPGRADE_CHECK_PORT:-3306}"
 user="${OPERATOR_USER:?}"
 pass="${OPERATOR_PASSWORD:?}"
 target="${MYSQL_UPGRADE_CHECK_TARGET_VERSION:?}"
+config_path="${MYSQL_UPGRADE_CHECK_CONFIG_PATH:?}"
 echo "MySQL upgrade check against ${host}:${port} (target ${target})"
 ready=0
 for i in $(seq 1 60); do
@@ -141,7 +166,17 @@ if [ "$ready" -ne 1 ]; then
 fi
 current="$(mysql --protocol=TCP -h "$host" -P "$port" -u "$user" -p"$pass" -NBe "SELECT VERSION()" 2>/dev/null || true)"
 echo "current server version: ${current:-unknown}"
-mysqlcheck --protocol=TCP -h "$host" -P "$port" -u "$user" -p"$pass" --all-databases --check
+if [ ! -f "$config_path" ]; then
+  echo "upgrade check config not found at ${config_path}"
+  exit 1
+fi
+echo "running mysqlsh util.checkForServerUpgrade for target ${target}"
+mysqlsh --js -- util checkForServerUpgrade \
+  "{ --user=${user} --host=${host} --port=${port} }" \
+  --password="${pass}" \
+  --target-version="${target}" \
+  --output-format=JSON \
+  --config-path="${config_path}"
 `)
 }
 

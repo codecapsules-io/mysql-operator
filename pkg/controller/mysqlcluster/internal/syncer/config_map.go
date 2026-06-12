@@ -81,14 +81,25 @@ func buildBashPreStop() string {
 set -ex
 
 # Source/replica terminology from MySQL 8.4+ (major > 8, or 8.x with minor >= 4).
-use_source_replica_terms=0
-if [ -n "${MY_MYSQL_VERSION}" ]; then
-  mysql_major="${MY_MYSQL_VERSION%%.*}"
-  mysql_minor="${MY_MYSQL_VERSION#*.}"
-  mysql_minor="${mysql_minor%%.*}"
+prestop_mysql_use_source_replica_terms() {
+  local ver="$1"
+  local mysql_major mysql_minor rest
+  mysql_major="${ver%%.*}"
+  rest="${ver#*.}"
+  mysql_minor="${rest%%.*}"
   if [ "${mysql_major}" -gt 8 ] || { [ "${mysql_major}" -eq 8 ] && [ "${mysql_minor}" -ge 4 ]; }; then
-    use_source_replica_terms=1
+    return 0
   fi
+  return 1
+}
+
+if [ -z "${MY_MYSQL_VERSION}" ]; then
+  # Pods created before MY_MYSQL_VERSION was injected lack the env var; ask the local mysqld.
+  MY_MYSQL_VERSION=$(mysql --defaults-file=ConfClientPathHolder -NB -e 'SELECT VERSION()')
+fi
+use_source_replica_terms=0
+if prestop_mysql_use_source_replica_terms "${MY_MYSQL_VERSION}"; then
+  use_source_replica_terms=1
 fi
 if [ "${use_source_replica_terms}" -eq 1 ]; then
   replica_status_cmd='__SR_STATUS__'

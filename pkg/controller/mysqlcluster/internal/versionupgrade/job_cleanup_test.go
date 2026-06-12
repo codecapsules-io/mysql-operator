@@ -57,6 +57,7 @@ func TestDeleteSucceededJobStepsForPhase_removesSucceededPreRolloutJobs(t *testi
 	}
 	upJob := upgradeCheckJobSucceeded(cluster, "8.4.0")
 	c := testClientBuilder().WithObjects(upJob).Build()
+	MarkPhaseJobsDone(cluster, PhasePreRollout, semver.MustParse("8.4.0"))
 
 	if err := DeleteSucceededJobStepsForPhase(context.Background(), c, cluster, sts, PhasePreRollout); err != nil {
 		t.Fatalf("delete: %v", err)
@@ -103,6 +104,31 @@ func TestJobStepComplete_afterJobDeletedWhenPhaseMarkedDone(t *testing.T) {
 	}
 	if !jobStepComplete(uctx, *step) {
 		t.Fatal("expected pre-rollout step complete via phase-done annotation after job deleted")
+	}
+}
+
+func TestDeleteSucceededJobStepsForPhase_skipsWithoutPhaseDoneMarker(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{ReadyReplicas: 1, Replicas: 1},
+	}
+	upJob := upgradeCheckJobSucceeded(cluster, "8.4.0")
+	c := testClientBuilder().WithObjects(upJob).Build()
+
+	if err := DeleteSucceededJobStepsForPhase(context.Background(), c, cluster, sts, PhasePreRollout); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if err := c.Get(context.Background(), types.NamespacedName{Name: JobName(cluster), Namespace: cluster.Namespace}, &batch.Job{}); err != nil {
+		t.Fatalf("job must remain until phase-done annotation is persisted: %v", err)
 	}
 }
 

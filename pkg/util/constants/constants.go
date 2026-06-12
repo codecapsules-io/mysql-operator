@@ -94,6 +94,10 @@ const (
 	// it's important to have a different extension than .cnf to be ignore by MySQL include
 	ConfHeartBeatPath = "/etc/mysql/heartbeat.conf"
 
+	// ConfPtKillPath the path where to put the pt-kill.conf file
+	// it's important to have a different extension than .cnf to be ignore by MySQL include
+	ConfPtKillPath = "/etc/mysql/pt-kill.conf"
+
 	// RcloneConfigFile represents the path to the file that contains rclone
 	// configs. This path should be the same as defined in docker entrypoint
 	// script from mysql-operator-sidecar/docker-entrypoint.sh. /tmp/rclone.conf

@@ -39,9 +39,9 @@ func TestGetClientConfigs_includesGetServerPublicKey(t *testing.T) {
 	}
 }
 
-func TestGetHeartbeatClientConfigs_usesUnixSocket(t *testing.T) {
+func TestGetSocketClientConfigs_usesUnixSocket(t *testing.T) {
 	t.Parallel()
-	cfg, err := getHeartbeatClientConfigs(constants.HeartBeatMySQLUser, "secret")
+	cfg, err := getSocketClientConfigs(constants.HeartBeatMySQLUser, "secret")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,6 +49,9 @@ var (
 	// confHeartbeatPath the path where to put the heartbeat.conf file
 	confHeartbeatPath = constants.ConfHeartBeatPath
 
+	// confPtKillPath the path where to put the pt-kill.conf file
+	confPtKillPath = constants.ConfPtKillPath
+
 	// DataDir is the mysql data. /var/lib/mysql
 	dataDir = constants.DataVolumeMountPath
 

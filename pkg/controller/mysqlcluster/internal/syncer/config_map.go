@@ -201,12 +201,19 @@ func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts
 
 }
 
-// mysqlConfVersion follows RolloutMySQLVersion so my.cnf tracks the StatefulSet rollout gate.
+// mysqlConfVersion selects the MySQL line for cluster-scoped my.cnf. The ConfigMap is live-mounted
+// into every pod, so during rollout it must stay on the applied data-plane version until all nodes
+// reach the target (SourceVersionForUpgrade). RolloutMySQLVersion only gates the StatefulSet image.
 func mysqlConfVersion(c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	if c != nil {
-		return versionupgrade.RolloutMySQLVersion(cluster, sts)
+	if c == nil {
+		return cluster.EffectiveVersion(sts)
 	}
-	return cluster.EffectiveVersion(sts)
+	if versionupgrade.VersionChangePending(cluster, sts) {
+		if source := versionupgrade.SourceVersionForUpgrade(cluster, sts); !source.EQ(semver.Version{}) {
+			return source
+		}
+	}
+	return versionupgrade.RolloutMySQLVersion(cluster, sts)
 }
 
 func convertMapToKVConfig(m map[string]string) map[string]intstr.IntOrString {

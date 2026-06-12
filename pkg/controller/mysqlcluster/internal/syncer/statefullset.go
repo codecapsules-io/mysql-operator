@@ -587,13 +587,13 @@ func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container
 		heartbeat,
 	}
 
-	// PT-KILL container
+	// PT-KILL container (explicit --socket: pt-kill's DSN defaults to TCP 127.0.0.1, which
+	// ignores socket-only defaults for Perl DBD::mysql and breaks caching_sha2 / host-matched grants.)
 	if s.cluster.Spec.QueryLimits != nil {
 		command := []string{
 			"pt-kill",
-			// host need to be specified, see pt-kill bug: https://jira.percona.com/browse/PT-1223
-			"--host=127.0.0.1",
-			fmt.Sprintf("--defaults-file=%s/client.conf", ConfVolumeMountPath),
+			"--defaults-file", constants.ConfPtKillPath,
+			"--socket", fmt.Sprintf("%s/mysql.sock", constants.DataVolumeMountPath),
 		}
 		command = append(command, getCliOptionsFromQueryLimits(s.cluster.Spec.QueryLimits)...)
 
@@ -784,9 +784,14 @@ func (s *sfsSyncer) getVolumeMountsFor(name string) []core.VolumeMount {
 		return mounts
 
 	case containerKillerName:
-		return []core.VolumeMount{
+		mounts := []core.VolumeMount{
 			{Name: confVolumeName, MountPath: ConfVolumeMountPath},
+			{Name: dataVolumeName, MountPath: DataVolumeMountPath, ReadOnly: true},
 		}
+		if s.cluster.Spec.TmpfsSize != nil {
+			mounts = append(mounts, core.VolumeMount{Name: tmpfsVolumeName, MountPath: DataVolumeMountPath, ReadOnly: true})
+		}
+		return mounts
 	}
 
 	return nil

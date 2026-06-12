@@ -67,7 +67,7 @@ func RunConfigCommand(cfg *Config) error {
 
 	reportHost := cfg.FQDNForServer(cfg.ServerID())
 
-	var identityCFG, initCFG, clientCFG, heartbeatCFG *ini.File
+	var identityCFG, initCFG, clientCFG, heartbeatCFG, ptKillCFG *ini.File
 
 	// mysql server identity configs
 	if identityCFG, err = getIdentityConfigs(cfg.ServerID(), reportHost); err != nil {
@@ -117,12 +117,21 @@ func RunConfigCommand(cfg *Config) error {
 
 	// mysql heartbeat: Unix socket avoids Perl DBD::mysql + caching_sha2_password TCP/RSA quirks
 	// ("Authentication requires secure connection" despite get-server-public-key in option files).
-	if heartbeatCFG, err = getHeartbeatClientConfigs(cfg.HeartBeatUser, cfg.HeartBeatPassword); err != nil {
+	if heartbeatCFG, err = getSocketClientConfigs(cfg.HeartBeatUser, cfg.HeartBeatPassword); err != nil {
 		return fmt.Errorf("failed to get heartbeat configs: %s", err)
 	}
 
 	if err = heartbeatCFG.SaveTo(confHeartbeatPath); err != nil {
 		return fmt.Errorf("failed to save heartbeat configs: %s", err)
+	}
+
+	// pt-kill: Unix socket + operator credentials (same Perl DBD::mysql / caching_sha2 rationale as heartbeat).
+	if ptKillCFG, err = getSocketClientConfigs(cfg.OperatorUser, cfg.OperatorPassword); err != nil {
+		return fmt.Errorf("failed to get pt-kill configs: %s", err)
+	}
+
+	if err = ptKillCFG.SaveTo(confPtKillPath); err != nil {
+		return fmt.Errorf("failed to save pt-kill configs: %s", err)
 	}
 
 	if err = writeLoopbackClientHints(); err != nil {
@@ -133,6 +142,7 @@ func RunConfigCommand(cfg *Config) error {
 		"initFile", initFilePath,
 		"clientConf", confClientPath,
 		"heartbeatConf", confHeartbeatPath,
+		"ptKillConf", confPtKillPath,
 		"loopbackHints", constants.ConfClientLoopbackPath,
 		"heartbeatSocket", path.Join(constants.DataVolumeMountPath, "mysql.sock"),
 	)
@@ -185,10 +195,10 @@ func getClientConfigs(user, pass string) (*ini.File, error) {
 	return cfg, nil
 }
 
-// getHeartbeatClientConfigs builds [client] for pt-heartbeat: Unix socket to local mysqld only
-// (same pod; datadir mounted read-only on the heartbeat container). No TCP — avoids Perl DBD::mysql
-// ignoring get-server-public-key from defaults with caching_sha2_password.
-func getHeartbeatClientConfigs(user, pass string) (*ini.File, error) {
+// getSocketClientConfigs builds [client] for Percona Toolkit tools (pt-heartbeat, pt-kill): Unix socket
+// to local mysqld only (same pod; datadir mounted read-only). No TCP — avoids Perl DBD::mysql ignoring
+// get-server-public-key from defaults with caching_sha2_password.
+func getSocketClientConfigs(user, pass string) (*ini.File, error) {
 	cfg := ini.Empty()
 	client := cfg.Section("client")
 

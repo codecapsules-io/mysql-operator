@@ -73,7 +73,7 @@ func TestBuildMysqlConfData_holdsSourceVersionWhenUpgradePathInvalid(t *testing.
 	}
 }
 
-func TestBuildMysqlConfData_usesTargetForValidUpgrade(t *testing.T) {
+func TestBuildMysqlConfData_holdsSourceVersionDuringValidUpgrade(t *testing.T) {
 	t.Parallel()
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
@@ -111,10 +111,59 @@ func TestBuildMysqlConfData_usesTargetForValidUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if strings.Contains(data, "skip-replica-start") {
+		t.Fatalf("expected 8.0 my.cnf while rollout pending, got 8.4 profile:\n%s", data)
+	}
+	if !strings.Contains(data, "skip-slave-start") {
+		t.Fatalf("expected 8.0 profile while rollout pending, got:\n%s", data)
+	}
+	if !strings.Contains(data, "default-authentication-plugin") {
+		t.Fatalf("expected 8.0 auth plugin while rollout pending, got:\n%s", data)
+	}
+}
+
+func TestBuildMysqlConfData_usesTargetAfterRolloutComplete(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.4.0"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.0"}},
+					}},
+				},
+			},
+		},
+	}
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = api.SchemeBuilder.AddToScheme(s)
+	_ = apps.AddToScheme(s)
+	c := fake.NewClientBuilder().WithScheme(s).Build()
+
+	data, err := buildMysqlConfData(c, cluster, sts)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(data, "skip-replica-start") {
-		t.Fatalf("expected 8.4 profile for valid upgrade, got:\n%s", data)
+		t.Fatalf("expected 8.4 profile after rollout, got:\n%s", data)
 	}
 	if strings.Contains(data, "default-authentication-plugin") {
-		t.Fatalf("expected no 8.0 auth plugin for 8.4 target, got:\n%s", data)
+		t.Fatalf("expected no 8.0 auth plugin after rollout, got:\n%s", data)
 	}
 }

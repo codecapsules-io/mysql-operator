@@ -85,3 +85,70 @@ func TestVersionChangePending_appliedBehindSpecDespiteSTS(t *testing.T) {
 		t.Fatal("expected upgrade pending when applied lags spec")
 	}
 }
+
+func TestVersionChangePending_legacyClusterWithoutAppliedOrEnv(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{ReadyNodes: 1},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1, ReadyReplicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name:  "mysql",
+						Image: "docker.io/percona/percona-server:8.0.34",
+					}},
+				},
+			},
+		},
+	}
+	if !VersionChangePending(cluster, sts) {
+		t.Fatal("expected upgrade pending for legacy cluster with 8.0 image and no appliedMysqlVersion")
+	}
+	got := SourceVersionForUpgrade(cluster, sts)
+	if got.String() != "8.0.34" {
+		t.Fatalf("source version from legacy image: %s", got)
+	}
+}
+
+func TestVersionChangePending_freshInstallAtDesiredNotPending(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+					}},
+				},
+			},
+		},
+	}
+	if VersionChangePending(cluster, sts) {
+		t.Fatal("fresh install already at desired must not be pending")
+	}
+}

@@ -17,8 +17,6 @@ package versionupgrade
 
 import (
 	"github.com/blang/semver"
-
-	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // StepStrategy encapsulates per-step upgrade path behavior (strategy pattern).
@@ -37,10 +35,7 @@ var (
 type datadirChownStrategy struct{}
 
 func (datadirChownStrategy) SourceVersion(uctx UpgradeContext) semver.Version {
-	if v := AppliedDataPlaneVersion(uctx.Cluster); !v.EQ(semver.Version{}) {
-		return v
-	}
-	return mysqlcluster.LaggingStatefulSetVersion(uctx.Cluster, uctx.STS)
+	return uctx.Source
 }
 
 func (s datadirChownStrategy) Applicable(uctx UpgradeContext) bool {

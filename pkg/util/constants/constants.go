@@ -54,6 +54,19 @@ const (
 	// if mysql is configure by the operator, if PURGE_GTID is set or not, etc
 	OperatorStatusTableName = "status"
 
+	// OperatorConfiguredKey tracks whether the node controller finished MySQL setup.
+	OperatorConfiguredKey = "configured"
+	// OperatorConfiguredPendingValue is set at init-file start before node controller runs.
+	OperatorConfiguredPendingValue = "0"
+	// OperatorConfiguredDoneValue is set when node initialization completes.
+	OperatorConfiguredDoneValue = "1"
+
+	// OperatorInitFileCompleteKey is written as the last statement in operator init-file so callers can
+	// distinguish "status table exists" from "init-file finished".
+	OperatorInitFileCompleteKey = "init_file_complete"
+	// OperatorInitFileCompleteValue is the value stored for OperatorInitFileCompleteKey.
+	OperatorInitFileCompleteValue = "1"
+
 	// ConfVolumeMountPath is the path where mysql configs will be mounted
 	ConfVolumeMountPath = "/etc/mysql"
 

@@ -114,6 +114,43 @@ func TestEnsureChecked_patchBumpSucceeds(t *testing.T) {
 	}
 }
 
+func TestEnsureChecked_legacyClusterWithoutAppliedValidatesUpgrade(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{ReadyNodes: 1},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.GetNameForResource(mysqlcluster.StatefulSet),
+			Namespace: cluster.Namespace,
+		},
+		Status: apps.StatefulSetStatus{Replicas: 1, ReadyReplicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name:  "mysql",
+						Image: "docker.io/percona/percona-server:8.0.34",
+					}},
+				},
+			},
+		},
+	}
+	c := testClientBuilder().WithObjects(sts).Build()
+	if err := EnsureChecked(context.Background(), c, cluster); err != nil {
+		t.Fatalf("legacy 8.0→8.4 upgrade should validate: %v", err)
+	}
+}
+
 func TestEnsureChecked_blocksSkipLine(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{

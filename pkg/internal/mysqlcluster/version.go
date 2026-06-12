@@ -16,6 +16,8 @@ limitations under the License.
 package mysqlcluster
 
 import (
+	"strings"
+
 	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
@@ -98,53 +100,84 @@ func (c *MysqlCluster) EffectiveVersion(sts *apps.StatefulSet) semver.Version {
 	return c.DesiredVersion()
 }
 
-// SemVerFromStatefulSet reads MySQLVersionEnv from the StatefulSet pod template.
+// SemVerFromStatefulSet reads MY_MYSQL_VERSION from the StatefulSet pod template, then the mysql
+// container image tag (legacy clusters may lack the env var).
 func SemVerFromStatefulSet(sts *apps.StatefulSet) semver.Version {
+	if sts == nil {
+		return semver.Version{}
+	}
 	for _, c := range sts.Spec.Template.Spec.Containers {
-		if c.Name != "mysql" {
-			continue
-		}
-		for _, e := range c.Env {
-			if e.Name == MySQLVersionEnv && e.Value != "" {
-				if v, err := semver.Parse(e.Value); err == nil {
-					return v
-				}
-			}
+		if c.Name == "mysql" {
+			return semVerFromMysqlContainer(c)
 		}
 	}
 	for _, c := range sts.Spec.Template.Spec.InitContainers {
-		if c.Name != "mysql-init-only" {
-			continue
-		}
-		for _, e := range c.Env {
-			if e.Name == MySQLVersionEnv && e.Value != "" {
-				if v, err := semver.Parse(e.Value); err == nil {
-					return v
-				}
-			}
+		if c.Name == "mysql-init-only" {
+			return semVerFromMysqlContainer(c)
 		}
 	}
 	return semver.Version{}
 }
 
-// SemVerFromPod reads MySQLVersionEnv from a running mysql pod (preferred for per-pod SQL dialect).
+// SemVerFromPod reads MY_MYSQL_VERSION from a running mysql pod, then the container image tag.
 func SemVerFromPod(pod *core.Pod) semver.Version {
 	if pod == nil {
 		return semver.Version{}
 	}
 	for _, c := range pod.Spec.Containers {
-		if c.Name != "mysql" {
-			continue
-		}
-		for _, e := range c.Env {
-			if e.Name == MySQLVersionEnv && e.Value != "" {
-				if v, err := semver.Parse(e.Value); err == nil {
-					return v
-				}
-			}
+		if c.Name == "mysql" {
+			return semVerFromMysqlContainer(c)
 		}
 	}
 	return semver.Version{}
+}
+
+func semVerFromMysqlContainer(c core.Container) semver.Version {
+	for _, e := range c.Env {
+		if e.Name == MySQLVersionEnv && e.Value != "" {
+			if v, err := semver.Parse(e.Value); err == nil {
+				return v
+			}
+		}
+	}
+	return semVerFromImageRef(c.Image)
+}
+
+func semVerFromImageRef(image string) semver.Version {
+	if image == "" {
+		return semver.Version{}
+	}
+	tag := imageTag(image)
+	if tag == "" || tag == "latest" {
+		return semver.Version{}
+	}
+	if mapped, ok := constants.MySQLTagsToSemVer[tag]; ok {
+		if v, err := semver.Parse(mapped); err == nil {
+			return v
+		}
+	}
+	if dash := strings.Index(tag, "-"); dash > 0 {
+		if v, err := semver.Parse(tag[:dash]); err == nil {
+			return v
+		}
+	}
+	if v, err := semver.Parse(tag); err == nil {
+		return v
+	}
+	if v, err := semver.Make(tag); err == nil {
+		return v
+	}
+	return semver.Version{}
+}
+
+func imageTag(image string) string {
+	if at := strings.LastIndex(image, "@"); at >= 0 && strings.Contains(image[at:], "sha256:") {
+		return ""
+	}
+	if idx := strings.LastIndex(image, ":"); idx >= 0 {
+		return image[idx+1:]
+	}
+	return ""
 }
 
 // WantsPerconaInitContainerFor reports whether the given server version needs mysql-init-only.

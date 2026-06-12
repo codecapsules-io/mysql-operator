@@ -40,9 +40,9 @@ const (
 // SQLInterface expose abstract operations that can be applied on a MySQL node
 type SQLInterface interface {
 	Wait(ctx context.Context) error
-	// WaitForOperatorStatusTable blocks until sys_operator.status exists (or ctx is done).
-	// MySQL can accept connections before init-file (operator-init.sql) has finished creating
-	// operator tables; callers must wait before querying that table.
+	// WaitForOperatorStatusTable blocks until operator init-file has finished (or ctx is done).
+	// MySQL can accept connections while init-file is still running grants and replication reset;
+	// the status table is created at the start of init-file, so table existence alone is not enough.
 	WaitForOperatorStatusTable(ctx context.Context) error
 	DisableSuperReadOnly(ctx context.Context) (func(), error)
 	ChangeMasterTo(ctx context.Context, host string, user string, pass string) error
@@ -90,28 +90,39 @@ func (r *nodeSQLRunner) Wait(ctx context.Context) error {
 }
 
 func (r *nodeSQLRunner) WaitForOperatorStatusTable(ctx context.Context) error {
-	log.V(1).Info("wait for operator status table", "host", r.Host())
-	// Table and schema names are operator constants (not user input).
-	q := fmt.Sprintf(
-		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '%s' AND table_name = '%s'",
-		constants.OperatorDbName, constants.OperatorStatusTableName,
-	)
+	log.V(1).Info("wait for init-file completion", "host", r.Host())
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for %s.%s: %w",
-				constants.OperatorDbName, constants.OperatorStatusTableName, ctx.Err())
+			return fmt.Errorf("timeout waiting for init-file completion: %w", ctx.Err())
 		case <-time.After(time.Second):
-			var n int
-			if err := r.readFromMysql(ctx, q, &n); err != nil {
-				log.V(1).Info("operator status table not ready yet", "host", r.Host(), "error", err)
+			done, err := r.isInitFileComplete(ctx)
+			if err != nil {
+				log.V(1).Info("init-file not complete yet", "host", r.Host(), "error", err)
 				continue
 			}
-			if n == 1 {
+			if done {
 				return nil
 			}
 		}
 	}
+}
+
+func (r *nodeSQLRunner) isInitFileComplete(ctx context.Context) (bool, error) {
+	complete, err := r.readStatusValue(ctx, constants.OperatorInitFileCompleteKey)
+	if err != nil {
+		return false, err
+	}
+	if complete == constants.OperatorInitFileCompleteValue {
+		return true, nil
+	}
+
+	// Pre-marker clusters: init-file does not re-run on restart; node controller already set configured.
+	configured, err := r.readStatusValue(ctx, constants.OperatorConfiguredKey)
+	if err != nil {
+		return false, err
+	}
+	return configured == constants.OperatorConfiguredDoneValue, nil
 }
 
 func (r *nodeSQLRunner) DisableSuperReadOnly(ctx context.Context) (func(), error) {
@@ -146,13 +157,13 @@ func (r *nodeSQLRunner) ChangeMasterTo(ctx context.Context, masterHost, user, pa
 
 // MarkConfigurationDone write in a MEMORY table value. The readiness probe checks for that value to exist to succeed.
 func (r *nodeSQLRunner) MarkConfigurationDone(ctx context.Context) error {
-	return r.writeStatusValue(ctx, "configured", "1")
+	return r.writeStatusValue(ctx, constants.OperatorConfiguredKey, constants.OperatorConfiguredDoneValue)
 }
 
 // IsConfigured returns true if MySQL was configured, a key was set in the status table
 func (r *nodeSQLRunner) IsConfigured(ctx context.Context) (bool, error) {
-	val, err := r.readStatusValue(ctx, "configured")
-	return val == "1", err
+	val, err := r.readStatusValue(ctx, constants.OperatorConfiguredKey)
+	return val == constants.OperatorConfiguredDoneValue, err
 }
 
 func (r *nodeSQLRunner) MarkSetGTIDPurged(ctx context.Context) error {

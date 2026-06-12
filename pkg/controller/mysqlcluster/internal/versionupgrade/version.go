@@ -51,18 +51,21 @@ func DesiredSemVer(cluster *mysqlcluster.MysqlCluster) semver.Version {
 	return cluster.DesiredVersion()
 }
 
-// VersionChangePending reports whether spec.mysqlVersion differs from status.appliedMysqlVersion.
+// VersionChangePending reports whether spec.mysqlVersion differs from the data-plane version.
 func VersionChangePending(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
 	desired := DesiredSemVer(cluster)
-	applied := AppliedDataPlaneVersion(cluster)
-	if !applied.EQ(semver.Version{}) {
+	if applied := AppliedDataPlaneVersion(cluster); !applied.EQ(semver.Version{}) {
 		return !applied.EQ(desired)
 	}
-	lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts)
-	if lag.EQ(semver.Version{}) {
-		return false
+	if lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !lag.EQ(semver.Version{}) {
+		return !lag.EQ(desired)
 	}
-	return !lag.EQ(desired)
+	if sts != nil {
+		if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.EQ(semver.Version{}) && v.EQ(desired) {
+			return false
+		}
+	}
+	return ClusterHasMySQLData(cluster, sts)
 }
 
 // HasPersistentDataVolume reports whether the cluster stores MySQL data on PVCs.

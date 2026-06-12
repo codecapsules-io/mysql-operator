@@ -258,8 +258,9 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 		constants.OperatorDbName, constants.OperatorStatusTableName))
 
 	// nolint: gosec
-	queries = append(queries, fmt.Sprintf("REPLACE INTO %s.%s VALUES ('%s', '0')",
-		constants.OperatorDbName, constants.OperatorStatusTableName, "configured"))
+	queries = append(queries, fmt.Sprintf("REPLACE INTO %s.%s VALUES ('%s', '%s')",
+		constants.OperatorDbName, constants.OperatorStatusTableName,
+		constants.OperatorConfiguredKey, constants.OperatorConfiguredPendingValue))
 
 	// set server as read only
 	// https://github.com/codecapsules-io/mysql-operator/issues/509
@@ -318,6 +319,12 @@ func initFileQuery(cfg *Config, gtidPurged string) []byte {
 			queries = append(queries, stmt)
 		}
 	}
+
+	// Terminal marker: node controller waits for this before running replication/GTID setup.
+	// nolint: gosec
+	queries = append(queries, fmt.Sprintf("REPLACE INTO %s.%s VALUES ('%s', '%s')",
+		constants.OperatorDbName, constants.OperatorStatusTableName,
+		constants.OperatorInitFileCompleteKey, constants.OperatorInitFileCompleteValue))
 
 	return []byte(strings.Join(queries, ";\n") + ";\n")
 }

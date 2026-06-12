@@ -55,8 +55,8 @@ var log = logf.Log.WithName(controllerName)
 const controllerName = "controller.mysqlNode"
 
 // mysqlReconciliationTimeout bounds a single reconcile (MySQL waits, init SQL, node setup).
-// First mysqld start can take longer than a few seconds; init-file may create sys_operator.status
-// shortly after the server begins accepting connections.
+// First mysqld start can take longer than a few seconds; init-file may still be running grants
+// and replication reset after the server begins accepting connections.
 const mysqlReconciliationTimeout = 2 * time.Minute
 
 // skipGTIDPurgedAnnotations, if this annotations is set on the cluster then the node controller skip setting GTID_PURGED variable.

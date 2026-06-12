@@ -489,8 +489,9 @@ func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container
 	}
 
 	// nolint: gosec
-	mysqlTestCmd := fmt.Sprintf(`mysql --defaults-file=%s -NB -e 'SELECT COUNT(*) FROM %s.%s WHERE name="configured" AND value="1"'`,
-		confClientPath, constants.OperatorDbName, constants.OperatorStatusTableName)
+	mysqlTestCmd := fmt.Sprintf(`mysql --defaults-file=%s -NB -e 'SELECT COUNT(*) FROM %s.%s WHERE name="%s" AND value="%s"'`,
+		confClientPath, constants.OperatorDbName, constants.OperatorStatusTableName,
+		constants.OperatorConfiguredKey, constants.OperatorConfiguredDoneValue)
 
 	// we have to know ASAP when server is not ready to remove it from endpoints
 	mysql.ReadinessProbe = ensureProbe(5, 5, 2, core.Handler{

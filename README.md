@@ -48,24 +48,32 @@ For version-specific behavior (MySQL 8.4, upgrades, catalogs, profiles), see the
 
 ## Documentation
 
-| Topic                            | Location                                                                           |
-| -------------------------------- | ---------------------------------------------------------------------------------- |
-| Active maintenance scope         | [`MAINTENANCE.md`](MAINTENANCE.md)                                                 |
-| Contributing & pull requests     | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                               |
-| MySQL version catalog & upgrades | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                 |
-| Version profiles                 | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                 |
-| Helm chart values                | [`deploy/charts/mysql-operator/README.md`](deploy/charts/mysql-operator/README.md) |
+| Topic                             | Location                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| Active maintenance scope          | [`MAINTENANCE.md`](MAINTENANCE.md)                                                 |
+| Contributing & pull requests      | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                               |
+| Operator install & releases       | [`deploy/manifests/README.md`](deploy/manifests/README.md)                         |
+| MySQL version catalog & upgrades  | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                 |
+| Version profiles                  | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                 |
+| Helm chart (legacy, unmaintained) | [`deploy/charts/mysql-operator/README.md`](deploy/charts/mysql-operator/README.md) |
 
 ## Deploying the controller
 
-Install from the Helm chart in this repository (adjust namespace and values as required for your environment):
+> **Helm charts (0.7.0+):** Not actively supported. Use the versioned manifests under [`deploy/manifests/`](deploy/manifests/).
+
+**Full install guide:** [`deploy/manifests/README.md`](deploy/manifests/README.md) — prerequisites, fresh install, verify, upgrade, uninstall, and deploying a MySQL cluster.
+
+Quick start:
 
 ```shell
-helm install mysql-operator ./deploy/charts/mysql-operator \
-  --namespace mysql-operator --create-namespace
+export OPERATOR_VERSION=v0.7.0
+kubectl create namespace mysql-operator --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/crds"
+kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/operator"
+kubectl rollout status statefulset/mysql-operator -n mysql-operator
 ```
 
-See the [chart README](deploy/charts/mysql-operator/README.md) for configuration options (sidecars, version catalog, images, and RBAC).
+A legacy Helm path remains under `deploy/charts/mysql-operator/` for reference only — see the [chart README](deploy/charts/mysql-operator/README.md).
 
 **Kubernetes version:** Confirm cluster compatibility with your target operator release before upgrading; see [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md) for MySQL server upgrade behavior.
 

@@ -37,6 +37,8 @@ The catalog file is a list of lines `8.4.2=percona@sha256:...` (comments with `#
 
 ## Helm
 
+> From **0.7.0** onward, Helm charts are not actively supported (see [`MAINTENANCE.md`](../MAINTENANCE.md)). The notes below apply to the legacy chart only.
+
 The chart can pass `--sidecar-mysql84-image` and optional catalog mounts via `values.yaml`. See `deploy/charts/mysql-operator/values.yaml`.
 
 ## MySQL server major upgrades

@@ -73,7 +73,7 @@ func TestBuildMysqlConfData_holdsSourceVersionWhenUpgradePathInvalid(t *testing.
 	}
 }
 
-func TestBuildMysqlConfData_holdsSourceVersionDuringValidUpgrade(t *testing.T) {
+func TestBuildMysqlConfData_usesRolloutVersionDuringValidUpgrade(t *testing.T) {
 	t.Parallel()
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
@@ -111,14 +111,11 @@ func TestBuildMysqlConfData_holdsSourceVersionDuringValidUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(data, "skip-replica-start") {
-		t.Fatalf("expected 8.0 my.cnf while rollout pending, got 8.4 profile:\n%s", data)
+	if !strings.Contains(data, "skip-replica-start") {
+		t.Fatalf("expected 8.4 my.cnf while STS rolls forward, got:\n%s", data)
 	}
-	if !strings.Contains(data, "skip-slave-start") {
-		t.Fatalf("expected 8.0 profile while rollout pending, got:\n%s", data)
-	}
-	if !strings.Contains(data, "default-authentication-plugin") {
-		t.Fatalf("expected 8.0 auth plugin while rollout pending, got:\n%s", data)
+	if strings.Contains(data, "default-authentication-plugin") {
+		t.Fatalf("expected no 8.0 auth plugin while rolling to 8.4, got:\n%s", data)
 	}
 }
 

@@ -42,7 +42,7 @@ const MySQLVersionEnv = "MY_MYSQL_VERSION"
 //   - RolloutVersion (versionupgrade.RolloutMySQLVersion): version the StatefulSet template should
 //     run during upgrade transitions. Holds at the current line when the upgrade path is invalid,
 //     otherwise advances to DesiredVersion together with the image roll. Cluster-scoped my.cnf follows
-//     SourceVersionForUpgrade until rollout completes because the ConfigMap is live-mounted on all pods.
+//     RolloutVersion so pods starting on the rolled-forward image get a compatible config.
 
 // DesiredVersion returns the MySQL version the user requested (spec → alias → operator default).
 func (c *MysqlCluster) DesiredVersion() semver.Version {

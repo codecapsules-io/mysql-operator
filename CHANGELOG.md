@@ -38,6 +38,8 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 - Rebrand Go module and import paths from `github.com/bitpoke/mysql-operator` to
   `github.com/codecapsules-io/mysql-operator`.
 - Update Helm chart metadata, documentation, and CRD field descriptions for Code Capsules.
+- **Helm charts are no longer actively supported** from 0.7.0 onward; charts under `deploy/charts/` are
+  retained for reference but are not maintained or tested as part of releases (see [`MAINTENANCE.md`](MAINTENANCE.md)).
 - Add Apache 2.0 modification notices (`Copyright 2026 Code Capsules`) to source files touched
   by the fork.
 - Updated versions to shift towards `go 1.26.3`.

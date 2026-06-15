@@ -56,9 +56,34 @@ include build/makelib/kubebuilder-v3.mk
 		@for crd in $(wildcard $(CRD_DIR)/*.yaml) ; do \
 			$(YQ) e '.spec.preserveUnknownFields=false' -i "$${crd}" ;\
 		done
-.kubebuilder.manifests.done: .kubebuilder.fix-preserve-unknown-fields
+.PHONY: .kubebuilder.fix-license-headers
+.kubebuilder.fix-license-headers:
+		@for f in $(wildcard $(CRD_DIR)/*.yaml) config/rbac/role.yaml ; do \
+			test -f "$${f}" || continue ; \
+			head -n 5 "$${f}" | grep -q 'SPDX-License-Identifier' && continue ; \
+			{ echo '# Copyright 2026 Code Capsules' ; \
+			  echo '# SPDX-License-Identifier: Apache-2.0' ; \
+			  echo '#' ; \
+			  cat "$${f}" ; } > "$${f}.tmp" && mv "$${f}.tmp" "$${f}" ; \
+		done
+.kubebuilder.manifests.done: .kubebuilder.fix-preserve-unknown-fields .kubebuilder.fix-license-headers
 
 include build/makelib/helm.mk
+
+DEPLOY_MANIFESTS_DIR ?= deploy/manifests
+
+.PHONY: version
+version:
+	@echo $(VERSION)
+
+.PHONY: deploy.crds deploy.manifests
+deploy.crds: $(YQ) kubebuilder.manifests
+	@$(INFO) syncing CRDs into deploy/manifests/$(VERSION)
+	@VERSION=$(VERSION) YQ=$(YQ) bash hack/generate-deploy-manifests.sh $(VERSION)
+	@$(OK) syncing CRDs into deploy/manifests/$(VERSION)
+
+# Operator manifests are maintained manually per version; this target only syncs CRDs.
+deploy.manifests: deploy.crds
 
 .PHONY: validate-domain
 validate-domain:

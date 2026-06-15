@@ -18,6 +18,8 @@ limitations under the License.
 
 This is the helm chart for [mysql-operator](https://github.com/codecapsules-io/mysql-operator).
 
+> **Not actively supported from 0.7.0 onward.** Code Capsules does not actively maintain or test this chart from release **0.7.0** onwards. It is kept in the repository for reference and may still work in some setups, but chart values, templates, and install docs are best-effort only. Prefer deploying with raw Kubernetes manifests or your own packaging. See [`MAINTENANCE.md`](../../../MAINTENANCE.md).
+
 ## TL;DR
 
 ```sh

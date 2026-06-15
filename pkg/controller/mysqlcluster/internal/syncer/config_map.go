@@ -150,7 +150,7 @@ func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts
 	cfg := ini.Empty()
 	sec := cfg.Section("mysqld")
 
-	// my.cnf is mounted by pods still on the data-plane version; spec.mysqlVersion may already target an upgrade.
+	// my.cnf follows RolloutMySQLVersion so it matches the mysqld binary on starting pods.
 	v := mysqlConfVersion(c, cluster, sts)
 	prof := mysqlversioning.ProfileFor(v)
 
@@ -201,19 +201,15 @@ func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts
 
 }
 
-// mysqlConfVersion selects the MySQL line for cluster-scoped my.cnf. The ConfigMap is live-mounted
-// into every pod, so during rollout it must stay on the applied data-plane version until all nodes
-// reach the target (SourceVersionForUpgrade). RolloutMySQLVersion only gates the StatefulSet image.
-func mysqlConfVersion(c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	if c == nil {
-		return cluster.EffectiveVersion(sts)
+// mysqlConfVersion selects the MySQL line for cluster-scoped my.cnf. It follows RolloutMySQLVersion
+// (the same version the StatefulSet template runs) so starting pods read a compatible my.cnf. The
+// ConfigMap is live-mounted; holding the source-line config while the STS rolls forward leaves new
+// pods unable to start (e.g. default-authentication-plugin on MySQL 8.4+).
+func mysqlConfVersion(_ client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
+	if sts != nil {
+		return versionupgrade.RolloutMySQLVersion(cluster, sts)
 	}
-	if versionupgrade.VersionChangePending(cluster, sts) {
-		if source := versionupgrade.SourceVersionForUpgrade(cluster, sts); !source.EQ(semver.Version{}) {
-			return source
-		}
-	}
-	return versionupgrade.RolloutMySQLVersion(cluster, sts)
+	return cluster.DesiredVersion()
 }
 
 func convertMapToKVConfig(m map[string]string) map[string]intstr.IntOrString {

@@ -8,6 +8,8 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.5
   name: mysqldatabases.mysql.presslabs.org
+  labels:
+    app.kubernetes.io/name: mysql-operator
 spec:
   group: mysql.presslabs.org
   names:

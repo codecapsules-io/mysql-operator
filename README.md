@@ -34,7 +34,7 @@ This repository is a maintained fork of the open-source [mysql-operator](https:/
 ## Relationship to upstream
 
 - **Upstream:** [bitpoke/mysql-operator](https://github.com/bitpoke/mysql-operator) (originally developed by Pressinfra SRL / Bitpoke).
-- **This fork:** Independently maintained by Code Capsules for internal platform use. Do not assume compatibility with upstream charts, docs, or release cadence.
+- **This fork:** Independently maintained by Code Capsules for internal platform use. Do not assume compatibility with upstream Helm charts, docs, or release cadence.
 
 ## Capabilities
 
@@ -48,18 +48,18 @@ For version-specific behavior (MySQL 8.4, upgrades, catalogs, profiles), see the
 
 ## Documentation
 
-| Topic                             | Location                                                                           |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
-| Active maintenance scope          | [`MAINTENANCE.md`](MAINTENANCE.md)                                                 |
-| Contributing & pull requests      | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                               |
-| Operator install & releases       | [`deploy/manifests/README.md`](deploy/manifests/README.md)                         |
-| MySQL version catalog & upgrades  | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                 |
-| Version profiles                  | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                 |
-| Helm chart (legacy, unmaintained) | [`deploy/charts/mysql-operator/README.md`](deploy/charts/mysql-operator/README.md) |
+| Topic                            | Location                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| Active maintenance scope         | [`MAINTENANCE.md`](MAINTENANCE.md)                                                  |
+| Contributing & pull requests     | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                                |
+| Operator install & releases      | [`deploy/manifests/README.md`](deploy/manifests/README.md)                          |
+| Migrating from Helm (v0.6.3)     | [`deploy/manifests/README.md`](deploy/manifests/README.md#migrating-from-helm-v063) |
+| MySQL version catalog & upgrades | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                  |
+| Version profiles                 | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                  |
 
 ## Deploying the controller
 
-> **Helm charts (0.7.0+):** Not actively supported. Use the versioned manifests under [`deploy/manifests/`](deploy/manifests/).
+Install and upgrade using versioned Kubernetes manifests under [`deploy/manifests/`](deploy/manifests/). See [`deploy/manifests/README.md`](deploy/manifests/README.md) for install steps and [migrating from Helm v0.6.3](deploy/manifests/README.md#migrating-from-helm-v063).
 
 **Full install guide:** [`deploy/manifests/README.md`](deploy/manifests/README.md) — prerequisites, fresh install, verify, upgrade, uninstall, and deploying a MySQL cluster.
 
@@ -72,8 +72,6 @@ kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/crds"
 kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/operator"
 kubectl rollout status statefulset/mysql-operator -n mysql-operator
 ```
-
-A legacy Helm path remains under `deploy/charts/mysql-operator/` for reference only — see the [chart README](deploy/charts/mysql-operator/README.md).
 
 **Kubernetes version:** Confirm cluster compatibility with your target operator release before upgrading; see [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md) for MySQL server upgrade behavior.
 

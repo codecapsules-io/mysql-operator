@@ -35,7 +35,7 @@ The following areas receive active maintenance:
 
 The following are **not** part of active maintenance unless explicitly called out in a release or issue:
 
-- **Helm charts** — From **0.7.0** onward, the charts under `deploy/charts/` are not actively maintained or tested. They may still work for some deployments, but chart values, templates, and install docs are best-effort only. Prefer the versioned manifests under [`deploy/manifests/`](deploy/manifests/) — see [`deploy/manifests/README.md`](deploy/manifests/README.md) for install and release preparation steps.
+- **Helm charts** — Removed from this repository in **0.7.0**. Use versioned manifests under [`deploy/manifests/`](deploy/manifests/). Frozen **v0.6.3** manifests are provided for users migrating off the legacy Helm chart — see [`deploy/manifests/README.md`](deploy/manifests/README.md).
 - **Built-in backup and restore** — The operator’s legacy backup subsystem (sidecar-driven backups, RClone integration, and related CR workflows) is not actively developed. Prefer external backup solutions or platform-level backup for new deployments.
 - **Upstream Bitpoke parity** — We do not merge or chase upstream releases; do not assume feature parity with [bitpoke/mysql-operator](https://github.com/bitpoke/mysql-operator).
 - **Commercial SLAs** — This repository is maintained for Code Capsules platform use; there is no published public support SLA.

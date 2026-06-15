@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 This directory stores **frozen Kubernetes manifests** for each operator release: CRDs and operator runtime resources (RBAC, StatefulSet, Services, ConfigMaps, and so on).
 
-Use these manifests to install or upgrade the operator **without Helm**. Helm charts under `deploy/charts/` remain for reference but are not actively maintained from 0.7.0 onward (see [`MAINTENANCE.md`](../../MAINTENANCE.md)).
+Use these manifests to install or upgrade the operator. Helm charts were removed in **0.7.0**; frozen **v0.6.3** manifests are available for migration off the legacy chart (see [Migrating from Helm (v0.6.3)](#migrating-from-helm-v063)).
 
 ---
 
@@ -71,6 +71,30 @@ Adapt names, storage classes, and `mysqlVersion` before production use. See [`do
 
 Review release notes and [`docs/mysql-version-upgrades.md`](../../docs/mysql-version-upgrades.md) before upgrading across minor versions.
 
+### Migrating from Helm (v0.6.3)
+
+If you currently run the operator via the **Helm chart** from upstream Bitpoke or an older fork release (**v0.6.3** or earlier), use the frozen manifests under `deploy/manifests/v0.6.3/` as a reference for what the chart deployed, then move to **v0.7.0** manifests for ongoing installs.
+
+**Typical path:**
+
+1. **Note your Helm values** — image repositories/tags, `extraArgs`, orchestrator topology password, `watchNamespace`, and any custom sidecar or exporter images.
+2. **Compare with** `deploy/manifests/v0.6.3/operator/statefulset.yaml` — defaults use `docker.io/bitpoke/*:v0.6.3` images and `prom/mysqld-exporter:v0.13.0`.
+3. **Uninstall the Helm release** (does not remove CRDs or `MysqlCluster` resources in app namespaces by default):
+   ```shell
+   helm uninstall <release-name> -n mysql-operator
+   ```
+4. **Apply v0.7.0 manifests** — edit `deploy/manifests/v0.7.0/operator/statefulset.yaml` first if you need non-default images or operator flags, then:
+   ```shell
+   kubectl apply -k deploy/manifests/v0.7.0/crds
+   kubectl apply -k deploy/manifests/v0.7.0/operator
+   kubectl rollout status statefulset/mysql-operator -n mysql-operator
+   ```
+5. **Verify** CRDs, operator pod, and existing `MysqlCluster` resources reconcile.
+
+The **v0.6.3** manifest set is not maintained for new features; it exists so manifest-based installs can match the last Helm chart layout before upgrading to **v0.7.0**.
+
+To regenerate **v0.6.3** files from the `v0.6.3` git tag (maintainers only): `./hack/generate-v063-manifests.sh` (requires `helm`).
+
 ### Uninstall
 
 ```shell
@@ -97,6 +121,10 @@ Each release is stored under a semver directory named after the git tag (includi
 
 ```text
 deploy/manifests/
+  v0.6.3/                # Frozen legacy install (former Helm chart defaults; migration reference)
+    crds/
+    operator/
+    kustomization.yaml
   v0.7.0/
     crds/                  # CustomResourceDefinitions (apply first)
       kustomization.yaml

@@ -37,15 +37,16 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 
 - Rebrand Go module and import paths from `github.com/bitpoke/mysql-operator` to
   `github.com/codecapsules-io/mysql-operator`.
-- Update Helm chart metadata and CRD field descriptions for Code Capsules.
-- **Helm charts are no longer actively supported** from 0.7.0 onward; charts under `deploy/charts/` are
-  retained for reference but are not maintained or tested as part of releases (see [`MAINTENANCE.md`](MAINTENANCE.md)).
+- **Helm charts removed** — install and upgrade via versioned manifests under `deploy/manifests/`
+  (see [`deploy/manifests/README.md`](deploy/manifests/README.md)). Frozen **v0.6.3** manifests are
+  included for users migrating off the legacy chart.
 - Add Apache 2.0 modification notices (`Copyright 2026 Code Capsules`) to source files touched
   by the fork.
 - Updated versions to shift towards `go 1.26.3`.
 
 ### Added
 
+- **Frozen v0.6.3 manifests** under `deploy/manifests/v0.6.3/` for migration from the legacy Helm chart.
 - **Percona Server / MySQL 8.4 LTS support:** deploy clusters with `spec.mysqlVersion: "8.4"` (or a
   patch semver such as `8.4.0`); built-in image catalog and the `percona-8.4` version profile drive
   server and sidecar selection. Optional dedicated `mysql-operator-sidecar-8.4` image via
@@ -70,6 +71,7 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 
 ### Removed
 
+- **Helm charts** under `deploy/charts/` (operator and mysql-cluster). Use `deploy/manifests/` instead.
 - **Automated auth plugin migration:** the operator no longer runs a pre-rollout auth-migrate step or
   sidecar `auth-migrate` command. Before upgrading 8.0 → 8.4+, migrate `mysql_native_password`
   accounts manually on the primary; see [docs/mysql-version-upgrades.md](docs/mysql-version-upgrades.md).

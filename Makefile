@@ -37,6 +37,7 @@ GO_INTEGRATION_TESTS_PARAMS ?= -timeout 50m \
 							   --operator-image $(E2E_IMAGE_REGISTRY)/mysql-operator$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
 							   --sidecar-mysql57-image $(E2E_IMAGE_REGISTRY)/mysql-operator-sidecar-5.7$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
 							   --sidecar-mysql8-image $(E2E_IMAGE_REGISTRY)/mysql-operator-sidecar-8.0$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
+							   --sidecar-mysql84-image $(E2E_IMAGE_REGISTRY)/mysql-operator-sidecar-8.4$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
 							   --orchestrator-image $(E2E_IMAGE_REGISTRY)/mysql-operator-orchestrator$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG)
 TEST_FILTER_PARAM += $(GO_INTEGRATION_TESTS_PARAMS)
 include build/makelib/golang.mk
@@ -68,8 +69,6 @@ include build/makelib/kubebuilder-v3.mk
 		done
 .kubebuilder.manifests.done: .kubebuilder.fix-preserve-unknown-fields .kubebuilder.fix-license-headers
 
-include build/makelib/helm.mk
-
 DEPLOY_MANIFESTS_DIR ?= deploy/manifests
 
 .PHONY: version
@@ -92,50 +91,6 @@ validate-domain:
 	@$(OK) validating domain metadata consistency
 
 .lint.run: validate-domain go.fmt.verify go.lint
-
-.PHONY: .kubebuilder.update.chart
-.kubebuilder.update.chart: kubebuilder.manifests $(YQ)
-	@$(INFO) updating helm RBAC and CRDs from kubebuilder manifests
-	@rm -rf $(HELM_CHARTS_DIR)/mysql-operator/crds
-	@mkdir -p $(HELM_CHARTS_DIR)/mysql-operator/crds
-	@set -e; \
-		for crd in $(wildcard $(CRD_DIR)/*.yaml) ; do \
-			cp $${crd} $(HELM_CHARTS_DIR)/mysql-operator/crds/ ; \
-			$(YQ) e '.metadata.labels["app.kubernetes.io/name"]="mysql-operator"' -i $(HELM_CHARTS_DIR)/mysql-operator/crds/$$(basename $${crd}) ; \
-			$(YQ) e 'del(.metadata.creationTimestamp)'                            -i $(HELM_CHARTS_DIR)/mysql-operator/crds/$$(basename $${crd}) ; \
-			$(YQ) e 'del(.status)'                                                -i $(HELM_CHARTS_DIR)/mysql-operator/crds/$$(basename $${crd}) ; \
-		done
-	@echo '{{- if .Values.rbac.create }}'                             > $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'apiVersion: rbac.authorization.k8s.io/v1'                 >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'kind: ClusterRole'                                        >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'metadata:'                                                >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '  name: {{ include "mysql-operator.fullname" . }}'        >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '  labels:'                                                >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '    {{- include "mysql-operator.labels" . | nindent 4 }}' >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'rules:'                                                   >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@yq e -P '.rules' config/rbac/role.yaml                          >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '{{- end }}'                                               >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@$(OK) updating helm RBAC and CRDs from kubebuilder manifests
-.generate.run: .kubebuilder.update.chart
-
-.PHONY: .helm.package.prepare.mysql-operator
-.helm.package.prepare.mysql-operator:  $(YQ)
-	@$(INFO) prepare mysql-operator chart $(HELM_CHART_VERSION)
-	@$(SED) 's/:latest/:$(VERSION)/g' $(HELM_CHARTS_WORK_DIR)/mysql-operator/Chart.yaml
-	@$(OK) prepare mysql-operator chart $(HELM_CHART_VERSION)
-.helm.package.run.mysql-operator: .helm.package.prepare.mysql-operator
-
-.PHONY: .helm.publish
-.helm.publish:
-	@$(INFO) publishing helm charts
-	@rm -rf $(WORK_DIR)/charts
-	@git clone -q git@github.com:codecapsules-io/helm-charts.git $(WORK_DIR)/charts
-	@cp $(HELM_OUTPUT_DIR)/*.tgz $(WORK_DIR)/charts/docs/
-	@git -C $(WORK_DIR)/charts add $(WORK_DIR)/charts/docs/*.tgz
-	@git -C $(WORK_DIR)/charts commit -q -m "Added $(call list-join,$(COMMA)$(SPACE),$(foreach c,$(HELM_CHARTS),$(c)-v$(HELM_CHART_VERSION)))"
-	@git -C $(WORK_DIR)/charts push -q
-	@$(OK) publishing helm charts
-.publish.run: .helm.publish
 
 CLUSTER_NAME ?= mysql-operator
 delete-environment:

@@ -26,7 +26,7 @@ All changes land through a **pull request**. Direct pushes to `main` are not use
 
 | Requirement                | Detail                                                                                                                                                                                       |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Pull request required**  | Every code, chart, or documentation change must be submitted as a PR against `main`.                                                                                                         |
+| **Pull request required**  | Every code, manifest, or documentation change must be submitted as a PR against `main`.                                                                                                         |
 | **Code Capsules approval** | A PR may be merged only after **approval from a member of the Code Capsules team**. External contributors cannot self-approve or merge.                                                      |
 | **Tests must pass**        | PRs must pass the checks defined in this repository (see [Tests and CI](#tests-and-ci)). Fix failures before requesting review.                                                              |
 | **Quality and security**   | Changes must be secure, maintainable, and consistent with existing patterns. PRs that are unclear, unsafe, or low quality may be **closed or rejected** without merge, even when tests pass. |
@@ -55,7 +55,7 @@ make test
 ./hack/license-check
 ```
 
-If your change touches Helm, CRDs, or cluster behavior, run additional validation described in [`docs/`](docs/) or ask in the PR which extra steps reviewers expect.
+If your change touches CRDs or cluster behavior, run additional validation described in [`docs/`](docs/) or ask in the PR which extra steps reviewers expect.
 
 CI configuration may evolve; **the workflows and Makefile targets in this repository are the source of truth** for what must pass before merge.
 
@@ -66,7 +66,7 @@ Reviewers may request:
 - Clear PR description (problem, approach, test evidence).
 - Tests for new behavior or regressions.
 - Security considerations (credentials, RBAC, SQL injection, privilege boundaries).
-- Updates to docs or chart README when behavior or values change.
+- Updates to docs or `deploy/manifests/` when install behavior or operator flags change.
 
 Approval is at the discretion of Code Capsules. Meeting the checklist above does not guarantee merge.
 

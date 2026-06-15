@@ -37,8 +37,7 @@ type TestContextType struct {
 
 	ReportDir string
 
-	ChartPath   string
-	ChartValues string
+	OperatorManifestsPath string
 
 	OperatorImage       string
 	SidecarMysql57Image string
@@ -70,13 +69,12 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.KubeContext, "kubernetes-context", "", "config context to use for kuberentes. If unset, will use value from 'current-context'")
 
 	flag.StringVar(&TestContext.ReportDir, "report-dir", "", "Optional directory to store junit and pod logs output in. If not specified, no junit or logs files will be output")
-	flag.StringVar(&TestContext.ChartPath, "operator-chart-path", "../../deploy/charts/mysql-operator", "The chart name or path for mysql operator")
-	flag.StringVar(&TestContext.ChartValues, "operator-chart-values-path", "../../test/e2e-values.yaml", "Path to a values file for mysql-operator chart.")
+	flag.StringVar(&TestContext.OperatorManifestsPath, "operator-manifests-path", "../../deploy/manifests/v0.7.0", "Path to versioned operator manifests (crds/ and operator/ subdirs).")
 
 	flag.StringVar(&TestContext.OperatorImage, "operator-image", "docker.io/codecapsules-io/mysql-operator:"+commit, "Image for mysql operator.")
 	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", "docker.io/codecapsules-io/mysql-operator-sidecar-5.7:"+commit, "Image for mysql helper.")
 	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", "docker.io/codecapsules-io/mysql-operator-sidecar-8.0:"+commit, "Image for mysql helper.")
-	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from helm).")
+	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from operator args).")
 	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "docker.io/codecapsules-io/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
 
 	flag.IntVar(&TestContext.TimeoutSeconds, "pod-wait-timeout", 100, "Timeout to wait for a pod to be ready.")

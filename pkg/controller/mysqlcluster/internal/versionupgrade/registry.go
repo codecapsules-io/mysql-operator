@@ -34,8 +34,3 @@ func StepByID(id string) *UpgradeStep {
 	}
 	return nil
 }
-
-// StepsForUpgrade returns steps on the current source→target path in the given phase.
-func StepsForUpgrade(uctx UpgradeContext, phase Phase) []UpgradeStep {
-	return stepsForPhase(uctx, phase)
-}

@@ -62,11 +62,6 @@ func ProfileFor(v semver.Version) Profile {
 	return NewRegistry(BuiltinProfiles()).MustResolve(v)
 }
 
-// ReplicationFor returns the replication dialect for a semver.
-func ReplicationFor(v semver.Version) ReplicationDialect {
-	return ProfileFor(v).Replication()
-}
-
 // ServerImage resolves the server image using Default() or a fresh resolver when unset.
 func ServerImage(opt *options.Options, ver semver.Version, spec *api.MysqlClusterSpec) (string, error) {
 	if Default() != nil {

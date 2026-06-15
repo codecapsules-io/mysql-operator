@@ -17,7 +17,6 @@ package mysqlversioning
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/blang/semver"
 
@@ -65,20 +64,8 @@ func (r *ImageResolver) SidecarImage(key string) string {
 	case SidecarPercona80:
 		return r.opt.SidecarMysql8Image
 	case SidecarPercona84:
-		if r.opt.SidecarMysql84Image != "" {
-			return r.opt.SidecarMysql84Image
-		}
-		return r.opt.SidecarMysql8Image
+		return r.opt.SidecarMysql84Image
 	default:
-		return r.opt.SidecarMysql8Image
+		return r.opt.SidecarMysql57Image
 	}
-}
-
-// IsPerconaImage returns true if the resolved server image name suggests Percona.
-func (r *ImageResolver) IsPerconaImage(ver semver.Version, spec *api.MysqlClusterSpec) bool {
-	img, err := r.ServerImage(ver, spec)
-	if err != nil || img == "" {
-		return false
-	}
-	return strings.Contains(img, "percona")
 }

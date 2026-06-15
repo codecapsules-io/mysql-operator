@@ -80,6 +80,10 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("max-binlog-size")))
 	})
 
+	It("should use init MySQL container for default Percona 5.7", func() {
+		Expect(cluster.ShouldHaveInitContainerForMysql()).To(Equal(true))
+	})
+
 	It("uses innodb-redo-log-capacity on MySQL 8.0.30+ instead of innodb-log-file-size", func() {
 		cluster = New(&api.MysqlCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -125,13 +129,25 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar84:tag"))
 	})
 
-	It("falls back to mysql8 sidecar for 8.4 when 84 image is empty", func() {
+	It("returns empty 8.4 sidecar image when unset", func() {
 		o := options.GetOptions()
 		prev := o.SidecarMysql84Image
 		defer func() { o.SidecarMysql84Image = prev }()
 		o.SidecarMysql84Image = ""
 		cluster.Spec.MysqlVersion = "8.4.0"
-		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql8Image))
+		Expect(cluster.GetSidecarImage()).To(Equal(""))
+	})
+
+	It("rejects cluster when sidecar image is unset for the mysql version", func() {
+		o := options.GetOptions()
+		prev := o.SidecarMysql84Image
+		defer func() { o.SidecarMysql84Image = prev }()
+		o.SidecarMysql84Image = ""
+		cluster.Spec.MysqlVersion = "8.4.0"
+		cluster.Spec.VolumeSpec = api.VolumeSpec{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimSpec{},
+		}
+		Expect(cluster.Validate()).To(MatchError(ContainSubstring("no sidecar image configured")))
 	})
 
 	It("should return 0.0.0 version if wrong mysql version was given", func() {

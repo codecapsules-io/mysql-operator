@@ -83,14 +83,3 @@ func stepApplicable(uctx UpgradeContext, stepID string) bool {
 func stepRequired(uctx UpgradeContext, stepID string) bool {
 	return stepScheduled(uctx, stepID) && stepApplicable(uctx, stepID)
 }
-
-func stepsForPhase(uctx UpgradeContext, phase Phase) []UpgradeStep {
-	var out []UpgradeStep
-	for _, step := range registeredSteps {
-		if step.Phase != phase || !stepRequired(uctx, step.ID) {
-			continue
-		}
-		out = append(out, step)
-	}
-	return out
-}

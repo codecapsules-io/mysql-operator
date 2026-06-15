@@ -42,7 +42,7 @@ type Options struct {
 	SidecarMysql57Image string
 	// SidecarMysql8Image is used for MySQL / Percona Server 8.0 through 8.3 (XtraBackup 8.0 line).
 	SidecarMysql8Image string
-	// SidecarMysql84Image is used for Percona Server 8.4 LTS when non-empty; otherwise SidecarMysql8Image is used.
+	// SidecarMysql84Image is used for Percona Server 8.4 LTS (no cross-profile fallback).
 	SidecarMysql84Image string
 
 	// MetricsExporterImage is the image for exporter container
@@ -185,7 +185,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"The image that is used for mysql (version 8.0 through 8.3) node instrumentation.")
 
 	fs.StringVar(&o.SidecarMysql84Image, "sidecar-mysql84-image", defaultSidecarMysql84Image(),
-		"The image used for Percona Server 8.4 LTS. When empty, falls back to --sidecar-mysql8-image.")
+		"The image used for Percona Server 8.4 LTS sidecar (XtraBackup 8.4 line).")
 
 	fs.StringVar(&o.MetricsExporterImage, "metrics-exporter-image", defaultExporterImage,
 		"The image for mysql metrics exporter.")

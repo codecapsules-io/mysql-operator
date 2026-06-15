@@ -37,7 +37,7 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 
 - Rebrand Go module and import paths from `github.com/bitpoke/mysql-operator` to
   `github.com/codecapsules-io/mysql-operator`.
-- Update Helm chart metadata, documentation, and CRD field descriptions for Code Capsules.
+- Update Helm chart metadata and CRD field descriptions for Code Capsules.
 - **Helm charts are no longer actively supported** from 0.7.0 onward; charts under `deploy/charts/` are
   retained for reference but are not maintained or tested as part of releases (see [`MAINTENANCE.md`](MAINTENANCE.md)).
 - Add Apache 2.0 modification notices (`Copyright 2026 Code Capsules`) to source files touched
@@ -49,7 +49,7 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 - **Percona Server / MySQL 8.4 LTS support:** deploy clusters with `spec.mysqlVersion: "8.4"` (or a
   patch semver such as `8.4.0`); built-in image catalog and the `percona-8.4` version profile drive
   server and sidecar selection. Optional dedicated `mysql-operator-sidecar-8.4` image via
-  `--sidecar-mysql84-image` and Helm `sidecar84` values (falls back to the 8.0 sidecar when unset).
+  `--sidecar-mysql84-image`.
 - **8.4-specific runtime behavior:** version profiles apply MySQL 8.4 semantics including
   SOURCE/REPLICA replication terminology, `innodb-redo-log-capacity` sizing, default
   `caching_sha2_password` authentication, and Percona 8.4 pod security context (`fsGroup` /

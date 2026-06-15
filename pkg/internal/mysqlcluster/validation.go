@@ -34,6 +34,10 @@ func (c *MysqlCluster) Validate() error {
 		return fmt.Errorf("%s is not a valid MySQL version", c.Spec.MysqlVersion)
 	}
 
+	if len(c.GetSidecarImage()) == 0 {
+		return fmt.Errorf("no sidecar image configured for MySQL version %s (set operator --sidecar-mysql84-image for 8.4+, or spec.sidecarImage)", c.Spec.MysqlVersion)
+	}
+
 	if err := mysqlversioning.ProfileFor(c.DesiredVersion()).Validate(&c.Spec); err != nil {
 		return err
 	}

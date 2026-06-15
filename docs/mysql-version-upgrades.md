@@ -23,7 +23,7 @@ This operator resolves the Percona (or other) **server image** for a `MysqlClust
 3. Lines from `--mysql-version-catalog-file` (e.g. a ConfigMap mounted as a file), same `semver=image` format.
 4. Built-in defaults in `pkg/util/constants/constants.go`.
 
-**Sidecar images** are chosen by resolving the server semver to a **profile** `SidecarProfileKey` (`percona-57`, `percona-80`, `percona-84`) and mapping that to operator flags (`--sidecar-image`, `--sidecar-mysql8-image`, optional `--sidecar-mysql84-image`). You can override with `spec.sidecarImage` on a cluster.
+**Sidecar images** are chosen by resolving the server semver to a **profile** `SidecarProfileKey` (`percona-57`, `percona-80`, `percona-84`) and mapping that to operator flags (`--sidecar-image`, `--sidecar-mysql8-image`, `--sidecar-mysql84-image`). Each profile uses only its configured image — there is no fallback to another profile’s sidecar (e.g. 8.4 does not use the 8.0 sidecar when `--sidecar-mysql84-image` is empty). You can override with `spec.sidecarImage` on a cluster. Cluster validation rejects a missing sidecar image for the requested version.
 
 Version-specific SQL and `my.cnf` behavior is defined in built-in profiles; see [mysql-version-profiles.md](mysql-version-profiles.md).
 
@@ -35,11 +35,9 @@ Version-specific SQL and `my.cnf` behavior is defined in built-in profiles; see 
 
 The catalog file is a list of lines `8.4.2=percona@sha256:...` (comments with `#` and blank lines are allowed).
 
-## Helm
+## Operator deployment
 
-> From **0.7.0** onward, Helm charts are not actively supported (see [`MAINTENANCE.md`](../MAINTENANCE.md)). The notes below apply to the legacy chart only.
-
-The chart can pass `--sidecar-mysql84-image` and optional catalog mounts via `values.yaml`. See `deploy/charts/mysql-operator/values.yaml`.
+Pass `--sidecar-mysql84-image`, `--mysql-version-catalog-file`, and related flags on the operator StatefulSet. Versioned examples are under [`deploy/manifests/`](../deploy/manifests/README.md) (see operator container `args` in e.g. `deploy/manifests/v0.7.0/operator/statefulset.yaml`).
 
 ## MySQL server major upgrades
 
@@ -58,6 +56,12 @@ When `spec.mysqlVersion` changes on a cluster that already has data on PVCs, the
    - **every init container on the current pod template has completed successfully on each pod**.
 
 Patch-level bumps within the same profile line (e.g. `8.0.20` → `8.0.34`) follow the same rollout and completion gates without extra steps.
+
+#### Cluster `my.cnf` during rollout
+
+The cluster ConfigMap (`my.cnf`) follows **`RolloutMySQLVersion`** — the same version as the StatefulSet pod template — not `status.appliedMysqlVersion`. For a valid upgrade (e.g. 8.0 → 8.4), once the operator advances the StatefulSet template to the target line, `my.cnf` switches to the target profile (e.g. `skip-replica-start`, no `default-authentication-plugin`) so **new pods starting on the target image** receive a compatible config. The ConfigMap is live-mounted into all pods; during a rolling upgrade, replicas still on the old mysqld version may briefly see the updated file until they are replaced.
+
+`status.appliedMysqlVersion` records when the rollout has **fully** completed; it does not gate `my.cnf` generation. Invalid upgrade paths (e.g. 5.7 → 8.4 skip) keep both the StatefulSet template and `my.cnf` on the current source line until `spec.mysqlVersion` is corrected.
 
 The operator does **not** run pre-upgrade compatibility Jobs (such as `mysqlsh util.checkForServerUpgrade`). Run Percona’s upgrade checks and take backups yourself before changing `spec.mysqlVersion`.
 

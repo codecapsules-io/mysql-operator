@@ -27,19 +27,6 @@ func AppliedDataPlaneVersion(cluster *mysqlcluster.MysqlCluster) semver.Version 
 	return mysqlcluster.AppliedDataPlaneVersion(cluster)
 }
 
-// AppliedSemVer returns the MySQL version currently applied on the cluster, or semver zero when unknown.
-func AppliedSemVer(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	if v := AppliedDataPlaneVersion(cluster); !v.EQ(semver.Version{}) {
-		return v
-	}
-	if sts != nil {
-		if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.EQ(semver.Version{}) {
-			return v
-		}
-	}
-	return semver.Version{}
-}
-
 // SourceVersionForUpgrade returns the MySQL version to treat as "current" for upgrade validation.
 // Prefer status.appliedMysqlVersion; fall back to a lagging STS template for clusters not yet recorded.
 func SourceVersionForUpgrade(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
@@ -85,14 +72,6 @@ func ClusterHasMySQLData(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulS
 		return true
 	}
 	return false
-}
-
-// SetAnnotation sets a single annotation on the cluster object (in-memory).
-func SetAnnotation(cluster *mysqlcluster.MysqlCluster, key, value string) {
-	if cluster.Annotations == nil {
-		cluster.Annotations = make(map[string]string)
-	}
-	cluster.Annotations[key] = value
 }
 
 // MarkAppliedVersion records the version now running on the data plane in status.

@@ -218,7 +218,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	}
 
 	annBefore := cloneStringMap(cluster.Annotations)
-	appliedStatusBefore := cluster.Status.AppliedMysqlVersion
 	if err = versionupgrade.EnsureChecked(ctx, r.Client, cluster); err != nil {
 		if versionupgrade.IsHoldRollout(err) {
 			log.Info("waiting for MySQL version upgrade", "cluster", cluster, "reason", err.Error())
@@ -267,12 +266,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	// Upgrade path is valid (or no upgrade pending) - clear any previous UpgradeBlocked condition.
 	cluster.UpdateStatusCondition(api.ClusterConditionUpgradeBlocked, corev1.ConditionFalse,
 		"NoUpgradePending", "")
-	if cluster.Status.AppliedMysqlVersion != appliedStatusBefore {
-		if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
-			log.Error(sErr, "failed to persist applied MySQL version status")
-			return reconcile.Result{}, sErr
-		}
-	}
 	if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
 		return reconcile.Result{}, annErr
 	}

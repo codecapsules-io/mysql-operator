@@ -50,6 +50,7 @@ spec:
             - --image-pull-policy=Always
             - --sidecar-image=docker.io/codecapsules-io/mysql-operator-sidecar-5.7:v0.7.0
             - --sidecar-mysql8-image=docker.io/codecapsules-io/mysql-operator-sidecar-8.0:v0.7.0
+            - --sidecar-mysql84-image=docker.io/codecapsules-io/mysql-operator-sidecar-8.4:v0.7.0
             - --metrics-exporter-image=docker.io/prom/mysqld-exporter:v0.16.0
             - --failover-before-shutdown=true
           livenessProbe:

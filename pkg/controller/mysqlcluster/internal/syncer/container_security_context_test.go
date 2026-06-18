@@ -16,6 +16,7 @@ limitations under the License.
 package mysqlcluster
 
 import (
+	"context"
 	"testing"
 
 	apps "k8s.io/api/apps/v1"
@@ -191,7 +192,7 @@ func runSecurityContextSyncFn(t *testing.T, opt *options.Options) *apps.Stateful
 	s.configMapRevision = "1"
 	s.secretRevision = "1"
 
-	if err := s.SyncFn(t.Context(), sts); err != nil {
+	if err := s.SyncFn(context.Background(), sts); err != nil {
 		t.Fatalf("SyncFn: %v", err)
 	}
 	return sts

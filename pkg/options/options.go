@@ -89,6 +89,10 @@ type Options struct {
 	// to trigger a failover before shutdown
 	FailoverBeforeShutdownEnabled bool
 
+	// ClusterRestrictPrivilegeEscalation when enabled sets securityContext.allowPrivilegeEscalation
+	// to false on every init container and container in managed MySQL cluster pods.
+	ClusterRestrictPrivilegeEscalation bool
+
 	// AllowCrossNamespaceUser allow creating users resources in clusters that are not in the same namespace.
 	AllowCrossNamespaceUsers bool
 
@@ -138,6 +142,8 @@ const (
 	defaultNamespace = ""
 
 	defaultFailoverBeforeShutdownEnabled = true
+
+	defaultClusterRestrictPrivilegeEscalation = false
 
 	defaultMetricsBindAddress     = ":8080"
 	defaultHealthProbeBindAddress = ":8081"
@@ -222,6 +228,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.FailoverBeforeShutdownEnabled, "failover-before-shutdown", defaultFailoverBeforeShutdownEnabled,
 		"In pre-stop hook trigger a failover from Orchestrator")
 
+	fs.BoolVar(&o.ClusterRestrictPrivilegeEscalation, "cluster-restrict-privilege-escalation",
+		defaultClusterRestrictPrivilegeEscalation,
+		"Set securityContext.allowPrivilegeEscalation to false on every init container and container in managed MySQL cluster pods")
+
 	fs.BoolVar(&o.AllowCrossNamespaceUsers, "allow-cross-namespace-user", false,
 		"Allow the operator create users in clusters from other namespaces. Enabling this may be a security issue")
 
@@ -259,6 +269,8 @@ func GetOptions() *Options {
 			LeaderElectionNamespace: namespace(),
 
 			FailoverBeforeShutdownEnabled: defaultFailoverBeforeShutdownEnabled,
+
+			ClusterRestrictPrivilegeEscalation: defaultClusterRestrictPrivilegeEscalation,
 
 			MetricsBindAddress:     defaultMetricsBindAddress,
 			HealthProbeBindAddress: defaultHealthProbeBindAddress,

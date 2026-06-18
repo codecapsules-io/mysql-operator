@@ -53,6 +53,9 @@ spec:
             - --sidecar-mysql84-image=docker.io/codecapsules-io/mysql-operator-sidecar-8.4:v0.7.0
             - --metrics-exporter-image=docker.io/prom/mysqld-exporter:v0.16.0
             - --failover-before-shutdown=true
+            # Set securityContext.allowPrivilegeEscalation=false on every init container and
+            # container in managed MySQL cluster pods (opt-in; default is off).
+            # - --cluster-restrict-privilege-escalation=true
           livenessProbe:
             httpGet:
               path: /healthz

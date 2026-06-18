@@ -127,7 +127,9 @@ func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 	out.Spec.Template.ObjectMeta.Annotations["prometheus.io/port"] = fmt.Sprintf("%d", ExporterPort)
 
 	desiredPod := s.ensurePodSpec(ctx, out)
+	s.applyPodContainerSecurityContext(&desiredPod)
 	out.Spec.Template.Spec = desiredPod
+	// Pod securityContext is assigned here so a removed runAsUser clears stale values on reconcile.
 	out.Spec.Template.Spec.SecurityContext = s.ensurePodSecurityContext()
 	defaultPodSpec(&out.Spec.Template.Spec, s.scheme)
 
@@ -150,7 +152,7 @@ func (s *sfsSyncer) ensurePodSpec(ctx context.Context, sts *apps.StatefulSet) co
 		InitContainers: s.ensureInitContainersSpec(ctx, sts),
 		Containers:     s.ensureContainersSpec(sts),
 		Volumes:        s.ensureVolumes(),
-		// SecurityContext is set in SyncFn so a removed RunAsUser clears stale values on the live StatefulSet.
+		// Container and pod securityContext are applied in SyncFn after assembly.
 		Affinity:           s.cluster.Spec.PodSpec.Affinity,
 		ImagePullSecrets:   s.cluster.Spec.PodSpec.ImagePullSecrets,
 		NodeSelector:       s.cluster.Spec.PodSpec.NodeSelector,
@@ -184,7 +186,7 @@ func (s *sfsSyncer) ensurePodSecurityContext() *core.PodSecurityContext {
 }
 
 func (s *sfsSyncer) ensureContainer(name, image string, args []string) core.Container {
-	c := core.Container{
+	return core.Container{
 		Name:            name,
 		Image:           image,
 		ImagePullPolicy: s.cluster.Spec.PodSpec.ImagePullPolicy,
@@ -192,26 +194,6 @@ func (s *sfsSyncer) ensureContainer(name, image string, args []string) core.Cont
 		EnvFrom:         s.getEnvSourcesFor(name),
 		Env:             s.getEnvFor(name),
 		VolumeMounts:    s.getVolumeMountsFor(name),
-	}
-	if sc := s.mysqlProcessSecurityContext(name); sc != nil {
-		c.SecurityContext = sc
-	}
-	return c
-}
-
-func (s *sfsSyncer) mysqlProcessSecurityContext(containerName string) *core.SecurityContext {
-	if containerName != containerMysqlName && containerName != containerMySQLInitName {
-		return nil
-	}
-	h := mysqlversioning.ProfileFor(s.rolloutVersion).PodSecurityHints(s.cluster.IsPerconaImage())
-	if h.MysqlRunAsUser == nil || h.MysqlRunAsGroup == nil {
-		return nil
-	}
-	u := *h.MysqlRunAsUser
-	g := *h.MysqlRunAsGroup
-	return &core.SecurityContext{
-		RunAsUser:  &u,
-		RunAsGroup: &g,
 	}
 }
 

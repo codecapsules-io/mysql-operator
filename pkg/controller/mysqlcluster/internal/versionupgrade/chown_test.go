@@ -47,6 +47,30 @@ func TestNeedsDatadirChownInit_whenUpgradingFromAppliedVersion(t *testing.T) {
 	}
 }
 
+func TestNeedsDatadirChownInit_whenCrashLoopReadyNodesZero(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status: api.MysqlClusterStatus{
+			AppliedMysqlVersion: "8.0.34",
+			ReadyNodes:          0,
+		},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			Image:        "percona/percona-server:8.4",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	c := testClientBuilder().Build()
+	if !NeedsDatadirChownInit(context.Background(), c, cluster) {
+		t.Fatal("expected chown init during 8.0→8.4 recovery even when ReadyNodes is zero")
+	}
+}
+
 func TestNeedsDatadirChownInit_falseWhenAppliedMatchesSpec(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{

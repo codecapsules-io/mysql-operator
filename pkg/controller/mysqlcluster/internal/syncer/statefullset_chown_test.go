@@ -76,6 +76,9 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 	}
 	ctx := context.Background()
 	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(cluster, sts, nil)
+	if s.rolloutVersion.String() != "8.4.0" {
+		t.Fatalf("rollout version during upgrade: %s", s.rolloutVersion)
+	}
 	inits := s.ensureInitContainersSpec(ctx)
 	found := false
 	for _, ic := range inits {
@@ -86,5 +89,18 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("init containers: %#v", inits)
+	}
+	pod := core.PodSpec{
+		InitContainers: inits,
+		Containers:     []core.Container{{Name: containerMysqlName}},
+	}
+	s.applyPodContainerSecurityContext(&pod)
+	sc := pod.Containers[0].SecurityContext
+	if sc == nil || sc.RunAsUser == nil || *sc.RunAsUser != 1001 {
+		t.Fatalf("mysql must run as UID 1001 on target rollout template, got %#v", sc)
+	}
+	podSC := s.ensurePodSecurityContext()
+	if podSC == nil || podSC.FSGroup == nil || *podSC.FSGroup != 1001 {
+		t.Fatalf("pod fsGroup must be 1001 on target rollout template, got %#v", podSC)
 	}
 }

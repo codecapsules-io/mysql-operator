@@ -16,8 +16,6 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"context"
-
 	"github.com/blang/semver"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
@@ -28,8 +26,8 @@ import (
 
 // RolloutMySQLVersion is the MySQL version the StatefulSet must run during an upgrade.
 // When the upgrade path is invalid the StatefulSet is held at the current running version indefinitely.
-// pods may be nil; pre-rollout init step completion is only enforced when pod status is available.
 func RolloutMySQLVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) semver.Version {
+	_ = pods
 	desired := DesiredSemVer(cluster)
 	applied := AppliedDataPlaneVersion(cluster)
 
@@ -55,9 +53,6 @@ func RolloutMySQLVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulS
 	source := SourceVersionForUpgrade(cluster)
 	if !source.EQ(semver.Version{}) {
 		if err := mysqlversioning.ValidateUpgradePath(source, desired); err != nil {
-			return source
-		}
-		if RolloutInitStepsPending(context.Background(), nil, cluster, sts, pods) {
 			return source
 		}
 	}

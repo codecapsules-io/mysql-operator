@@ -27,7 +27,7 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
-func TestRolloutMySQLVersion_holdsAtSourceUntilChownCompletes(t *testing.T) {
+func TestRolloutMySQLVersion_rollsToTargetWithChownStepPending(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -74,60 +74,8 @@ func TestRolloutMySQLVersion_holdsAtSourceUntilChownCompletes(t *testing.T) {
 		},
 	}
 	got := RolloutMySQLVersion(cluster, sts, []core.Pod{pod})
-	if got.String() != "8.0.36" {
-		t.Fatalf("rollout version should stay on source until chown completes: %s", got)
-	}
-}
-
-func TestRolloutMySQLVersion_advancesAfterChownCompletes(t *testing.T) {
-	replicas := int32(1)
-	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36", ReadyNodes: 1},
-		Spec: api.MysqlClusterSpec{
-			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
-			SecretName:   "sec",
-			Image:        "percona/percona-server:8.4",
-			VolumeSpec: api.VolumeSpec{
-				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
-			},
-		},
-	})
-	sts := &apps.StatefulSet{
-		Status: apps.StatefulSetStatus{ReadyReplicas: 1, Replicas: 1},
-		Spec: apps.StatefulSetSpec{
-			Template: core.PodTemplateSpec{
-				Spec: core.PodSpec{
-					InitContainers: []core.Container{{
-						Name:    DatadirChownInitContainerName,
-						Command: []string{"/bin/sh"},
-					}},
-					Containers: []core.Container{{
-						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.36"}},
-					}},
-				},
-			},
-		},
-	}
-	pod := core.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1-mysql-0"},
-		Spec: core.PodSpec{
-			InitContainers: []core.Container{{Name: DatadirChownInitContainerName}},
-		},
-		Status: core.PodStatus{
-			InitContainerStatuses: []core.ContainerStatus{{
-				Name: DatadirChownInitContainerName,
-				State: core.ContainerState{
-					Terminated: &core.ContainerStateTerminated{ExitCode: 0},
-				},
-			}},
-		},
-	}
-	got := RolloutMySQLVersion(cluster, sts, []core.Pod{pod})
 	if got.String() != "8.4.0" {
-		t.Fatalf("rollout version should advance to target after chown: %s", got)
+		t.Fatalf("rollout version must advance to target with chown on the same template: %s", got)
 	}
 }
 

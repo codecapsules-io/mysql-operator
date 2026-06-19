@@ -24,6 +24,8 @@ import (
 )
 
 // DatadirChownInitContainerName is the init container that chowns PVC data for Percona 8.0→8.4 UID migration.
+// It must run on the target-version pod template immediately before mysqld starts as UID 1001, not while the
+// StatefulSet is still pinned to the 8.0 image/security profile (UID 999).
 const DatadirChownInitContainerName = "mysql-datadir-chown"
 
 // NeedsDatadirChownInit reports whether the StatefulSet pod template should include the datadir-chown rollout init step.

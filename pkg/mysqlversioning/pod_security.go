@@ -36,21 +36,21 @@ const (
 
 // PodSecurityLegacy999 matches historical operator behaviour: force UID/GID 999 for every container.
 func PodSecurityLegacy999() PodSecurityHints {
-	u := operatorLegacyMySQLUID
-	return PodSecurityHints{FSGroup: u, RunAsUser: &u}
+	user := operatorLegacyMySQLUID
+	return PodSecurityHints{FSGroup: user, RunAsUser: &user}
 }
 
 // PodSecurityPerconaUID1001VolumeGroup sets fsGroup for shared volumes; omits pod runAsUser so sidecars
 // stay on 999. Forces the mysql containers to UID/GID 1001 to match official Percona Server 8.4+ images
 // and to survive pod-level runAsUser forced to 999 (policy or merge artifacts).
 func PodSecurityPerconaUID1001VolumeGroup() PodSecurityHints {
-	fg := perconaUIDGID1001
-	u := perconaUIDGID1001
-	g := perconaUIDGID1001
+	fsGroup := perconaUIDGID1001
+	user := perconaUIDGID1001
+	group := perconaUIDGID1001
 	return PodSecurityHints{
-		FSGroup:         fg,
+		FSGroup:         fsGroup,
 		RunAsUser:       nil,
-		MysqlRunAsUser:  &u,
-		MysqlRunAsGroup: &g,
+		MysqlRunAsUser:  &user,
+		MysqlRunAsGroup: &group,
 	}
 }

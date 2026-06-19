@@ -82,7 +82,7 @@ func TestEnsureChecked_freshClusterNoAppliedDoesNotDeadlock(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},
@@ -121,7 +121,7 @@ func TestEnsureChecked_legacyClusterWithoutAppliedHoldsUntilBackfill(t *testing.
 		Status:     api.MysqlClusterStatus{ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
@@ -159,7 +159,7 @@ func TestEnsureChecked_blocksSkipLine(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "5.7.35", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},

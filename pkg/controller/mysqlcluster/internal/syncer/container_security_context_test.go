@@ -91,7 +91,7 @@ func TestApplyPodContainerSecurityContext_preservesPerContainerOverride(t *testi
 func TestApplyPodContainerSecurityContext_setsMysqlRunAsForPercona84(t *testing.T) {
 	t.Parallel()
 
-	s := newSecurityContextSyncer(t, "8.4.0", "docker.io/percona/percona-server:8.4", &options.Options{})
+	s := newSecurityContextSyncer(t, "8.4.8", "docker.io/percona/percona-server:8.4", &options.Options{})
 	pod := core.PodSpec{
 		Containers: []core.Container{{Name: containerMysqlName}},
 	}
@@ -109,7 +109,7 @@ func TestApplyPodContainerSecurityContext_setsMysqlRunAsForPercona84(t *testing.
 func TestApplyPodContainerSecurityContext_preservesDatadirChownRunAsRoot(t *testing.T) {
 	t.Parallel()
 
-	s := newSecurityContextSyncer(t, "8.4.0", "docker.io/percona/percona-server:8.4", &options.Options{ClusterRestrictPrivilegeEscalation: true})
+	s := newSecurityContextSyncer(t, "8.4.8", "docker.io/percona/percona-server:8.4", &options.Options{ClusterRestrictPrivilegeEscalation: true})
 	root := int64(0)
 	pod := core.PodSpec{
 		InitContainers: []core.Container{{

@@ -18,8 +18,6 @@ package mysqlcluster
 import (
 	"testing"
 
-	"github.com/blang/semver"
-
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,11 +32,11 @@ func TestDesiredVersion_specThenDefault(t *testing.T) {
 	c := New(&api.MysqlCluster{
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
-	if got := c.DesiredVersion().String(); got != "8.4.0" {
+	if got := c.DesiredVersion().String(); got != "8.4.8" {
 		t.Fatalf("desired: %s", got)
 	}
 
@@ -53,12 +51,12 @@ func TestSourceVersionForUpgrade_emptyWithoutApplied(t *testing.T) {
 	cluster := New(&api.MysqlCluster{
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
 	got := SourceVersionForUpgrade(cluster)
-	if !got.EQ(semver.Version{}) {
+	if !got.IsZero() {
 		t.Fatalf("upgrade source must be empty without applied: %s", got)
 	}
 }
@@ -94,7 +92,7 @@ func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T)
 		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
@@ -110,7 +108,7 @@ func TestEffectiveVersion_usesLaggingSTSBeforeDesired(t *testing.T) {
 	cluster := New(&api.MysqlCluster{
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
@@ -138,12 +136,12 @@ func TestEffectiveVersion_fallsBackToDesiredOnFreshInstall(t *testing.T) {
 	cluster := New(&api.MysqlCluster{
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
 	got := cluster.EffectiveVersion(nil)
-	if got.String() != "8.4.0" {
+	if got.String() != "8.4.8" {
 		t.Fatalf("fresh install effective: %s", got)
 	}
 }

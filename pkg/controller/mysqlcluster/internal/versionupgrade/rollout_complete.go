@@ -33,7 +33,7 @@ func RolloutComplete(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, 
 	if replicas == 0 {
 		return false
 	}
-	desired := DesiredSemVer(cluster)
+	desired := cluster.DesiredVersion()
 	if !rolloutCompleteOnVersion(cluster, sts, desired) {
 		return false
 	}

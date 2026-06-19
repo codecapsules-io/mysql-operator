@@ -33,7 +33,7 @@ func TestRolloutComplete_requiresInitContainers(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
@@ -45,7 +45,7 @@ func TestRolloutComplete_requiresInitContainers(t *testing.T) {
 					InitContainers: []core.Container{{Name: "init"}, {Name: "mysql-init-only"}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},

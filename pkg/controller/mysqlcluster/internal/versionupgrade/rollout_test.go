@@ -34,7 +34,7 @@ func TestRolloutMySQLVersion_usesTargetWhenUpgradePathValid(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
@@ -48,14 +48,14 @@ func TestRolloutMySQLVersion_usesTargetWhenUpgradePathValid(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},
 		},
 	}
 	got := RolloutMySQLVersion(cluster, sts, nil)
-	if got.String() != "8.4.0" {
+	if got.String() != "8.4.8" {
 		t.Fatalf("rollout version: %s", got)
 	}
 }
@@ -67,7 +67,7 @@ func TestRolloutMySQLVersion_holdsAtSTSWWhenAppliedUnset(t *testing.T) {
 		Status:     api.MysqlClusterStatus{ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "docker.io/percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -101,7 +101,7 @@ func TestNeedsDatadirChownInit_afterAppliedBackfill(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "docker.io/percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -124,7 +124,7 @@ func TestNeedsDatadirChownInit(t *testing.T) {
 		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -162,7 +162,7 @@ func TestNeedsDatadirChownInit_requiresPersistentData(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 		},

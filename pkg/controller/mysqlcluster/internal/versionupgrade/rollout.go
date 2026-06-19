@@ -16,7 +16,7 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 
@@ -28,30 +28,30 @@ import (
 // When the upgrade path is invalid the StatefulSet is held at the current running version indefinitely.
 func RolloutMySQLVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) semver.Version {
 	_ = pods
-	desired := DesiredSemVer(cluster)
-	applied := AppliedDataPlaneVersion(cluster)
+	desired := cluster.DesiredVersion()
+	applied := mysqlcluster.AppliedDataPlaneVersion(cluster)
 
-	if !applied.EQ(semver.Version{}) && applied.GT(desired) {
+	if !applied.IsZero() && applied.GT(desired) {
 		return applied
 	}
 
-	if !VersionChangePending(cluster) {
+	if !mysqlversioning.VersionChangePending(desired, applied, ClusterHasMySQLData(cluster)) {
 		return desired
 	}
 
-	if applied.EQ(semver.Version{}) && ClusterHasMySQLData(cluster) {
-		if lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !lag.EQ(semver.Version{}) {
+	if applied.IsZero() && ClusterHasMySQLData(cluster) {
+		if lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !lag.IsZero() {
 			return lag
 		}
 		if sts != nil {
-			if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.EQ(semver.Version{}) && !v.EQ(desired) {
+			if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.IsZero() && !v.EQ(desired) {
 				return v
 			}
 		}
 	}
 
-	source := SourceVersionForUpgrade(cluster)
-	if !source.EQ(semver.Version{}) {
+	source := mysqlcluster.SourceVersionForUpgrade(cluster)
+	if !source.IsZero() {
 		if err := mysqlversioning.ValidateUpgradePath(source, desired); err != nil {
 			return source
 		}

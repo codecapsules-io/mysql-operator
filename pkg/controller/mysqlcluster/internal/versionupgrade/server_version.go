@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,12 +64,12 @@ func defaultQueryMysqldVersion(ctx context.Context, user, password, host string)
 func ObserveDataPlaneVersionSQL(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, pods []core.Pod) (semver.Version, error) {
 	ready := readyMysqlPods(pods)
 	if len(ready) == 0 {
-		return semver.Version{}, &HoldRolloutError{Reason: "waiting for MySQL data-plane version: no ready mysql pods"}
+		return semver.Zero, &HoldRolloutError{Reason: "waiting for MySQL data-plane version: no ready mysql pods"}
 	}
 
 	user, password, err := operatorSQLCredentials(ctx, c, cluster)
 	if err != nil {
-		return semver.Version{}, err
+		return semver.Zero, err
 	}
 
 	headless := cluster.GetNameForResource(mysqlcluster.HeadlessSVC)
@@ -79,22 +79,22 @@ func ObserveDataPlaneVersionSQL(ctx context.Context, c client.Client, cluster *m
 		host := mysqldHost(pod, headless, cluster.Namespace)
 		raw, err := queryMysqldVersion(ctx, user, password, host)
 		if err != nil {
-			return semver.Version{}, &HoldRolloutError{
+			return semver.Zero, &HoldRolloutError{
 				Reason: fmt.Sprintf("waiting for MySQL data-plane version: query pod %s: %v", pod.Name, err),
 			}
 		}
 		v, err := mysqlcluster.ParseServerVersion(raw)
 		if err != nil {
-			return semver.Version{}, &HoldRolloutError{
+			return semver.Zero, &HoldRolloutError{
 				Reason: fmt.Sprintf("waiting for MySQL data-plane version: parse %q from pod %s: %v", raw, pod.Name, err),
 			}
 		}
-		if observed.EQ(semver.Version{}) {
+		if observed.IsZero() {
 			observed = v
 			continue
 		}
 		if !observed.EQ(v) {
-			return semver.Version{}, &HoldRolloutError{
+			return semver.Zero, &HoldRolloutError{
 				Reason: fmt.Sprintf("waiting for MySQL data-plane version: pods disagree (%s vs %s)", observed, v),
 			}
 		}

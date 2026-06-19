@@ -18,7 +18,6 @@ package versionupgrade
 import (
 	"context"
 
-	"github.com/blang/semver"
 	core "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -27,7 +26,7 @@ import (
 
 // NeedsAppliedBackfill reports whether status.appliedMysqlVersion must be populated from SQL.
 func NeedsAppliedBackfill(cluster *mysqlcluster.MysqlCluster) bool {
-	if !AppliedDataPlaneVersion(cluster).EQ(semver.Version{}) {
+	if !mysqlcluster.AppliedDataPlaneVersion(cluster).IsZero() {
 		return false
 	}
 	return ClusterHasMySQLData(cluster)

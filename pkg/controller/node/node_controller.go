@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	apps "k8s.io/api/apps/v1"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
@@ -343,7 +343,7 @@ func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlClust
 
 // replicationSQLVersion prefers the pod's MY_MYSQL_VERSION (accurate during rollout), then cluster effective.
 func replicationSQLVersion(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, sts *apps.StatefulSet) semver.Version {
-	if v := mysqlcluster.SemVerFromPod(pod); !v.EQ(semver.Version{}) {
+	if v := mysqlcluster.SemVerFromPod(pod); !v.IsZero() {
 		return v
 	}
 	return cluster.EffectiveVersion(sts)

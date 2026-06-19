@@ -37,7 +37,7 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -56,7 +56,7 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 					}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},
@@ -80,7 +80,7 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -99,7 +99,7 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 					}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},
@@ -136,18 +136,18 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 		},
 	}
 	secret := testOperatorSecret(cluster)
-	withMockMysqldVersion("8.4.0-8", func() {
+	withMockMysqldVersion("8.4.8-8", func() {
 		c := testClientBuilder().WithObjects(secret).Build()
 		advance, ok := SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod})
 		if !ok {
 			t.Fatal("expected rollout to be ready for applied version update")
 		}
-		if advance.String() != "8.4.0" {
+		if advance.String() != "8.4.8" {
 			t.Fatalf("advance version: %s", advance)
 		}
 	})
-	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
-	if cluster.Status.AppliedMysqlVersion != "8.4.0" {
+	MarkAppliedVersion(cluster, cluster.DesiredVersion())
+	if cluster.Status.AppliedMysqlVersion != "8.4.8" {
 		t.Fatalf("applied version: %q", cluster.Status.AppliedMysqlVersion)
 	}
 }

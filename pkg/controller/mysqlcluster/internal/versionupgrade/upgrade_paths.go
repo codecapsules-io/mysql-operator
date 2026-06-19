@@ -16,7 +16,7 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
@@ -51,7 +51,7 @@ func stepIDsOnPath(from, to semver.Version) []string {
 func sourceVersionForStep(uctx UpgradeContext, stepID string) semver.Version {
 	step := StepByID(stepID)
 	if step == nil {
-		return semver.Version{}
+		return semver.Zero
 	}
 	return step.sourceVersion(uctx)
 }
@@ -59,7 +59,7 @@ func sourceVersionForStep(uctx UpgradeContext, stepID string) semver.Version {
 // stepScheduled reports whether the step is listed on the source→target upgrade path.
 func stepScheduled(uctx UpgradeContext, stepID string) bool {
 	from := sourceVersionForStep(uctx, stepID)
-	if from.EQ(semver.Version{}) {
+	if from.IsZero() {
 		return false
 	}
 	for _, id := range stepIDsOnPath(from, uctx.Target) {

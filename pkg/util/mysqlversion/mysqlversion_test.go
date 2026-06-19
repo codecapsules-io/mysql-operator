@@ -18,7 +18,7 @@ package mysqlversion
 import (
 	"testing"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 )
 
 func TestAtLeastMySQL8030(t *testing.T) {

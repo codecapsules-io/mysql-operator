@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/util/mysqlversion"
 )

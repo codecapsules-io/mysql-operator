@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	apps "k8s.io/api/apps/v1"

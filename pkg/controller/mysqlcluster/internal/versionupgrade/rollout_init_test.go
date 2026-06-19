@@ -34,7 +34,7 @@ func TestRolloutMySQLVersion_rollsToTargetWithChownStepPending(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -74,7 +74,7 @@ func TestRolloutMySQLVersion_rollsToTargetWithChownStepPending(t *testing.T) {
 		},
 	}
 	got := RolloutMySQLVersion(cluster, sts, []core.Pod{pod})
-	if got.String() != "8.4.0" {
+	if got.String() != "8.4.8" {
 		t.Fatalf("rollout version must advance to target with chown on the same template: %s", got)
 	}
 }
@@ -86,7 +86,7 @@ func TestSyncAppliedVersion_profileMatchNotExactPatch(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -101,7 +101,7 @@ func TestSyncAppliedVersion_profileMatchNotExactPatch(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},

@@ -18,7 +18,7 @@ package versionupgrade
 import (
 	"context"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
@@ -55,8 +55,8 @@ func newUpgradeContext(ctx context.Context, c client.Client, cluster *mysqlclust
 		Client:  c,
 		Cluster: cluster,
 		Opt:     opt,
-		Source:  SourceVersionForUpgrade(cluster),
-		Target:  DesiredSemVer(cluster),
+		Source:  mysqlcluster.SourceVersionForUpgrade(cluster),
+		Target:  cluster.DesiredVersion(),
 	}
 }
 

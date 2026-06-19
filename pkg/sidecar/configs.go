@@ -28,7 +28,7 @@ import (
 	// add mysql driver
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	"github.com/presslabs/controller-util/rand"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"

@@ -219,10 +219,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 
 	annBefore := cloneStringMap(cluster.Annotations)
 
-	sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster)
-	if stsErr != nil {
-		return reconcile.Result{}, stsErr
-	}
 	podList := &corev1.PodList{}
 	if listErr := r.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); listErr != nil {
 		return reconcile.Result{}, listErr
@@ -247,10 +243,6 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 				log.Error(sErr, "failed to persist applied MySQL version backfill")
 				return reconcile.Result{}, sErr
 			}
-			if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
-				return reconcile.Result{}, annErr
-			}
-			return reconcile.Result{Requeue: true}, nil
 		}
 	}
 
@@ -316,7 +308,7 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		}
 	}()
 
-	sts, stsErr = versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster)
+	sts, stsErr := versionupgrade.GetStatefulSetForRollout(ctx, r.Client, cluster)
 	if stsErr != nil {
 		return reconcile.Result{}, stsErr
 	}

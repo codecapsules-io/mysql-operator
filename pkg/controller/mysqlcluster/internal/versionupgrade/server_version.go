@@ -47,7 +47,7 @@ func defaultQueryMysqldVersion(ctx context.Context, user, password, host string)
 	if err != nil {
 		return "", err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	qctx, cancel := context.WithTimeout(ctx, serverVersionQueryTimeout)
 	defer cancel()

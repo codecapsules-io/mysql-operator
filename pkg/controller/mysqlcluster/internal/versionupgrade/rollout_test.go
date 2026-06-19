@@ -54,7 +54,7 @@ func TestRolloutMySQLVersion_usesTargetWhenUpgradePathValid(t *testing.T) {
 			},
 		},
 	}
-	got := RolloutMySQLVersion(cluster, sts)
+	got := RolloutMySQLVersion(cluster, sts, nil)
 	if got.String() != "8.4.0" {
 		t.Fatalf("rollout version: %s", got)
 	}
@@ -88,7 +88,7 @@ func TestRolloutMySQLVersion_holdsAtSTSWWhenAppliedUnset(t *testing.T) {
 			},
 		},
 	}
-	got := RolloutMySQLVersion(cluster, sts)
+	got := RolloutMySQLVersion(cluster, sts, nil)
 	if got.String() != "8.0.34" {
 		t.Fatalf("rollout version should hold at STS line until applied is set: %s", got)
 	}
@@ -149,7 +149,7 @@ func TestRolloutMySQLVersion_appliedAheadOfDesiredPinsRollout(t *testing.T) {
 			SecretName:   "sec",
 		},
 	})
-	got := RolloutMySQLVersion(cluster, nil)
+	got := RolloutMySQLVersion(cluster, nil, nil)
 	if got.String() != "8.0.34" {
 		t.Fatalf("rollout version: %s", got)
 	}

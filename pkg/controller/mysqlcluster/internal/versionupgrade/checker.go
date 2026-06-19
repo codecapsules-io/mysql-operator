@@ -30,6 +30,10 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
 
+func versionProfilesMatch(a, b semver.Version) bool {
+	return mysqlversioning.ProfileFor(a).Name() == mysqlversioning.ProfileFor(b).Name()
+}
+
 // HoldRolloutError is returned when reconciliation must wait for an upgrade step.
 type HoldRolloutError struct {
 	Reason string
@@ -86,7 +90,8 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 // SyncAppliedVersion reports when rollout has succeeded and SQL confirms spec.mysqlVersion on all ready pods.
 func SyncAppliedVersion(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) (advance semver.Version, ok bool) {
 	desired := DesiredSemVer(cluster)
-	if AppliedDataPlaneVersion(cluster).EQ(desired) {
+	applied := AppliedDataPlaneVersion(cluster)
+	if versionProfilesMatch(applied, desired) && !applied.LT(desired) {
 		return semver.Version{}, false
 	}
 	if !RolloutComplete(cluster, sts, pods) {
@@ -96,7 +101,7 @@ func SyncAppliedVersion(ctx context.Context, c client.Client, cluster *mysqlclus
 	if err != nil {
 		return semver.Version{}, false
 	}
-	if !observed.EQ(desired) {
+	if !versionProfilesMatch(observed, desired) {
 		return semver.Version{}, false
 	}
 	return observed, true

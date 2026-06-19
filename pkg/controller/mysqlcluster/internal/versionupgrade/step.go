@@ -19,7 +19,6 @@ import (
 	"context"
 
 	"github.com/blang/semver"
-	apps "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
@@ -45,21 +44,18 @@ type UpgradeContext struct {
 	Ctx     context.Context
 	Client  client.Client
 	Cluster *mysqlcluster.MysqlCluster
-	STS     *apps.StatefulSet
 	Opt     *options.Options
 	Source  semver.Version
 	Target  semver.Version
 }
 
-func newUpgradeContext(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, opt *options.Options) UpgradeContext {
-	source := SourceVersionForUpgrade(cluster, sts)
+func newUpgradeContext(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, opt *options.Options) UpgradeContext {
 	return UpgradeContext{
 		Ctx:     ctx,
 		Client:  c,
 		Cluster: cluster,
-		STS:     sts,
 		Opt:     opt,
-		Source:  source,
+		Source:  SourceVersionForUpgrade(cluster),
 		Target:  DesiredSemVer(cluster),
 	}
 }

@@ -27,6 +27,14 @@ This operator resolves the Percona (or other) **server image** for a `MysqlClust
 
 Version-specific SQL and `my.cnf` behavior is defined in built-in profiles; see [mysql-version-profiles.md](mysql-version-profiles.md).
 
+### Short tags vs exact versions
+
+Built-in catalog images accept short tags such as `"8.0"` or `"8.4"`; the operator maps them to a pinned
+patch (e.g. `"8.0"` → `8.0.20`). For **custom `spec.image`**, set `spec.mysqlVersion` to the **exact**
+server version that image runs (e.g. `8.0.34`, not `"8.0"`). Init containers, sidecar profile selection,
+and `MY_MYSQL_VERSION` on pods follow that declaration before mysqld is up. Digest-only images require an
+explicit `mysqlVersion`. Once pods are running, `status.appliedMysqlVersion` is confirmed by SQL.
+
 ## Updating images without rebuilding the operator
 
 1. Mount a ConfigMap (or Secret) into the operator pod at a path such as `/etc/mysql-operator/catalog/versions.properties`.
@@ -47,13 +55,20 @@ Changing `mysqlVersion` / `image` on an existing cluster is a **data plane** ope
 
 When `spec.mysqlVersion` changes on a cluster that already has data on PVCs, the cluster controller:
 
-1. Compares the desired version to `status.appliedMysqlVersion` (the version **fully running** on the data plane, not the spec alone).
-2. Validates the upgrade path (no downgrades; one LTS line at a time, e.g. 8.0.x before 8.4.x). Invalid paths set the `UpgradeBlocked` condition and keep the cluster on its current version until `spec.mysqlVersion` is corrected.
-3. Rolls out the new pod template for valid paths (including any required init containers, e.g. `mysql-datadir-chown` for Percona 8.0→8.4).
-4. Sets `status.appliedMysqlVersion` to match `spec.mysqlVersion` only after:
+1. Compares the desired version to `status.appliedMysqlVersion` (the version **fully running** on the data plane, confirmed by SQL).
+2. **Legacy backfill:** clusters with data but empty `status.appliedMysqlVersion` are held until the operator
+   runs unanimous `SELECT VERSION()` on every ready mysqld pod and writes the result to status. This runs
+   early each reconcile, before StatefulSet sync.
+3. Validates the upgrade path (no downgrades; one LTS line at a time, e.g. 8.0.x before 8.4.x). Invalid paths set the `UpgradeBlocked` condition and keep the cluster on its current version until `spec.mysqlVersion` is corrected.
+4. Rolls out the new pod template for valid paths (including any required init containers, e.g. `mysql-datadir-chown` for Percona 8.0→8.4).
+5. Sets `status.appliedMysqlVersion` to match `spec.mysqlVersion` only after:
    - the StatefulSet template matches spec,
-   - every replica is ready, and
-   - **every init container on the current pod template has completed successfully on each pod**.
+   - every replica is ready,
+   - **every init container on the current pod template has completed successfully on each pod**, and
+   - **unanimous `SELECT VERSION()` on ready mysqld pods reports the desired version**.
+
+`MY_MYSQL_VERSION` on pods records the rollout target for in-pod bootstrap (sidecar init, preStop). It is
+**not** used to populate or advance `status.appliedMysqlVersion`.
 
 Patch-level bumps within the same profile line (e.g. `8.0.20` → `8.0.34`) follow the same rollout and completion gates without extra steps.
 

@@ -19,7 +19,6 @@ import (
 	"context"
 	"testing"
 
-	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -42,10 +41,33 @@ func TestNeedsDatadirChownInit_whenUpgradingFromAppliedVersion(t *testing.T) {
 			},
 		},
 	})
-	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
 	c := testClientBuilder().Build()
-	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
+	if !NeedsDatadirChownInit(context.Background(), c, cluster) {
 		t.Fatal("expected chown init when applied is 8.0 and spec is 8.4")
+	}
+}
+
+func TestNeedsDatadirChownInit_whenCrashLoopReadyNodesZero(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status: api.MysqlClusterStatus{
+			AppliedMysqlVersion: "8.0.34",
+			ReadyNodes:          0,
+		},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			Image:        "percona/percona-server:8.4",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	c := testClientBuilder().Build()
+	if !NeedsDatadirChownInit(context.Background(), c, cluster) {
+		t.Fatal("expected chown init during 8.0→8.4 recovery even when ReadyNodes is zero")
 	}
 }
 
@@ -64,9 +86,8 @@ func TestNeedsDatadirChownInit_falseWhenAppliedMatchesSpec(t *testing.T) {
 			},
 		},
 	})
-	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
 	c := testClientBuilder().Build()
-	if NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
+	if NeedsDatadirChownInit(context.Background(), c, cluster) {
 		t.Fatal("expected no chown when applied version already matches spec")
 	}
 }

@@ -54,13 +54,13 @@ func TestRolloutMySQLVersion_usesTargetWhenUpgradePathValid(t *testing.T) {
 			},
 		},
 	}
-	got := RolloutMySQLVersion(cluster, sts)
+	got := RolloutMySQLVersion(cluster, sts, nil)
 	if got.String() != "8.4.0" {
 		t.Fatalf("rollout version: %s", got)
 	}
 }
 
-func TestRolloutMySQLVersion_legacyClusterInfersSourceFromImage(t *testing.T) {
+func TestRolloutMySQLVersion_holdsAtSTSWWhenAppliedUnset(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -88,12 +88,29 @@ func TestRolloutMySQLVersion_legacyClusterInfersSourceFromImage(t *testing.T) {
 			},
 		},
 	}
-	got := RolloutMySQLVersion(cluster, sts)
-	if got.String() != "8.4.0" {
-		t.Fatalf("rollout version after inferring 8.0 source: %s", got)
+	got := RolloutMySQLVersion(cluster, sts, nil)
+	if got.String() != "8.0.34" {
+		t.Fatalf("rollout version should hold at STS line until applied is set: %s", got)
 	}
-	if !NeedsDatadirChownInit(context.Background(), testClientBuilder().Build(), cluster, sts) {
-		t.Fatal("expected chown init when legacy 8.0 cluster upgrades to 8.4")
+}
+
+func TestNeedsDatadirChownInit_afterAppliedBackfill(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34", ReadyNodes: 1},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			Image:        "docker.io/percona/percona-server:8.4",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	if !NeedsDatadirChownInit(context.Background(), testClientBuilder().Build(), cluster) {
+		t.Fatal("expected chown when applied is 8.0 and STS template is already 8.4")
 	}
 }
 
@@ -104,7 +121,7 @@ func TestNeedsDatadirChownInit(t *testing.T) {
 			Name:      "c1",
 			Namespace: "default",
 		},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
@@ -115,10 +132,26 @@ func TestNeedsDatadirChownInit(t *testing.T) {
 			},
 		},
 	})
-	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
 	c := testClientBuilder().Build()
-	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
+	if !NeedsDatadirChownInit(context.Background(), c, cluster) {
 		t.Fatal("expected chown init when upgrading 8.0 Percona to 8.4")
+	}
+}
+
+func TestRolloutMySQLVersion_appliedAheadOfDesiredPinsRollout(t *testing.T) {
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.0",
+			SecretName:   "sec",
+		},
+	})
+	got := RolloutMySQLVersion(cluster, nil, nil)
+	if got.String() != "8.0.34" {
+		t.Fatalf("rollout version: %s", got)
 	}
 }
 
@@ -135,7 +168,7 @@ func TestNeedsDatadirChownInit_requiresPersistentData(t *testing.T) {
 		},
 	})
 	c := testClientBuilder().Build()
-	if NeedsDatadirChownInit(context.Background(), c, cluster, nil) {
+	if NeedsDatadirChownInit(context.Background(), c, cluster) {
 		t.Fatal("expected no chown without a persistent volume")
 	}
 }

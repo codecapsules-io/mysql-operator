@@ -19,6 +19,7 @@ package mysqlcluster
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"path"
 	"sort"
@@ -203,13 +204,25 @@ func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts
 
 // mysqlConfVersion selects the MySQL line for cluster-scoped my.cnf. It follows RolloutMySQLVersion
 // (the same version the StatefulSet template runs) so starting pods read a compatible my.cnf. The
-// ConfigMap is live-mounted; holding the source-line config while the STS rolls forward leaves new
-// pods unable to start (e.g. default-authentication-plugin on MySQL 8.4+).
-func mysqlConfVersion(_ client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
+// ConfigMap is live-mounted; holding the source-line config while pre-rollout init steps run keeps
+// pods on the source mysqld binary compatible until the image roll advances.
+func mysqlConfVersion(c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
 	if sts != nil {
-		return versionupgrade.RolloutMySQLVersion(cluster, sts)
+		pods := listClusterPods(c, cluster)
+		return versionupgrade.RolloutMySQLVersion(cluster, sts, pods)
 	}
 	return cluster.DesiredVersion()
+}
+
+func listClusterPods(c client.Client, cluster *mysqlcluster.MysqlCluster) []core.Pod {
+	if c == nil {
+		return nil
+	}
+	podList := &core.PodList{}
+	if err := c.List(context.Background(), podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); err != nil {
+		return nil
+	}
+	return podList.Items
 }
 
 func convertMapToKVConfig(m map[string]string) map[string]intstr.IntOrString {

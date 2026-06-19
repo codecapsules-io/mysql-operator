@@ -218,6 +218,34 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 	}
 
 	annBefore := cloneStringMap(cluster.Annotations)
+
+	podList := &corev1.PodList{}
+	if listErr := r.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); listErr != nil {
+		return reconcile.Result{}, listErr
+	}
+	if versionupgrade.NeedsAppliedBackfill(cluster) {
+		updated, bfErr := versionupgrade.BackfillAppliedVersion(ctx, r.Client, cluster, podList.Items)
+		if bfErr != nil {
+			if versionupgrade.IsHoldRollout(bfErr) {
+				log.Info("waiting for MySQL data-plane version backfill", "cluster", cluster, "reason", bfErr.Error())
+				if syncErr := r.syncRolloutHold(ctx, cluster); syncErr != nil {
+					return reconcile.Result{}, syncErr
+				}
+				if annErr := r.persistClusterAnnotations(ctx, cluster, annBefore); annErr != nil {
+					return reconcile.Result{}, annErr
+				}
+				return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
+			}
+			return reconcile.Result{}, bfErr
+		}
+		if updated {
+			if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
+				log.Error(sErr, "failed to persist applied MySQL version backfill")
+				return reconcile.Result{}, sErr
+			}
+		}
+	}
+
 	if err = versionupgrade.EnsureChecked(ctx, r.Client, cluster); err != nil {
 		if versionupgrade.IsHoldRollout(err) {
 			log.Info("waiting for MySQL version upgrade", "cluster", cluster, "reason", err.Error())
@@ -349,8 +377,8 @@ func (r *ReconcileMysqlCluster) Reconcile(ctx context.Context, request reconcile
 		if listErr := r.List(ctx, podList, client.InNamespace(cluster.Namespace), client.MatchingLabels(cluster.GetSelectorLabels())); listErr != nil {
 			return reconcile.Result{}, listErr
 		}
-		if versionupgrade.SyncAppliedVersion(cluster, sts, podList.Items) {
-			versionupgrade.MarkAppliedVersion(cluster, versionupgrade.DesiredSemVer(cluster))
+		if advance, ok := versionupgrade.SyncAppliedVersion(ctx, r.Client, cluster, sts, podList.Items); ok {
+			versionupgrade.MarkAppliedVersion(cluster, advance)
 			if sErr := r.Status().Update(ctx, cluster.Unwrap()); sErr != nil {
 				log.Error(sErr, "failed to persist applied MySQL version status")
 				return reconcile.Result{}, sErr

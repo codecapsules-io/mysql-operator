@@ -106,7 +106,16 @@ func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 
 	s.syncCtx = ctx
 	s.syncSTS = out
-	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(s.cluster, out)
+
+	var podItems []core.Pod
+	if s.client != nil {
+		podList := &core.PodList{}
+		if err := s.client.List(ctx, podList, client.InNamespace(s.cluster.Namespace), client.MatchingLabels(s.cluster.GetSelectorLabels())); err != nil {
+			return err
+		}
+		podItems = podList.Items
+	}
+	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(s.cluster, out, podItems)
 
 	s.cluster.Status.ReadyNodes = int(out.Status.ReadyReplicas)
 
@@ -126,7 +135,7 @@ func (s *sfsSyncer) SyncFn(ctx context.Context, in runtime.Object) error {
 	out.Spec.Template.ObjectMeta.Annotations["prometheus.io/scrape"] = "true"
 	out.Spec.Template.ObjectMeta.Annotations["prometheus.io/port"] = fmt.Sprintf("%d", ExporterPort)
 
-	desiredPod := s.ensurePodSpec(ctx, out)
+	desiredPod := s.ensurePodSpec(ctx)
 	s.applyPodContainerSecurityContext(&desiredPod)
 	out.Spec.Template.Spec = desiredPod
 	// Pod securityContext is assigned here so a removed runAsUser clears stale values on reconcile.
@@ -147,10 +156,10 @@ func (s *sfsSyncer) shouldSetVolumeClaimTemplates(sts *apps.StatefulSet) bool {
 	return sts.CreationTimestamp.IsZero() || len(sts.Spec.VolumeClaimTemplates) == 0
 }
 
-func (s *sfsSyncer) ensurePodSpec(ctx context.Context, sts *apps.StatefulSet) core.PodSpec {
+func (s *sfsSyncer) ensurePodSpec(ctx context.Context) core.PodSpec {
 	return core.PodSpec{
-		InitContainers: s.ensureInitContainersSpec(ctx, sts),
-		Containers:     s.ensureContainersSpec(sts),
+		InitContainers: s.ensureInitContainersSpec(ctx),
+		Containers:     s.ensureContainersSpec(),
 		Volumes:        s.ensureVolumes(),
 		// Container and pod securityContext are applied in SyncFn after assembly.
 		Affinity:           s.cluster.Spec.PodSpec.Affinity,
@@ -372,10 +381,10 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 	return env
 }
 
-func (s *sfsSyncer) ensureInitContainersSpec(ctx context.Context, sts *apps.StatefulSet) []core.Container {
+func (s *sfsSyncer) ensureInitContainersSpec(ctx context.Context) []core.Container {
 	initCs := []core.Container{}
 
-	if versionupgrade.NeedsDatadirChownInit(ctx, s.client, s.cluster, sts) {
+	if versionupgrade.NeedsDatadirChownInit(ctx, s.client, s.cluster) {
 		chown := s.ensureDatadirChownInitContainer()
 		if len(chown.Command) > 0 {
 			chown.Resources = s.ensureResources(containerDatadirChownName)
@@ -408,7 +417,8 @@ func (s *sfsSyncer) ensureInitContainersSpec(ctx context.Context, sts *apps.Stat
 }
 
 func (s *sfsSyncer) ensureDatadirChownInitContainer() core.Container {
-	h := mysqlversioning.ProfileFor(s.rolloutVersion).PodSecurityHints(s.cluster.IsPerconaImage())
+	chownVersion := s.cluster.DesiredVersion()
+	h := mysqlversioning.ProfileFor(chownVersion).PodSecurityHints(s.cluster.IsPerconaImage())
 	if h.MysqlRunAsUser == nil || h.MysqlRunAsGroup == nil {
 		return core.Container{Name: containerDatadirChownName}
 	}
@@ -417,7 +427,7 @@ func (s *sfsSyncer) ensureDatadirChownInitContainer() core.Container {
 	root := int64(0)
 	return core.Container{
 		Name:            containerDatadirChownName,
-		Image:           s.serverImageForVersion(s.rolloutVersion),
+		Image:           s.serverImageForVersion(chownVersion),
 		ImagePullPolicy: s.cluster.Spec.PodSpec.ImagePullPolicy,
 		Command:         []string{"/bin/sh", "-ec"},
 		Args: []string{fmt.Sprintf(
@@ -432,8 +442,7 @@ chown -R %d:%d %s`,
 	}
 }
 
-func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container {
-	_ = sts
+func (s *sfsSyncer) ensureContainersSpec() []core.Container {
 	// MYSQL container
 	mysql := s.ensureContainer(containerMysqlName,
 		s.serverImageForVersion(s.rolloutVersion),

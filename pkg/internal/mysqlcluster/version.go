@@ -16,6 +16,7 @@ limitations under the License.
 package mysqlcluster
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/blang/semver"
@@ -84,18 +85,17 @@ func LaggingStatefulSetVersion(c *MysqlCluster, sts *apps.StatefulSet) semver.Ve
 	return semver.Version{}
 }
 
-// SourceVersionForUpgrade returns the known "from" version for upgrade-path checks.
-// Unlike EffectiveVersion, it does not fall back to spec when neither applied nor STS is known.
-func SourceVersionForUpgrade(c *MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	if v := AppliedDataPlaneVersion(c); !v.EQ(semver.Version{}) {
-		return v
-	}
-	return LaggingStatefulSetVersion(c, sts)
+// SourceVersionForUpgrade returns status.appliedMysqlVersion (SQL-confirmed data plane only).
+func SourceVersionForUpgrade(c *MysqlCluster) semver.Version {
+	return AppliedDataPlaneVersion(c)
 }
 
 // EffectiveVersion returns the MySQL version running on pods (applied → lagging STS → DesiredVersion).
 func (c *MysqlCluster) EffectiveVersion(sts *apps.StatefulSet) semver.Version {
-	if v := SourceVersionForUpgrade(c, sts); !v.EQ(semver.Version{}) {
+	if v := AppliedDataPlaneVersion(c); !v.EQ(semver.Version{}) {
+		return v
+	}
+	if v := LaggingStatefulSetVersion(c, sts); !v.EQ(semver.Version{}) {
 		return v
 	}
 	return c.DesiredVersion()
@@ -142,6 +142,28 @@ func semVerFromMysqlContainer(c core.Container) semver.Version {
 		}
 	}
 	return semVerFromImageRef(c.Image)
+}
+
+// ParseServerVersion parses a MySQL server version string (e.g. from SELECT VERSION() or image tags).
+func ParseServerVersion(version string) (semver.Version, error) {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return semver.Version{}, fmt.Errorf("empty server version")
+	}
+	// SELECT VERSION() returns e.g. 8.0.34-26 — strip vendor suffix after the first dash.
+	if dash := strings.Index(version, "-"); dash > 0 {
+		if v, err := semver.Parse(version[:dash]); err == nil {
+			return v, nil
+		}
+	}
+	if v, err := semver.Parse(version); err == nil {
+		return v, nil
+	}
+	v := semVerFromImageRef(version)
+	if v.EQ(semver.Version{}) {
+		return semver.Version{}, fmt.Errorf("unrecognized server version %q", version)
+	}
+	return v, nil
 }
 
 func semVerFromImageRef(image string) semver.Version {

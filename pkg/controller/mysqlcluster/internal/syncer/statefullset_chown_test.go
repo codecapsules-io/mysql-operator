@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -39,7 +39,7 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 			Name:      "c1",
 			Namespace: "default",
 		},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
+		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34", ReadyNodes: 0},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
@@ -75,8 +75,11 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 		opt:     &options.Options{},
 	}
 	ctx := context.Background()
-	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(cluster, sts)
-	inits := s.ensureInitContainersSpec(ctx, sts)
+	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(cluster, sts, nil)
+	if s.rolloutVersion.String() != "8.4.0" {
+		t.Fatalf("rollout version during upgrade: %s", s.rolloutVersion)
+	}
+	inits := s.ensureInitContainersSpec(ctx)
 	found := false
 	for _, ic := range inits {
 		if ic.Name == versionupgrade.DatadirChownInitContainerName && len(ic.Command) > 0 {
@@ -86,5 +89,18 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("init containers: %#v", inits)
+	}
+	pod := core.PodSpec{
+		InitContainers: inits,
+		Containers:     []core.Container{{Name: containerMysqlName}},
+	}
+	s.applyPodContainerSecurityContext(&pod)
+	sc := pod.Containers[0].SecurityContext
+	if sc == nil || sc.RunAsUser == nil || *sc.RunAsUser != 1001 {
+		t.Fatalf("mysql must run as UID 1001 on target rollout template, got %#v", sc)
+	}
+	podSC := s.ensurePodSecurityContext()
+	if podSC == nil || podSC.FSGroup == nil || *podSC.FSGroup != 1001 {
+		t.Fatalf("pod fsGroup must be 1001 on target rollout template, got %#v", podSC)
 	}
 }

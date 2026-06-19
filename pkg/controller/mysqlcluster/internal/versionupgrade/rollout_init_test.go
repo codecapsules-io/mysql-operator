@@ -27,14 +27,11 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
-func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
+func TestRolloutMySQLVersion_rollsToTargetWithChownStepPending(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "c1",
-			Namespace: "default",
-		},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
@@ -56,28 +53,37 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 					}},
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.0.36"}},
 					}},
 				},
 			},
 		},
 	}
-	if _, ok := SyncAppliedVersion(context.Background(), testClientBuilder().Build(), cluster, sts, nil); ok {
-		t.Fatal("should not set applied until init containers succeed on pods")
+	pod := core.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1-mysql-0"},
+		Spec: core.PodSpec{
+			InitContainers: []core.Container{{Name: DatadirChownInitContainerName}},
+		},
+		Status: core.PodStatus{
+			InitContainerStatuses: []core.ContainerStatus{{
+				Name: DatadirChownInitContainerName,
+				State: core.ContainerState{
+					Running: &core.ContainerStateRunning{},
+				},
+			}},
+		},
 	}
-	if cluster.Status.AppliedMysqlVersion != "8.0.20" {
-		t.Fatalf("applied version: %q", cluster.Status.AppliedMysqlVersion)
+	got := RolloutMySQLVersion(cluster, sts, []core.Pod{pod})
+	if got.String() != "8.4.0" {
+		t.Fatalf("rollout version must advance to target with chown on the same template: %s", got)
 	}
 }
 
-func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
+func TestSyncAppliedVersion_profileMatchNotExactPatch(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "c1",
-			Namespace: "default",
-		},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",
@@ -93,10 +99,6 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 		Spec: apps.StatefulSetSpec{
 			Template: core.PodTemplateSpec{
 				Spec: core.PodSpec{
-					InitContainers: []core.Container{{
-						Name:    DatadirChownInitContainerName,
-						Command: []string{"/bin/sh"},
-					}},
 					Containers: []core.Container{{
 						Name: "mysql",
 						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
@@ -107,47 +109,20 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 	}
 	pod := core.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1-mysql-0"},
-		Spec: core.PodSpec{
-			InitContainers: []core.Container{
-				{Name: DatadirChownInitContainerName},
-				{Name: "init"},
-			},
-			Containers: []core.Container{{Name: "mysql"}},
-		},
+		Spec:       core.PodSpec{Containers: []core.Container{{Name: "mysql"}}},
 		Status: core.PodStatus{
-			Conditions: []core.PodCondition{{
-				Type:   core.PodReady,
-				Status: core.ConditionTrue,
-			}},
-			InitContainerStatuses: []core.ContainerStatus{
-				{
-					Name: DatadirChownInitContainerName,
-					State: core.ContainerState{
-						Terminated: &core.ContainerStateTerminated{ExitCode: 0},
-					},
-				},
-				{
-					Name: "init",
-					State: core.ContainerState{
-						Terminated: &core.ContainerStateTerminated{ExitCode: 0},
-					},
-				},
-			},
+			Conditions: []core.PodCondition{{Type: core.PodReady, Status: core.ConditionTrue}},
 		},
 	}
 	secret := testOperatorSecret(cluster)
-	withMockMysqldVersion("8.4.0-8", func() {
+	withMockMysqldVersion("8.4.8-8", func() {
 		c := testClientBuilder().WithObjects(secret).Build()
 		advance, ok := SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod})
 		if !ok {
-			t.Fatal("expected rollout to be ready for applied version update")
+			t.Fatal("expected profile match to allow applied advance")
 		}
-		if advance.String() != "8.4.0" {
-			t.Fatalf("advance version: %s", advance)
+		if advance.String() != "8.4.8" {
+			t.Fatalf("advance version should record observed SQL patch: %s", advance)
 		}
 	})
-	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
-	if cluster.Status.AppliedMysqlVersion != "8.4.0" {
-		t.Fatalf("applied version: %q", cluster.Status.AppliedMysqlVersion)
-	}
 }

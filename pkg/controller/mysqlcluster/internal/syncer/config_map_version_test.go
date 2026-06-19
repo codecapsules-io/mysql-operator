@@ -112,10 +112,54 @@ func TestBuildMysqlConfData_usesRolloutVersionDuringValidUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(data, "skip-replica-start") {
-		t.Fatalf("expected 8.4 my.cnf while STS rolls forward, got:\n%s", data)
+		t.Fatalf("expected 8.4 my.cnf after rollout advances, got:\n%s", data)
 	}
 	if strings.Contains(data, "default-authentication-plugin") {
 		t.Fatalf("expected no 8.0 auth plugin while rolling to 8.4, got:\n%s", data)
+	}
+}
+
+func TestBuildMysqlConfData_usesTargetDuringUpgradeRollout(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	cluster := mysqlcluster.New(&api.MysqlCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36", ReadyNodes: 1},
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+			Image:        "percona/percona-server:8.4",
+			VolumeSpec: api.VolumeSpec{
+				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
+			},
+		},
+	})
+	sts := &apps.StatefulSet{
+		Status: apps.StatefulSetStatus{Replicas: 1, ReadyReplicas: 1},
+		Spec: apps.StatefulSetSpec{
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					Containers: []core.Container{{
+						Name: "mysql",
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.0.36"}},
+					}},
+				},
+			},
+		},
+	}
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = api.SchemeBuilder.AddToScheme(s)
+	_ = apps.AddToScheme(s)
+	c := fake.NewClientBuilder().WithScheme(s).Build()
+
+	data, err := buildMysqlConfData(c, cluster, sts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(data, "skip-replica-start") {
+		t.Fatalf("expected 8.4 my.cnf on target rollout template during upgrade, got:\n%s", data)
 	}
 }
 

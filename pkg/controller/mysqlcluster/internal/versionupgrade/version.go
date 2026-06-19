@@ -17,9 +17,9 @@ package versionupgrade
 
 import (
 	"github.com/blang/semver"
-	apps "k8s.io/api/apps/v1"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
 
 // AppliedDataPlaneVersion is the operator-recorded MySQL version on the data plane (status.appliedMysqlVersion).
@@ -27,10 +27,9 @@ func AppliedDataPlaneVersion(cluster *mysqlcluster.MysqlCluster) semver.Version 
 	return mysqlcluster.AppliedDataPlaneVersion(cluster)
 }
 
-// SourceVersionForUpgrade returns the MySQL version to treat as "current" for upgrade validation.
-// Prefer status.appliedMysqlVersion; fall back to a lagging STS template for clusters not yet recorded.
-func SourceVersionForUpgrade(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
-	return mysqlcluster.SourceVersionForUpgrade(cluster, sts)
+// SourceVersionForUpgrade returns status.appliedMysqlVersion (SQL-confirmed data plane only).
+func SourceVersionForUpgrade(cluster *mysqlcluster.MysqlCluster) semver.Version {
+	return mysqlcluster.SourceVersionForUpgrade(cluster)
 }
 
 // DesiredSemVer is the user-requested MySQL version (spec → operator default).
@@ -38,21 +37,22 @@ func DesiredSemVer(cluster *mysqlcluster.MysqlCluster) semver.Version {
 	return cluster.DesiredVersion()
 }
 
-// VersionChangePending reports whether spec.mysqlVersion differs from the data-plane version.
-func VersionChangePending(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
+// VersionChangePending reports whether spec.mysqlVersion differs from the SQL-confirmed data plane.
+func VersionChangePending(cluster *mysqlcluster.MysqlCluster) bool {
 	desired := DesiredSemVer(cluster)
-	if applied := AppliedDataPlaneVersion(cluster); !applied.EQ(semver.Version{}) {
-		return !applied.EQ(desired)
-	}
-	if lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !lag.EQ(semver.Version{}) {
-		return !lag.EQ(desired)
-	}
-	if sts != nil {
-		if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.EQ(semver.Version{}) && v.EQ(desired) {
+	applied := AppliedDataPlaneVersion(cluster)
+	if applied.EQ(semver.Version{}) {
+		if !ClusterHasMySQLData(cluster) {
 			return false
 		}
+		return true
 	}
-	return ClusterHasMySQLData(cluster, sts)
+	appliedProfile := mysqlversioning.ProfileFor(applied).Name()
+	desiredProfile := mysqlversioning.ProfileFor(desired).Name()
+	if appliedProfile != desiredProfile {
+		return true
+	}
+	return applied.LT(desired)
 }
 
 // HasPersistentDataVolume reports whether the cluster stores MySQL data on PVCs.
@@ -60,18 +60,12 @@ func HasPersistentDataVolume(cluster *mysqlcluster.MysqlCluster) bool {
 	return cluster.Spec.VolumeSpec.PersistentVolumeClaim != nil
 }
 
-// ClusterHasMySQLData returns true when the cluster appears to be serving or have served MySQL data.
-func ClusterHasMySQLData(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
+// ClusterHasMySQLData returns true when the cluster appears to be serving MySQL data.
+func ClusterHasMySQLData(cluster *mysqlcluster.MysqlCluster) bool {
 	if !HasPersistentDataVolume(cluster) {
 		return false
 	}
-	if cluster.Status.ReadyNodes > 0 {
-		return true
-	}
-	if sts != nil && sts.Status.Replicas > 0 {
-		return true
-	}
-	return false
+	return cluster.Status.ReadyNodes > 0
 }
 
 // MarkAppliedVersion records the version now running on the data plane in status.

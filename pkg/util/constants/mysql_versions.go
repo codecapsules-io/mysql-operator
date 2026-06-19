@@ -31,8 +31,7 @@ const (
 	MySQLVersion5731 MySQLVersion = "5.7.31"
 	MySQLVersion5735 MySQLVersion = "5.7.35"
 	MySQLVersion8020 MySQLVersion = "8.0.20"
-	MySQLVersion8032 MySQLVersion = "8.0.32"
-	MySQLVersion840  MySQLVersion = "8.4.0"
+	MySQLVersion848  MySQLVersion = "8.4.8"
 )
 
 // Short tags accepted in spec.mysqlVersion; each resolves to a MySQLVersion via MySQLTagsToSemVer.

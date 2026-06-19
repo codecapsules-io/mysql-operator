@@ -56,7 +56,7 @@ func MustParse(s string) Version {
 
 // Make parses a lenient version string (e.g. "8.0", "8").
 func Make(s string) (Version, error) {
-	v, err := blang.Make(s)
+	v, err := blang.ParseTolerant(s)
 	if err != nil {
 		return Zero, err
 	}

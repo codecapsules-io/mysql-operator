@@ -43,7 +43,7 @@ func (s datadirChownStrategy) Applicable(uctx UpgradeContext) bool {
 	if from.EQ(semver.Version{}) || from.EQ(uctx.Target) {
 		return false
 	}
-	if !HasPersistentDataVolume(uctx.Cluster) || !ClusterHasMySQLData(uctx.Cluster, uctx.STS) {
+	if !HasPersistentDataVolume(uctx.Cluster) || !ClusterHasMySQLData(uctx.Cluster) {
 		return false
 	}
 	return uctx.Cluster.IsPerconaImage()

@@ -114,7 +114,7 @@ func TestEnsureChecked_patchBumpSucceeds(t *testing.T) {
 	}
 }
 
-func TestEnsureChecked_legacyClusterWithoutAppliedValidatesUpgrade(t *testing.T) {
+func TestEnsureChecked_legacyClusterWithoutAppliedHoldsUntilBackfill(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
@@ -146,8 +146,9 @@ func TestEnsureChecked_legacyClusterWithoutAppliedValidatesUpgrade(t *testing.T)
 		},
 	}
 	c := testClientBuilder().WithObjects(sts).Build()
-	if err := EnsureChecked(context.Background(), c, cluster); err != nil {
-		t.Fatalf("legacy 8.0→8.4 upgrade should validate: %v", err)
+	err := EnsureChecked(context.Background(), c, cluster)
+	if !IsHoldRollout(err) {
+		t.Fatalf("legacy cluster without applied must hold until SQL backfill: %v", err)
 	}
 }
 
@@ -200,22 +201,21 @@ func TestSyncAppliedVersion(t *testing.T) {
 			},
 		},
 	}
-	pod := core.Pod{
-		Spec: core.PodSpec{
-			InitContainers: []core.Container{{Name: "init"}},
-		},
-		Status: core.PodStatus{
-			InitContainerStatuses: []core.ContainerStatus{{
-				Name:  "init",
-				State: core.ContainerState{Terminated: &core.ContainerStateTerminated{ExitCode: 0}},
-			}},
-		},
-	}
-	if !SyncAppliedVersion(cluster, sts, []core.Pod{pod}) {
-		t.Fatal("expected rollout to be ready for applied version update")
-	}
-	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
-	if cluster.Status.AppliedMysqlVersion != "8.0.34" {
-		t.Fatalf("applied status: %q", cluster.Status.AppliedMysqlVersion)
-	}
+	pod := mysqlReadyPod("c1-mysql-0")
+	pod.Spec.InitContainers = []core.Container{{Name: "init"}}
+	pod.Status.InitContainerStatuses = []core.ContainerStatus{{
+		Name:  "init",
+		State: core.ContainerState{Terminated: &core.ContainerStateTerminated{ExitCode: 0}},
+	}}
+	secret := testOperatorSecret(cluster)
+	withMockMysqldVersion("8.0.34-26", func() {
+		c := testClientBuilder().WithObjects(secret).Build()
+		advance, ok := SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod})
+		if !ok {
+			t.Fatal("expected rollout to be ready for applied version update")
+		}
+		if advance.String() != "8.0.34" {
+			t.Fatalf("advance version: %s", advance)
+		}
+	})
 }

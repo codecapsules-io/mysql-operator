@@ -19,7 +19,6 @@ import (
 	"context"
 	"testing"
 
-	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -42,9 +41,8 @@ func TestNeedsDatadirChownInit_whenUpgradingFromAppliedVersion(t *testing.T) {
 			},
 		},
 	})
-	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
 	c := testClientBuilder().Build()
-	if !NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
+	if !NeedsDatadirChownInit(context.Background(), c, cluster) {
 		t.Fatal("expected chown init when applied is 8.0 and spec is 8.4")
 	}
 }
@@ -64,9 +62,8 @@ func TestNeedsDatadirChownInit_falseWhenAppliedMatchesSpec(t *testing.T) {
 			},
 		},
 	})
-	sts := &apps.StatefulSet{Status: apps.StatefulSetStatus{Replicas: 1}}
 	c := testClientBuilder().Build()
-	if NeedsDatadirChownInit(context.Background(), c, cluster, sts) {
+	if NeedsDatadirChownInit(context.Background(), c, cluster) {
 		t.Fatal("expected no chown when applied version already matches spec")
 	}
 }

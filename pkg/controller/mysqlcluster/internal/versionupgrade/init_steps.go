@@ -18,13 +18,12 @@ package versionupgrade
 import (
 	"context"
 
-	apps "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // NeedsRolloutInit reports whether the StatefulSet should include the named rollout init step.
-func NeedsRolloutInit(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, stepID string) bool {
-	return RolloutInitStepRequired(newUpgradeContext(ctx, c, cluster, sts, nil), stepID)
+func NeedsRolloutInit(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, stepID string) bool {
+	return RolloutInitStepRequired(newUpgradeContext(ctx, c, cluster, nil), stepID)
 }

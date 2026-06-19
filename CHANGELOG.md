@@ -37,6 +37,9 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 
 - Rebrand Go module and import paths from `github.com/bitpoke/mysql-operator` to
   `github.com/codecapsules-io/mysql-operator`.
+- **Built-in `"8.0"` catalog tag** maps to **`8.0.20`** again (reverts the interim `8.0.32` pin).
+- **`status.appliedMysqlVersion` is SQL-backed:** legacy clusters backfill via `SELECT VERSION()` on
+  operator upgrade; version-sensitive rollouts hold until the data plane is observable.
 - **Helm charts removed** — install and upgrade via versioned manifests under `deploy/manifests/`
   (see [`deploy/manifests/README.md`](deploy/manifests/README.md)). Frozen **v0.6.3** manifests are
   included for users migrating off the legacy chart.
@@ -57,8 +60,9 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
   `runAsUser` 1001).
 - **MySQL server version upgrades:** orchestrated upgrade pipeline when `spec.mysqlVersion` changes on
   clusters with existing data, including path validation, StatefulSet rollout, and completion gates.
-- **`status.appliedMysqlVersion`:** tracks the MySQL version fully running on the data plane; rollout
-  and completion gates compare spec against applied status, not spec alone.
+- **`status.appliedMysqlVersion`:** tracks the MySQL version fully running on the data plane; populated and
+  advanced only from unanimous `SELECT VERSION()` on ready mysqld pods (not from spec, image tags, or
+  `MY_MYSQL_VERSION`). Rollout and completion gates compare spec against this SQL-confirmed status.
 - **Pre-upgrade path validation:** blocks downgrades and skipping LTS lines (e.g. must upgrade
   5.7 → 8.0 → 8.4 one step at a time).
 - **`mysql-datadir-chown` init container:** injected for Percona 8.0 → 8.4 upgrades to fix datadir
@@ -79,6 +83,9 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 ### Fixed
 
 - Avoid set read_only conflict when graceful takeover
+- **Percona 8.0→8.4 chown regression:** upgrade source is `status.appliedMysqlVersion` only (SQL-confirmed),
+  so `mysql-datadir-chown` is not dropped on the reconcile after the StatefulSet template advances to 8.4
+  while pods still run 8.0.x.
 - preStop replication SQL dialect: when `MY_MYSQL_VERSION` is unset (e.g. operator rollout before
   pod recreate), detect the running server via `SELECT VERSION()` so MySQL 8.4+ pods use
   `SHOW REPLICA STATUS` / `SHOW REPLICAS` instead of removed `SHOW SLAVE` commands

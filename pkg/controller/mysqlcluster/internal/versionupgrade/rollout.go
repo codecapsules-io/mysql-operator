@@ -27,10 +27,28 @@ import (
 // When the upgrade path is invalid the StatefulSet is held at the current running version indefinitely.
 func RolloutMySQLVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) semver.Version {
 	desired := DesiredSemVer(cluster)
-	if !VersionChangePending(cluster, sts) {
+	applied := AppliedDataPlaneVersion(cluster)
+
+	if !applied.EQ(semver.Version{}) && applied.GT(desired) {
+		return applied
+	}
+
+	if !VersionChangePending(cluster) {
 		return desired
 	}
-	source := SourceVersionForUpgrade(cluster, sts)
+
+	if applied.EQ(semver.Version{}) && ClusterHasMySQLData(cluster) {
+		if lag := mysqlcluster.LaggingStatefulSetVersion(cluster, sts); !lag.EQ(semver.Version{}) {
+			return lag
+		}
+		if sts != nil {
+			if v := mysqlcluster.SemVerFromStatefulSet(sts); !v.EQ(semver.Version{}) && !v.EQ(desired) {
+				return v
+			}
+		}
+	}
+
+	source := SourceVersionForUpgrade(cluster)
 	if !source.EQ(semver.Version{}) {
 		if err := mysqlversioning.ValidateUpgradePath(source, desired); err != nil {
 			return source

@@ -18,7 +18,6 @@ package versionupgrade
 import (
 	"context"
 
-	apps "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
@@ -28,6 +27,6 @@ import (
 const DatadirChownInitContainerName = "mysql-datadir-chown"
 
 // NeedsDatadirChownInit reports whether the StatefulSet pod template should include the datadir-chown rollout init step.
-func NeedsDatadirChownInit(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet) bool {
-	return NeedsRolloutInit(ctx, c, cluster, sts, StepDatadirChown)
+func NeedsDatadirChownInit(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster) bool {
+	return NeedsRolloutInit(ctx, c, cluster, StepDatadirChown)
 }

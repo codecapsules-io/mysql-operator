@@ -39,7 +39,7 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 			Name:      "c1",
 			Namespace: "default",
 		},
-		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
+		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
 			MysqlVersion: "8.4.0",

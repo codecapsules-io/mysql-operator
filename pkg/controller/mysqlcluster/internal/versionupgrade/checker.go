@@ -64,18 +64,13 @@ func IsUpgradeBlocked(err error) bool {
 
 // EnsureChecked validates a pending MySQL version change.
 func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster) error {
-	sts, err := getStatefulSet(ctx, c, cluster)
-	if err != nil {
-		return err
-	}
-
-	if !VersionChangePending(cluster, sts) {
+	if !VersionChangePending(cluster) {
 		return nil
 	}
 
-	source := SourceVersionForUpgrade(cluster, sts)
+	source := SourceVersionForUpgrade(cluster)
 	if source.EQ(semver.Version{}) {
-		if !ClusterHasMySQLData(cluster, sts) {
+		if !ClusterHasMySQLData(cluster) {
 			return nil
 		}
 		return &HoldRolloutError{Reason: "waiting for MySQL data-plane version: cluster must be ready on the current version before upgrading (see status.appliedMysqlVersion)"}
@@ -88,14 +83,23 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 	return nil
 }
 
-// SyncAppliedVersion reports when rollout has succeeded and the cluster is ready for
-// status.appliedMysqlVersion to advance.
-func SyncAppliedVersion(cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) bool {
+// SyncAppliedVersion reports when rollout has succeeded and SQL confirms spec.mysqlVersion on all ready pods.
+func SyncAppliedVersion(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) (advance semver.Version, ok bool) {
 	desired := DesiredSemVer(cluster)
 	if AppliedDataPlaneVersion(cluster).EQ(desired) {
-		return false
+		return semver.Version{}, false
 	}
-	return RolloutComplete(cluster, sts, pods)
+	if !RolloutComplete(cluster, sts, pods) {
+		return semver.Version{}, false
+	}
+	observed, err := ObserveDataPlaneVersionSQL(ctx, c, cluster, pods)
+	if err != nil {
+		return semver.Version{}, false
+	}
+	if !observed.EQ(desired) {
+		return semver.Version{}, false
+	}
+	return observed, true
 }
 
 // GetStatefulSetForRollout loads the cluster StatefulSet if it exists.

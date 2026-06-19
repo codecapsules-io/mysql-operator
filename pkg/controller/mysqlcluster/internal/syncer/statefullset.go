@@ -150,7 +150,7 @@ func (s *sfsSyncer) shouldSetVolumeClaimTemplates(sts *apps.StatefulSet) bool {
 func (s *sfsSyncer) ensurePodSpec(ctx context.Context, sts *apps.StatefulSet) core.PodSpec {
 	return core.PodSpec{
 		InitContainers: s.ensureInitContainersSpec(ctx, sts),
-		Containers:     s.ensureContainersSpec(sts),
+		Containers:     s.ensureContainersSpec(),
 		Volumes:        s.ensureVolumes(),
 		// Container and pod securityContext are applied in SyncFn after assembly.
 		Affinity:           s.cluster.Spec.PodSpec.Affinity,
@@ -375,7 +375,7 @@ func (s *sfsSyncer) getEnvFor(name string) []core.EnvVar {
 func (s *sfsSyncer) ensureInitContainersSpec(ctx context.Context, sts *apps.StatefulSet) []core.Container {
 	initCs := []core.Container{}
 
-	if versionupgrade.NeedsDatadirChownInit(ctx, s.client, s.cluster, sts) {
+	if versionupgrade.NeedsDatadirChownInit(ctx, s.client, s.cluster) {
 		chown := s.ensureDatadirChownInitContainer()
 		if len(chown.Command) > 0 {
 			chown.Resources = s.ensureResources(containerDatadirChownName)
@@ -432,8 +432,7 @@ chown -R %d:%d %s`,
 	}
 }
 
-func (s *sfsSyncer) ensureContainersSpec(sts *apps.StatefulSet) []core.Container {
-	_ = sts
+func (s *sfsSyncer) ensureContainersSpec() []core.Container {
 	// MYSQL container
 	mysql := s.ensureContainer(containerMysqlName,
 		s.serverImageForVersion(s.rolloutVersion),

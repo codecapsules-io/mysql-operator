@@ -20,8 +20,6 @@ import (
 	"testing"
 
 	"github.com/blang/semver"
-	apps "k8s.io/api/apps/v1"
-	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
@@ -48,19 +46,7 @@ func TestDatadirChownStrategy_sourceVersionPrefersApplied(t *testing.T) {
 			MysqlVersion: "8.4.0",
 		},
 	})
-	sts := &apps.StatefulSet{
-		Spec: apps.StatefulSetSpec{
-			Template: core.PodTemplateSpec{
-				Spec: core.PodSpec{
-					Containers: []core.Container{{
-						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
-					}},
-				},
-			},
-		},
-	}
-	uctx := newUpgradeContext(context.Background(), nil, cluster, sts, nil)
+	uctx := newUpgradeContext(context.Background(), nil, cluster, nil)
 	step := StepByID(StepDatadirChown)
 	got := step.Strategy.SourceVersion(uctx)
 	if !got.EQ(semver.MustParse("8.0.34")) {

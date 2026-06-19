@@ -18,6 +18,8 @@ package mysqlcluster
 import (
 	"testing"
 
+	"github.com/blang/semver"
+
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,6 +48,42 @@ func TestDesiredVersion_specThenDefault(t *testing.T) {
 	}
 }
 
+func TestSourceVersionForUpgrade_emptyWithoutApplied(t *testing.T) {
+	replicas := int32(1)
+	cluster := New(&api.MysqlCluster{
+		Spec: api.MysqlClusterSpec{
+			Replicas:     &replicas,
+			MysqlVersion: "8.4.0",
+			SecretName:   "sec",
+		},
+	})
+	got := SourceVersionForUpgrade(cluster)
+	if !got.EQ(semver.Version{}) {
+		t.Fatalf("upgrade source must be empty without applied: %s", got)
+	}
+}
+
+func TestParseServerVersion(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in  string
+		out string
+	}{
+		{"8.0.34-26", "8.0.34"},
+		{"8.4.0-8", "8.4.0"},
+		{"8.0.20", "8.0.20"},
+	}
+	for _, tc := range cases {
+		v, err := ParseServerVersion(tc.in)
+		if err != nil {
+			t.Fatalf("parse %q: %v", tc.in, err)
+		}
+		if v.String() != tc.out {
+			t.Fatalf("parse %q: got %s want %s", tc.in, v, tc.out)
+		}
+	}
+}
+
 func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T) {
 	replicas := int32(1)
 	cluster := New(&api.MysqlCluster{
@@ -60,19 +98,7 @@ func TestSourceVersionForUpgrade_usesAppliedNotStatefulSetTemplate(t *testing.T)
 			SecretName:   "sec",
 		},
 	})
-	sts := &apps.StatefulSet{
-		Spec: apps.StatefulSetSpec{
-			Template: core.PodTemplateSpec{
-				Spec: core.PodSpec{
-					Containers: []core.Container{{
-						Name: "mysql",
-						Env:  []core.EnvVar{{Name: MySQLVersionEnv, Value: "8.4.0"}},
-					}},
-				},
-			},
-		},
-	}
-	got := SourceVersionForUpgrade(cluster, sts)
+	got := SourceVersionForUpgrade(cluster)
 	if got.String() != "8.0.20" {
 		t.Fatalf("upgrade source version: %s", got)
 	}

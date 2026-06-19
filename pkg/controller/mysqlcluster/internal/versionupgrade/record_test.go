@@ -16,6 +16,7 @@ limitations under the License.
 package versionupgrade
 
 import (
+	"context"
 	"testing"
 
 	apps "k8s.io/api/apps/v1"
@@ -61,7 +62,7 @@ func TestSyncAppliedVersion_waitsUntilRolloutComplete(t *testing.T) {
 			},
 		},
 	}
-	if SyncAppliedVersion(cluster, sts, nil) {
+	if _, ok := SyncAppliedVersion(context.Background(), testClientBuilder().Build(), cluster, sts, nil); ok {
 		t.Fatal("should not set applied until init containers succeed on pods")
 	}
 	if cluster.Status.AppliedMysqlVersion != "8.0.20" {
@@ -111,8 +112,13 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 				{Name: DatadirChownInitContainerName},
 				{Name: "init"},
 			},
+			Containers: []core.Container{{Name: "mysql"}},
 		},
 		Status: core.PodStatus{
+			Conditions: []core.PodCondition{{
+				Type:   core.PodReady,
+				Status: core.ConditionTrue,
+			}},
 			InitContainerStatuses: []core.ContainerStatus{
 				{
 					Name: DatadirChownInitContainerName,
@@ -129,9 +135,17 @@ func TestSyncAppliedVersion_afterFullRollout(t *testing.T) {
 			},
 		},
 	}
-	if !SyncAppliedVersion(cluster, sts, []core.Pod{pod}) {
-		t.Fatal("expected rollout to be ready for applied version update")
-	}
+	secret := testOperatorSecret(cluster)
+	withMockMysqldVersion("8.4.0-8", func() {
+		c := testClientBuilder().WithObjects(secret).Build()
+		advance, ok := SyncAppliedVersion(context.Background(), c, cluster, sts, []core.Pod{pod})
+		if !ok {
+			t.Fatal("expected rollout to be ready for applied version update")
+		}
+		if advance.String() != "8.4.0" {
+			t.Fatalf("advance version: %s", advance)
+		}
+	})
 	MarkAppliedVersion(cluster, DesiredSemVer(cluster))
 	if cluster.Status.AppliedMysqlVersion != "8.4.0" {
 		t.Fatalf("applied version: %q", cluster.Status.AppliedMysqlVersion)

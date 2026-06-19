@@ -19,7 +19,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/blang/semver"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -254,7 +253,7 @@ func TestObserveDataPlaneVersionSQL_ignoresNonReadyPods(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.EQ(semver.Version{}) {
+		if got.IsZero() {
 			t.Fatal("expected version from ready pod only")
 		}
 	})

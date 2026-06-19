@@ -19,7 +19,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -29,10 +29,6 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
-
-func versionProfilesMatch(a, b semver.Version) bool {
-	return mysqlversioning.ProfileFor(a).Name() == mysqlversioning.ProfileFor(b).Name()
-}
 
 // HoldRolloutError is returned when reconciliation must wait for an upgrade step.
 type HoldRolloutError struct {
@@ -68,19 +64,19 @@ func IsUpgradeBlocked(err error) bool {
 
 // EnsureChecked validates a pending MySQL version change.
 func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster) error {
-	if !VersionChangePending(cluster) {
+	if !mysqlversioning.VersionChangePending(cluster.DesiredVersion(), mysqlcluster.AppliedDataPlaneVersion(cluster), ClusterHasMySQLData(cluster)) {
 		return nil
 	}
 
-	source := SourceVersionForUpgrade(cluster)
-	if source.EQ(semver.Version{}) {
+	source := mysqlcluster.SourceVersionForUpgrade(cluster)
+	if source.IsZero() {
 		if !ClusterHasMySQLData(cluster) {
 			return nil
 		}
 		return &HoldRolloutError{Reason: "waiting for MySQL data-plane version: cluster must be ready on the current version before upgrading (see status.appliedMysqlVersion)"}
 	}
 
-	if err := mysqlversioning.ValidateUpgradePath(source, DesiredSemVer(cluster)); err != nil {
+	if err := mysqlversioning.ValidateUpgradePath(source, cluster.DesiredVersion()); err != nil {
 		return &UpgradeBlockedError{Reason: fmt.Sprintf("MySQL version upgrade blocked: %s", err.Error())}
 	}
 
@@ -89,20 +85,20 @@ func EnsureChecked(ctx context.Context, c client.Client, cluster *mysqlcluster.M
 
 // SyncAppliedVersion reports when rollout has succeeded and SQL confirms spec.mysqlVersion on all ready pods.
 func SyncAppliedVersion(ctx context.Context, c client.Client, cluster *mysqlcluster.MysqlCluster, sts *apps.StatefulSet, pods []core.Pod) (advance semver.Version, ok bool) {
-	desired := DesiredSemVer(cluster)
-	applied := AppliedDataPlaneVersion(cluster)
-	if versionProfilesMatch(applied, desired) && !applied.LT(desired) {
-		return semver.Version{}, false
+	desired := cluster.DesiredVersion()
+	applied := mysqlcluster.AppliedDataPlaneVersion(cluster)
+	if mysqlversioning.ProfilesMatch(applied, desired) && !applied.LT(desired) {
+		return semver.Zero, false
 	}
 	if !RolloutComplete(cluster, sts, pods) {
-		return semver.Version{}, false
+		return semver.Zero, false
 	}
 	observed, err := ObserveDataPlaneVersionSQL(ctx, c, cluster, pods)
 	if err != nil {
-		return semver.Version{}, false
+		return semver.Zero, false
 	}
-	if !versionProfilesMatch(observed, desired) {
-		return semver.Version{}, false
+	if !mysqlversioning.ProfilesMatch(observed, desired) {
+		return semver.Zero, false
 	}
 	return observed, true
 }

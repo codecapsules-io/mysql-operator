@@ -16,7 +16,7 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	apps "k8s.io/api/apps/v1"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"

@@ -42,7 +42,7 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 		Status: api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34", ReadyNodes: 0},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "docker.io/percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -76,7 +76,7 @@ func TestEnsureInitContainersSpec_includesDatadirChownOnUpgrade(t *testing.T) {
 	}
 	ctx := context.Background()
 	s.rolloutVersion = versionupgrade.RolloutMySQLVersion(cluster, sts, nil)
-	if s.rolloutVersion.String() != "8.4.0" {
+	if s.rolloutVersion.String() != "8.4.8" {
 		t.Fatalf("rollout version during upgrade: %s", s.rolloutVersion)
 	}
 	inits := s.ensureInitContainersSpec(ctx)

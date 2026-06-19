@@ -38,7 +38,7 @@ func TestBuildMysqlConfData_holdsSourceVersionWhenUpgradePathInvalid(t *testing.
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "5.7.35"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
@@ -52,7 +52,7 @@ func TestBuildMysqlConfData_holdsSourceVersionWhenUpgradePathInvalid(t *testing.
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.8"}},
 					}},
 				},
 			},
@@ -81,7 +81,7 @@ func TestBuildMysqlConfData_usesRolloutVersionDuringValidUpgrade(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
@@ -95,7 +95,7 @@ func TestBuildMysqlConfData_usesRolloutVersionDuringValidUpgrade(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.8"}},
 					}},
 				},
 			},
@@ -127,7 +127,7 @@ func TestBuildMysqlConfData_usesTargetDuringUpgradeRollout(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.36", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -168,10 +168,10 @@ func TestBuildMysqlConfData_usesTargetAfterRolloutComplete(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.4.0"},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.4.8"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &core.PersistentVolumeClaimSpec{},
@@ -185,7 +185,7 @@ func TestBuildMysqlConfData_usesTargetAfterRolloutComplete(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: "MY_MYSQL_VERSION", Value: "8.4.8"}},
 					}},
 				},
 			},

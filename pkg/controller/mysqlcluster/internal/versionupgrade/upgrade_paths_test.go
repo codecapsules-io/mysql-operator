@@ -18,7 +18,7 @@ package versionupgrade
 import (
 	"testing"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
 )
@@ -32,7 +32,7 @@ func TestStepIDsOnPath_sameProfile(t *testing.T) {
 
 func TestStepIDsOnPath_80To84(t *testing.T) {
 	from := semver.MustParse("8.0.34")
-	to := semver.MustParse("8.4.0")
+	to := semver.MustParse("8.4.8")
 	got := stepIDsOnPath(from, to)
 	want := []string{StepDatadirChown}
 	if len(got) != len(want) {
@@ -54,7 +54,7 @@ func TestStepIDsOnPath_57To80(t *testing.T) {
 
 func TestStepIDsOnPath_unmappedTransition(t *testing.T) {
 	// Skipping an LTS line is blocked by ValidateUpgradePath; no steps are scheduled.
-	got := stepIDsOnPath(semver.MustParse("5.7.44"), semver.MustParse("8.4.0"))
+	got := stepIDsOnPath(semver.MustParse("5.7.44"), semver.MustParse("8.4.8"))
 	if got != nil {
 		t.Fatalf("unmapped transition should have no steps, got %v", got)
 	}

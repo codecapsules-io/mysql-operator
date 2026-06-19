@@ -16,7 +16,7 @@ limitations under the License.
 package versionupgrade
 
 import (
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 )
 
 // StepStrategy encapsulates per-step upgrade path behavior (strategy pattern).
@@ -40,7 +40,7 @@ func (datadirChownStrategy) SourceVersion(uctx UpgradeContext) semver.Version {
 
 func (s datadirChownStrategy) Applicable(uctx UpgradeContext) bool {
 	from := s.SourceVersion(uctx)
-	if from.EQ(semver.Version{}) || from.EQ(uctx.Target) {
+	if from.IsZero() || from.EQ(uctx.Target) {
 		return false
 	}
 	if !HasPersistentDataVolume(uctx.Cluster) {
@@ -51,7 +51,7 @@ func (s datadirChownStrategy) Applicable(uctx UpgradeContext) bool {
 
 func (s *UpgradeStep) sourceVersion(uctx UpgradeContext) semver.Version {
 	if s == nil || s.Strategy == nil {
-		return semver.Version{}
+		return semver.Zero
 	}
 	return s.Strategy.SourceVersion(uctx)
 }

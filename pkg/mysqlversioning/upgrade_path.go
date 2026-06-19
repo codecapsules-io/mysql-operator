@@ -18,7 +18,7 @@ package mysqlversioning
 import (
 	"fmt"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 )
 
 // ValidateUpgradePath returns an error when changing MySQL server version from current to target

@@ -33,7 +33,7 @@ func TestNeedsDatadirChownInit_whenUpgradingFromAppliedVersion(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -57,7 +57,7 @@ func TestNeedsDatadirChownInit_whenCrashLoopReadyNodesZero(t *testing.T) {
 		},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{
@@ -75,10 +75,10 @@ func TestNeedsDatadirChownInit_falseWhenAppliedMatchesSpec(t *testing.T) {
 	replicas := int32(1)
 	cluster := mysqlcluster.New(&api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
-		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.4.0", ReadyNodes: 1},
+		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.4.8", ReadyNodes: 1},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 			Image:        "percona/percona-server:8.4",
 			VolumeSpec: api.VolumeSpec{

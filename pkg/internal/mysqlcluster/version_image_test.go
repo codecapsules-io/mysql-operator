@@ -67,7 +67,7 @@ func TestLaggingStatefulSetVersion_legacyImageWithoutEnv(t *testing.T) {
 	cluster := New(&api.MysqlCluster{
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})

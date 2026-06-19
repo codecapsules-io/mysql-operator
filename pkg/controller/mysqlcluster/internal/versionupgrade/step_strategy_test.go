@@ -19,7 +19,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
@@ -43,7 +43,7 @@ func TestDatadirChownStrategy_sourceVersionPrefersApplied(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.34"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 		},
 	})
 	uctx := newUpgradeContext(context.Background(), nil, cluster, nil)

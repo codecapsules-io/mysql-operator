@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +36,7 @@ func TestReplicationSQLVersion_usesAppliedDuringUpgrade(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
@@ -46,7 +46,7 @@ func TestReplicationSQLVersion_usesAppliedDuringUpgrade(t *testing.T) {
 				Spec: core.PodSpec{
 					Containers: []core.Container{{
 						Name: "mysql",
-						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+						Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 					}},
 				},
 			},
@@ -68,7 +68,7 @@ func TestReplicationSQLVersion_prefersPodEnvDuringRollout(t *testing.T) {
 		Status:     api.MysqlClusterStatus{AppliedMysqlVersion: "8.0.20"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
@@ -76,13 +76,13 @@ func TestReplicationSQLVersion_prefersPodEnvDuringRollout(t *testing.T) {
 		Spec: core.PodSpec{
 			Containers: []core.Container{{
 				Name: "mysql",
-				Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.0"}},
+				Env:  []core.EnvVar{{Name: mysqlcluster.MySQLVersionEnv, Value: "8.4.8"}},
 			}},
 		},
 	}
 
 	got := replicationSQLVersion(cluster, pod, nil)
-	if got.String() != "8.4.0" {
+	if got.String() != "8.4.8" {
 		t.Fatalf("pod env should win during rollout: %s", got)
 	}
 }
@@ -94,14 +94,14 @@ func TestReplicationSQLVersion_fallsBackToDesiredOnFreshInstall(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "default"},
 		Spec: api.MysqlClusterSpec{
 			Replicas:     &replicas,
-			MysqlVersion: "8.4.0",
+			MysqlVersion: "8.4.8",
 			SecretName:   "sec",
 		},
 	})
 	pod := &core.Pod{}
 
 	got := replicationSQLVersion(cluster, pod, nil)
-	if got.String() != "8.4.0" {
+	if got.String() != "8.4.8" {
 		t.Fatalf("fresh install version: %s", got)
 	}
 }

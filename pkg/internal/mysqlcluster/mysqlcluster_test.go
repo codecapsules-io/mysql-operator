@@ -92,7 +92,7 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 			},
 			Spec: api.MysqlClusterSpec{
 				SecretName:   "sct-name",
-				MysqlVersion: "8.4.0",
+				MysqlVersion: "8.4.8",
 				MysqlConf:    map[string]intstr.IntOrString{},
 				PodSpec: api.PodSpec{
 					Resources: corev1.ResourceRequirements{
@@ -125,7 +125,7 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 		cluster.Spec.MysqlVersion = "8.0.20"
 		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql8Image))
 
-		cluster.Spec.MysqlVersion = "8.4.0"
+		cluster.Spec.MysqlVersion = "8.4.8"
 		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar84:tag"))
 	})
 
@@ -134,7 +134,7 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 		prev := o.SidecarMysql84Image
 		defer func() { o.SidecarMysql84Image = prev }()
 		o.SidecarMysql84Image = ""
-		cluster.Spec.MysqlVersion = "8.4.0"
+		cluster.Spec.MysqlVersion = "8.4.8"
 		Expect(cluster.GetSidecarImage()).To(Equal(""))
 	})
 
@@ -143,7 +143,7 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 		prev := o.SidecarMysql84Image
 		defer func() { o.SidecarMysql84Image = prev }()
 		o.SidecarMysql84Image = ""
-		cluster.Spec.MysqlVersion = "8.4.0"
+		cluster.Spec.MysqlVersion = "8.4.8"
 		cluster.Spec.VolumeSpec = api.VolumeSpec{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimSpec{},
 		}

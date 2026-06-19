@@ -18,7 +18,7 @@ package mysqlversioning
 import (
 	"testing"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 )
 
 func TestProfilePodSecurityHints_builtin(t *testing.T) {

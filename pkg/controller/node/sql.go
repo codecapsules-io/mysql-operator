@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	// add mysql driver
 	_ "github.com/go-sql-driver/mysql"
 

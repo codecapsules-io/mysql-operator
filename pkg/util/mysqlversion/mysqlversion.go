@@ -15,7 +15,7 @@ limitations under the License.
 */
 package mysqlversion
 
-import "github.com/blang/semver"
+import "github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 
 // AtLeastMySQL8 reports whether the server is MySQL / Percona Server 8.0+ or 9.x.
 func AtLeastMySQL8(v semver.Version) bool {

@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	"github.com/go-ini/ini"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
@@ -39,7 +39,6 @@ import (
 	"github.com/codecapsules-io/mysql-operator/pkg/controller/mysqlcluster/internal/versionupgrade"
 	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
-	"github.com/codecapsules-io/mysql-operator/pkg/util/mysqlversion"
 )
 
 // NewConfigMapSyncer returns config map syncer.
@@ -156,20 +155,20 @@ func buildMysqlConfData(c client.Client, cluster *mysqlcluster.MysqlCluster, sts
 	prof := mysqlversioning.ProfileFor(v)
 
 	if prof.UseMySQL5xConfigs() {
-		addKVConfigsToSection(sec, convertMapToKVConfig(mysql5xConfigs))
+		addKVConfigsToSection(sec, convertMapToKVConfig(mysqlversioning.Mysqld5xConfigs()))
 	} else if prof.UseMySQL8xConfigs() {
-		addKVConfigsToSection(sec, convertMapToKVConfig(mysql8xConfigs))
+		addKVConfigsToSection(sec, convertMapToKVConfig(mysqlversioning.Mysqld8xConfigs()))
 		if prof.UseMySQL80AuthPlugin() {
-			addKVConfigsToSection(sec, convertMapToKVConfig(mysql80AuthPluginConfig))
+			addKVConfigsToSection(sec, convertMapToKVConfig(mysqlversioning.Mysqld80AuthPluginConfig()))
 		}
 	}
 
 	// boolean configs (skip-host-cache removed in MySQL 8.0.30+ / Percona 8.0.30+)
-	addBConfigsToSection(sec, mysqlMasterSlaveBooleanConfigsForVersion(v))
+	addBConfigsToSection(sec, mysqlversioning.MysqldBooleanConfigs(v))
 	// Official MySQL images default the client to /var/run/mysqld/mysqld.sock; Percona often uses the
 	// datadir. We pin both server and client to the mounted data volume so probes, pt-heartbeat, and
 	// ad-hoc `mysql` agree (errno 2 if client and server paths differ).
-	opKV := MysqlKVConfigsForVersion(v)
+	opKV := mysqlversioning.OperatorKVForVersion(v)
 	effectiveSocket := path.Join(DataVolumeMountPath, "mysql.sock")
 	if _, userSet := cluster.Spec.MysqlConf["socket"]; !userSet {
 		opKV["socket"] = effectiveSocket
@@ -280,41 +279,4 @@ func writeConfigs(cfg *ini.File) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
-}
-
-// MysqlKVConfigsForVersion returns mysqld key/value defaults for the given server version.
-func MysqlKVConfigsForVersion(v semver.Version) map[string]string {
-	return mysqlversioning.OperatorKVForVersion(v)
-}
-
-var mysql5xConfigs = map[string]string{
-	"query-cache-type": "0",
-	"query-cache-size": "0",
-	"sql-mode": "STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER," +
-		"NO_AUTO_VALUE_ON_ZERO,NO_ENGINE_SUBSTITUTION,NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY",
-
-	"expire-logs-days": "14",
-}
-
-var mysql8xConfigs = map[string]string{
-	"sql-mode": "STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_VALUE_ON_ZERO,NO_ENGINE_SUBSTITUTION," +
-		"NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY",
-
-	"binlog_expire_logs_seconds": "1209600", // 14 days = 14 * 24 * 60 * 60
-}
-
-// mysql80AuthPluginConfig is not applied on MySQL 8.4+ where mysql_native_password is unavailable.
-var mysql80AuthPluginConfig = map[string]string{
-	"default-authentication-plugin": "mysql_native_password",
-}
-
-func mysqlMasterSlaveBooleanConfigsForVersion(v semver.Version) []string {
-	out := []string{
-		// Safety
-		"skip-name-resolve",
-	}
-	if !mysqlversion.AtLeastMySQL8030(v) {
-		out = append(out, "skip-host-cache")
-	}
-	return out
 }

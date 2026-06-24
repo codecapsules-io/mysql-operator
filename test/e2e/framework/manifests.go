@@ -47,6 +47,10 @@ func ApplyOperatorManifests(ns string) {
 	Expect(kubectl("apply", "-k", base+"/crds")).Should(Succeed())
 	Expect(kubectl("apply", "-k", base+"/operator")).Should(Succeed())
 
+	// Do not start pods with release images; patch local CI images first.
+	Expect(kubectl("scale", "statefulset/"+operatorStatefulSetName, "-n", ns, "--replicas=0")).Should(Succeed())
+	waitOperatorPodsGone(ns)
+
 	cfg, err := LoadConfig()
 	Expect(err).NotTo(HaveOccurred())
 	client, err := clientset.NewForConfig(cfg)
@@ -54,15 +58,39 @@ func ApplyOperatorManifests(ns string) {
 
 	patchOperatorStatefulSet(client, ns)
 
-	Expect(kubectl(
-		"rollout", "status", "statefulset/"+operatorStatefulSetName,
-		"-n", ns, "--timeout=10m",
-	)).Should(Succeed())
+	Expect(kubectl("scale", "statefulset/"+operatorStatefulSetName, "-n", ns, "--replicas=1")).Should(Succeed())
+	waitOperatorRollout(ns)
 }
 
 func RemoveOperatorManifests(ns string) {
 	base := TestContext.OperatorManifestsPath
 	_ = kubectl("delete", "-k", base+"/operator", "-n", ns, "--ignore-not-found", "--wait=false")
+}
+
+func waitOperatorPodsGone(ns string) {
+	_ = kubectl(
+		"wait", "--for=delete", "pod",
+		"-l", "app.kubernetes.io/name=mysql-operator",
+		"-n", ns, "--timeout=120s",
+	)
+}
+
+func waitOperatorRollout(ns string) {
+	err := kubectl(
+		"rollout", "status", "statefulset/"+operatorStatefulSetName,
+		"-n", ns, "--timeout=10m",
+	)
+	if err != nil {
+		dumpOperatorDiagnostics(ns)
+	}
+	Expect(err).Should(Succeed())
+}
+
+func dumpOperatorDiagnostics(ns string) {
+	Logf("operator rollout failed; dumping cluster diagnostics")
+	_ = kubectl("get", "pods", "-n", ns, "-o", "wide")
+	_ = kubectl("describe", "pod", "-n", ns, "-l", "app.kubernetes.io/name=mysql-operator")
+	_ = kubectl("get", "events", "-n", ns, "--sort-by=.lastTimestamp")
 }
 
 func patchOperatorStatefulSet(client clientset.Interface, ns string) {
@@ -80,11 +108,17 @@ func patchOperatorStatefulSet(client clientset.Interface, ns string) {
 		switch ss.Spec.Template.Spec.Containers[i].Name {
 		case "operator":
 			ss.Spec.Template.Spec.Containers[i].Image = TestContext.OperatorImage
-			ss.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullNever
+			ss.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullIfNotPresent
 			ss.Spec.Template.Spec.Containers[i].Args = patchOperatorArgs(ss.Spec.Template.Spec.Containers[i].Args)
+			if ss.Spec.Template.Spec.Containers[i].ReadinessProbe != nil {
+				ss.Spec.Template.Spec.Containers[i].ReadinessProbe.InitialDelaySeconds = 15
+			}
 		case "orchestrator":
 			ss.Spec.Template.Spec.Containers[i].Image = TestContext.OrchestratorImage
-			ss.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullNever
+			ss.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullIfNotPresent
+			if ss.Spec.Template.Spec.Containers[i].ReadinessProbe != nil {
+				ss.Spec.Template.Spec.Containers[i].ReadinessProbe.InitialDelaySeconds = 60
+			}
 		}
 	}
 

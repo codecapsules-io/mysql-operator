@@ -41,11 +41,16 @@ jobs:
           IMAGE_TAG: ${{ env.E2E_IMAGE_TAG }}
           DOCKER_REGISTRY: ${{ env.E2E_IMAGE_REGISTRY }}
         run: |
+          set -euo pipefail
           make -j4 build
           # Retag build/<hash>/…-amd64 → mysql-operator-ci/…:local (see build/makelib/image.mk)
           make .img.release.build
           for img in mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4; do
-            docker tag "${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}-amd64" "${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}"
+            built="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}-amd64"
+            ref="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}"
+            docker tag "${built}" "${ref}"
+            # Kind matches images by exact reference; use short local names in pods.
+            docker tag "${ref}" "${img}:${E2E_IMAGE_TAG}"
           done
 
       - name: Load images into kind
@@ -54,11 +59,9 @@ jobs:
         run: |
           set -euo pipefail
           for img in mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4; do
-            ref="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}"
-            docker tag "$ref" "docker.io/${ref}"
-            kind load docker-image --name "${CLUSTER_NAME}" "$ref"
-            kind load docker-image --name "${CLUSTER_NAME}" "docker.io/${ref}"
+            kind load docker-image --name "${CLUSTER_NAME}" "${img}:${E2E_IMAGE_TAG}"
           done
+          docker exec "${CLUSTER_NAME}-control-plane" crictl images
 
       - name: Run e2e tests
         env:
@@ -70,8 +73,8 @@ jobs:
             -- \
             --pod-wait-timeout 200 \
             --kubernetes-config $HOME/.kube/config \
-            --operator-image ${E2E_IMAGE_REGISTRY}/mysql-operator:${E2E_IMAGE_TAG} \
-            --sidecar-mysql57-image ${E2E_IMAGE_REGISTRY}/mysql-operator-sidecar-5.7:${E2E_IMAGE_TAG} \
-            --sidecar-mysql8-image ${E2E_IMAGE_REGISTRY}/mysql-operator-sidecar-8.0:${E2E_IMAGE_TAG} \
-            --sidecar-mysql84-image ${E2E_IMAGE_REGISTRY}/mysql-operator-sidecar-8.4:${E2E_IMAGE_TAG} \
-            --orchestrator-image ${E2E_IMAGE_REGISTRY}/mysql-operator-orchestrator:${E2E_IMAGE_TAG}"
+            --operator-image mysql-operator:${E2E_IMAGE_TAG} \
+            --sidecar-mysql57-image mysql-operator-sidecar-5.7:${E2E_IMAGE_TAG} \
+            --sidecar-mysql8-image mysql-operator-sidecar-8.0:${E2E_IMAGE_TAG} \
+            --sidecar-mysql84-image mysql-operator-sidecar-8.4:${E2E_IMAGE_TAG} \
+            --orchestrator-image mysql-operator-orchestrator:${E2E_IMAGE_TAG}"

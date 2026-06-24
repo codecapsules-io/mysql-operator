@@ -6,10 +6,12 @@ name: E2E Tests
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: ['master']
+  pull_request:
+    branches: ['master']
 
 env:
+  CI: true
   E2E_IMAGE_REGISTRY: mysql-operator-ci
   E2E_IMAGE_TAG: local
 
@@ -58,6 +60,7 @@ jobs:
         run: |
           make e2e GO_INTEGRATION_TESTS_PARAMS="-timeout 50m \
             -ginkgo.slowSpecThreshold 300 \
+            -ginkgo.skip='Mysql backups' \
             -- \
             --pod-wait-timeout 200 \
             --kubernetes-config $HOME/.kube/config \

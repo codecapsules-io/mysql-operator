@@ -12,6 +12,7 @@ on:
 
 env:
   CI: true
+  CI_BUILD_NUMBER: ${{ github.run_id }}
   E2E_IMAGE_REGISTRY: mysql-operator-ci
   E2E_IMAGE_TAG: local
 
@@ -34,11 +35,9 @@ jobs:
         with:
           cluster_name: mysql-operator
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build and tag images for kind
         env:
+          BUILD_ARGS: --load
           IMAGE_TAG: ${{ env.E2E_IMAGE_TAG }}
           DOCKER_REGISTRY: ${{ env.E2E_IMAGE_REGISTRY }}
         run: |

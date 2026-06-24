@@ -39,8 +39,8 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 	gomegatypes "github.com/onsi/gomega/types"
 
-	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
 	pf "github.com/codecapsules-io/mysql-operator/test/e2e/framework/portforward"
 )
 

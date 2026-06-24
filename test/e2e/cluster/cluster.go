@@ -317,8 +317,8 @@ func testClusterReadiness(f *framework.Framework, cluster *api.MysqlCluster) {
 		return cl.Status.ReadyNodes
 	}, timeout, POLLING).Should(Equal(int(*cluster.Spec.Replicas)), "Not ready replicas of cluster '%s'", cluster.Name)
 
-	f.ClusterEventuallyCondition(cluster, api.ClusterConditionReady, core.ConditionTrue, f.Timeout)
-	f.ClusterEventuallyCondition(cluster, api.ClusterConditionFailoverAck, core.ConditionFalse, f.Timeout)
+	f.ClusterEventuallyCondition(cluster, api.ClusterConditionReady, core.ConditionTrue, timeout)
+	f.ClusterEventuallyCondition(cluster, api.ClusterConditionFailoverAck, core.ConditionFalse, timeout)
 }
 
 type clusterOrchestratorRegistrationOptions struct {

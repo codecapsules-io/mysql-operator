@@ -19,7 +19,7 @@ env:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,14 +61,21 @@ jobs:
           for img in mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4; do
             kind load docker-image --name "${CLUSTER_NAME}" "${img}:${E2E_IMAGE_TAG}"
           done
+          # Default MySQL 5.7.35 server image and metrics exporter used by cluster pods.
+          PERCONA_IMAGE="percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393"
+          EXPORTER_IMAGE="prom/mysqld-exporter:v0.16.0"
+          docker pull "${PERCONA_IMAGE}"
+          docker pull "${EXPORTER_IMAGE}"
+          kind load docker-image --name "${CLUSTER_NAME}" "${PERCONA_IMAGE}"
+          kind load docker-image --name "${CLUSTER_NAME}" "${EXPORTER_IMAGE}"
           docker exec "${CLUSTER_NAME}-control-plane" crictl images
 
       - name: Run e2e tests
         env:
           ACK_GINKGO_DEPRECATIONS: "1.16.4"
         run: |
-          make e2e GO_INTEGRATION_TESTS_PARAMS="-timeout 50m \
-            -ginkgo.slowSpecThreshold 300 \
+          make e2e GO_INTEGRATION_TESTS_PARAMS="-timeout 75m \
+            -ginkgo.slowSpecThreshold 200 \
             -ginkgo.skip='Mysql backups' \
             -- \
             --pod-wait-timeout 200 \

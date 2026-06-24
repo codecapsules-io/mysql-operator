@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 )
@@ -55,7 +56,7 @@ func ApplyOperatorManifests(ns string) {
 
 	Expect(kubectl(
 		"rollout", "status", "statefulset/"+operatorStatefulSetName,
-		"-n", ns, "--timeout=5m",
+		"-n", ns, "--timeout=10m",
 	)).Should(Succeed())
 }
 
@@ -79,9 +80,11 @@ func patchOperatorStatefulSet(client clientset.Interface, ns string) {
 		switch ss.Spec.Template.Spec.Containers[i].Name {
 		case "operator":
 			ss.Spec.Template.Spec.Containers[i].Image = TestContext.OperatorImage
+			ss.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullNever
 			ss.Spec.Template.Spec.Containers[i].Args = patchOperatorArgs(ss.Spec.Template.Spec.Containers[i].Args)
 		case "orchestrator":
 			ss.Spec.Template.Spec.Containers[i].Image = TestContext.OrchestratorImage
+			ss.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullNever
 		}
 	}
 
@@ -93,6 +96,7 @@ func patchOperatorArgs(args []string) []string {
 	args = setArg(args, "--sidecar-image", TestContext.SidecarMysql57Image)
 	args = setArg(args, "--sidecar-mysql8-image", TestContext.SidecarMysql8Image)
 	args = setArg(args, "--sidecar-mysql84-image", TestContext.SidecarMysql84Image)
+	args = setArg(args, "--image-pull-policy", "IfNotPresent")
 	return ensureFlag(args, "--debug")
 }
 

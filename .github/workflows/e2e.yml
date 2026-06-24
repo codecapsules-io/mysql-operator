@@ -51,7 +51,14 @@ jobs:
       - name: Load images into kind
         env:
           CLUSTER_NAME: mysql-operator
-        run: make kind-load-images
+        run: |
+          set -euo pipefail
+          for img in mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4; do
+            ref="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}"
+            docker tag "$ref" "docker.io/${ref}"
+            kind load docker-image --name "${CLUSTER_NAME}" "$ref"
+            kind load docker-image --name "${CLUSTER_NAME}" "docker.io/${ref}"
+          done
 
       - name: Run e2e tests
         env:

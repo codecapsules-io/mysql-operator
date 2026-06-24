@@ -1,0 +1,202 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publishes operator images to GHCR (manual trigger only).
+#
+
+name: Publish Release Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Release branch to build (e.g. release-0.7)'
+        required: true
+        type: string
+      version:
+        description: 'Image tag (e.g. v0.7.3). Leave empty to auto-increment patch on the release line (v0.7.0 → v0.7.1 → …).'
+        required: false
+        type: string
+      tag_commit:
+        description: 'Create and push a git tag matching the published version'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  DEFAULT_BRANCH: master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-images-${{ inputs.branch }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      branch: ${{ steps.branch.outputs.name }}
+    steps:
+      - name: Validate release branch
+        id: branch
+        run: |
+          BRANCH="${{ inputs.branch }}"
+
+          if [[ ! "${BRANCH}" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Refusing to publish from branch '${BRANCH}'. Expected release-X.Y (e.g. release-0.7)."
+            exit 1
+          fi
+
+          echo "name=${BRANCH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.name }}
+          fetch-depth: 0
+
+      - name: Verify release branch provenance
+        env:
+          DEFAULT_BRANCH: ${{ env.DEFAULT_BRANCH }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin "${DEFAULT_BRANCH}"
+
+          if ! git merge-base --is-ancestor "origin/${DEFAULT_BRANCH}" HEAD; then
+            echo "::error::Release branch '${{ steps.branch.outputs.name }}' is not based on origin/${DEFAULT_BRANCH}."
+            echo "Create release branches from ${DEFAULT_BRANCH} only (e.g. after a reviewed merge)."
+            exit 1
+          fi
+
+          if ! git diff --quiet "origin/${DEFAULT_BRANCH}" HEAD -- .github/; then
+            echo "::error::Release branch modifies .github/ relative to origin/${DEFAULT_BRANCH}."
+            echo "Workflow and Actions config changes must land on ${DEFAULT_BRANCH} first."
+            git diff --stat "origin/${DEFAULT_BRANCH}" HEAD -- .github/
+            exit 1
+          fi
+
+          echo "Provenance checks passed for ${{ steps.branch.outputs.name }} (actor: ${{ github.actor }})"
+
+  publish:
+    needs: guard
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: ghcr-release
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve version
+        id: version
+        env:
+          RELEASE_BRANCH: ${{ needs.guard.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+            if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Invalid version '${VERSION}'. Expected vMAJOR.MINOR.PATCH (e.g. v0.7.3)."
+              exit 1
+            fi
+            echo "strategy=manual" >> "${GITHUB_OUTPUT}"
+          else
+            git fetch --tags origin
+
+            if [[ ! "${RELEASE_BRANCH}" =~ ^release-([0-9]+)\.([0-9]+)$ ]]; then
+              echo "::error::Invalid release branch '${RELEASE_BRANCH}'."
+              exit 1
+            fi
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+
+            LATEST="$(
+              git tag -l "v${MAJOR}.${MINOR}.*" --merged HEAD --sort=-v:refname \
+                | grep -E "^v${MAJOR}\\.${MINOR}\\.[0-9]+\$" \
+                | head -1 || true
+            )"
+
+            if [[ -z "${LATEST}" ]]; then
+              VERSION="v${MAJOR}.${MINOR}.0"
+            else
+              PATCH="${LATEST##*.}"
+              VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+            fi
+            echo "strategy=release-line-patch-bump" >> "${GITHUB_OUTPUT}"
+          fi
+
+          echo "value=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved image tag: ${VERSION}"
+
+      - name: Build images
+        env:
+          CI: 'true'
+          CI_BUILD_NUMBER: ${{ github.run_id }}
+          BRANCH_NAME: ${{ needs.guard.outputs.branch }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: make -j"$(nproc)" build
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish images to GHCR
+        env:
+          CI: 'true'
+          CI_BUILD_NUMBER: ${{ github.run_id }}
+          BRANCH_NAME: ${{ needs.guard.outputs.branch }}
+          DOCKER_REGISTRY: ${{ env.REGISTRY }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: make publish
+
+      - name: Tag release commit
+        if: inputs.tag_commit == true
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "${VERSION}^{commit}" >/dev/null 2>&1; then
+            echo "::warning::Tag ${VERSION} already exists; skipping tag creation."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${VERSION}" -m "release ${VERSION}" "${GITHUB_SHA}"
+          git push origin "${VERSION}"
+
+      - name: Publish summary
+        run: |
+          {
+            echo "### Published container images"
+            echo ""
+            echo "| Image | Tag |"
+            echo "| --- | --- |"
+            for image in mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4; do
+              echo "| \`${{ env.REGISTRY }}/${image}\` | \`${{ steps.version.outputs.value }}\` |"
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"

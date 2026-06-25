@@ -16,6 +16,7 @@ env:
   E2E_IMAGE_REGISTRY: mysql-operator-ci
   E2E_IMAGE_TAG: local
   CLUSTER_NAME: mysql-operator
+  KIND_NODE_PLATFORM: linux/amd64
 
 jobs:
   e2e:
@@ -45,10 +46,15 @@ jobs:
           sudo mv -f /etc/docker/daemon.json.tmp /etc/docker/daemon.json
           sudo systemctl restart docker
 
+      # Build before kind so peak RAM is not "kind + kube-system + docker builds".
+      - name: Build operator images
+        run: bash hack/e2e-kind.sh --build-only
+
       - name: Create kind cluster
         uses: helm/kind-action@v1
         with:
           cluster_name: mysql-operator
+          config: hack/kind-config-ci.yaml
 
       - name: Run e2e tests
-        run: bash hack/e2e-kind.sh --skip-cluster
+        run: bash hack/e2e-kind.sh --skip-build --skip-cluster

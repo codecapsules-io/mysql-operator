@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
@@ -249,6 +250,18 @@ func LogContainersInPodsWithLabels(c clientset.Interface, ns string, match map[s
 
 func NewCluster(name, ns string) *api.MysqlCluster {
 	one := int32(1)
+	// Sized for Kind on GHA (~16Gi host): mysql-init-only runs full Percona briefly;
+	// limits prevent unbounded RSS; small buffer pool keeps init peak low.
+	mysqlResources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("768Mi"),
+		},
+	}
 	return &api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -257,6 +270,32 @@ func NewCluster(name, ns string) *api.MysqlCluster {
 		Spec: api.MysqlClusterSpec{
 			Replicas:   &one,
 			SecretName: name,
+			MysqlConf: api.MysqlConf{
+				"innodb-buffer-pool-size": intstr.FromString("128M"),
+			},
+			PodSpec: api.PodSpec{
+				Resources: mysqlResources,
+				MySQLOperatorSidecarResources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+						corev1.ResourceMemory: resource.MustParse("64Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("200m"),
+						corev1.ResourceMemory: resource.MustParse("128Mi"),
+					},
+				},
+				MetricsExporterResources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+						corev1.ResourceMemory: resource.MustParse("32Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("100m"),
+						corev1.ResourceMemory: resource.MustParse("64Mi"),
+					},
+				},
+			},
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimSpec{
 					Resources: corev1.ResourceRequirements{

@@ -1,0 +1,18 @@
+# Kind cluster config for GitHub Actions e2e.
+#
+# GHA ubuntu-latest has ~16Gi RAM shared by Docker, the kind node, image builds,
+# and workload pods. Reserve memory so the kubelet does not over-schedule vs what
+# is realistically available after the OS, Docker, and kube-system.
+#
+# See: https://github.com/kubernetes-sigs/kind/issues/1524
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            system-reserved: memory=3Gi
+            kube-reserved: memory=512Mi

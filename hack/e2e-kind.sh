@@ -13,6 +13,7 @@
 # Usage:
 #   hack/e2e-kind.sh                 # create cluster, build, load images, run all cluster e2e tests
 #   hack/e2e-kind.sh --focus 'scales up'   # run a single spec (faster smoke test)
+#   hack/e2e-kind.sh --build-only       # build images only (CI: before kind create)
 #   hack/e2e-kind.sh --skip-build    # reuse existing images
 #   hack/e2e-kind.sh --skip-cluster  # reuse existing kind cluster (CI: cluster from helm/kind-action)
 #   hack/e2e-kind.sh --down          # delete the kind cluster and exit
@@ -48,6 +49,7 @@ LOCAL_IMAGES=(
 
 SKIP_BUILD=0
 SKIP_CLUSTER=0
+BUILD_ONLY=0
 DOWN_ONLY=0
 GINKGO_FOCUS=""
 GINKGO_SKIP="Mysql backups"
@@ -76,6 +78,11 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--skip-build)
 		SKIP_BUILD=1
+		shift
+		;;
+	--build-only)
+		BUILD_ONLY=1
+		SKIP_CLUSTER=1
 		shift
 		;;
 	--skip-cluster)
@@ -123,6 +130,10 @@ create_cluster() {
 }
 
 kind_node_platform() {
+	if [[ -n "${KIND_NODE_PLATFORM:-}" ]]; then
+		echo "${KIND_NODE_PLATFORM}"
+		return 0
+	fi
 	local arch
 	arch="$(docker exec "${CLUSTER_NAME}-control-plane" uname -m)"
 	case "${arch}" in
@@ -145,7 +156,13 @@ build_images() {
 	export DOCKER_REGISTRY="${E2E_IMAGE_REGISTRY}"
 
 	echo "building operator images for ${platform}"
-	make -j"$(cpu_count)" build \
+	local jobs
+	jobs="$(cpu_count)"
+	if [[ "${CI:-}" == "true" ]]; then
+		# Limit parallel compile/link on GHA to leave RAM for kind + MySQL pods.
+		jobs=2
+	fi
+	make -j"${jobs}" build \
 		PLATFORMS="${make_platform}" BUILD_PLATFORMS="${make_platform}"
 	make .img.release.build
 
@@ -158,11 +175,19 @@ build_images() {
 }
 
 load_local_images() {
-	local img kind_ref
+	local img kind_ref node="${CLUSTER_NAME}-control-plane" json
 	for img in "${LOCAL_IMAGES[@]}"; do
 		kind_ref="${img}:${E2E_IMAGE_TAG}"
 		echo "loading ${kind_ref} into kind cluster ${CLUSTER_NAME}"
 		kind load docker-image --name "${CLUSTER_NAME}" "${kind_ref}"
+		json="$(docker exec "${node}" crictl images -o json 2>/dev/null || true)"
+		if ! grep -Fq "${kind_ref}" <<< "${json}" \
+			&& ! grep -Fq "library/${kind_ref}" <<< "${json}"; then
+			echo "error: ${kind_ref} not visible on ${node} after kind load" >&2
+			docker exec "${node}" crictl images >&2 || true
+			exit 1
+		fi
+		echo "verified ${kind_ref} on ${node}"
 	done
 	echo "locally built images on ${CLUSTER_NAME}-control-plane:"
 	docker exec "${CLUSTER_NAME}-control-plane" crictl images \
@@ -196,6 +221,16 @@ run_e2e() {
 	ACK_GINKGO_DEPRECATIONS=1.16.4 \
 		make e2e GO_INTEGRATION_TESTS_PARAMS="${params}"
 }
+
+if [[ "${DOWN_ONLY}" -eq 1 ]]; then
+	kind delete cluster --name "${CLUSTER_NAME}" || true
+	exit 0
+fi
+
+if [[ "${BUILD_ONLY}" -eq 1 ]]; then
+	build_images
+	exit 0
+fi
 
 if [[ "${SKIP_CLUSTER}" -eq 0 ]]; then
 	kind delete cluster --name "${CLUSTER_NAME}" 2>/dev/null || true

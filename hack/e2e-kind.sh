@@ -9,6 +9,7 @@
 #     kind load docker-image, referenced with imagePullPolicy IfNotPresent in e2e patches.
 #   - Public images (Percona server, mysqld-exporter): NOT preloaded; kind nodes pull
 #     from Docker Hub when cluster pods are created (GHA runners have network).
+#   - Platform: auto-detected from kind node or host uname (arm64 on ubuntu-*-arm runners).
 #
 # Usage:
 #   hack/e2e-kind.sh                 # create cluster, build, load images, run all cluster e2e tests
@@ -134,9 +135,18 @@ kind_node_platform() {
 		echo "${KIND_NODE_PLATFORM}"
 		return 0
 	fi
-	local arch
-	arch="$(docker exec "${CLUSTER_NAME}-control-plane" uname -m)"
-	case "${arch}" in
+	if docker exec "${CLUSTER_NAME}-control-plane" uname -m >/dev/null 2>&1; then
+		local arch
+		arch="$(docker exec "${CLUSTER_NAME}-control-plane" uname -m)"
+		case "${arch}" in
+		x86_64) echo "linux/amd64" ;;
+		aarch64 | arm64) echo "linux/arm64" ;;
+		*) echo "linux/amd64" ;;
+		esac
+		return 0
+	fi
+	# Build-only before kind exists (CI): match the host runner arch.
+	case "$(uname -m)" in
 	x86_64) echo "linux/amd64" ;;
 	aarch64 | arm64) echo "linux/arm64" ;;
 	*) echo "linux/amd64" ;;

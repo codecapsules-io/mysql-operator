@@ -1,8 +1,8 @@
 # Kind cluster config for GitHub Actions e2e.
 #
-# GHA ubuntu-latest has ~16Gi RAM shared by Docker, the kind node, image builds,
-# and workload pods. Reserve memory so the kubelet does not over-schedule vs what
-# is realistically available after the OS, Docker, and kube-system.
+# Runners (e.g. ubuntu-26.04-arm) share RAM between Docker, the kind node, image
+# builds, and workload pods. Reserve memory so the kubelet does not over-schedule.
+# ARM hosted runners are often smaller than ubuntu-latest (amd64); keep reservations modest.
 #
 # See: https://github.com/kubernetes-sigs/kind/issues/1524
 kind: Cluster
@@ -14,5 +14,5 @@ nodes:
         kind: InitConfiguration
         nodeRegistration:
           kubeletExtraArgs:
-            system-reserved: memory=3Gi
+            system-reserved: memory=2Gi
             kube-reserved: memory=512Mi

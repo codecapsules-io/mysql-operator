@@ -16,7 +16,6 @@ env:
   E2E_IMAGE_REGISTRY: mysql-operator-ci
   E2E_IMAGE_TAG: local
   CLUSTER_NAME: mysql-operator
-  KIND_NODE_PLATFORM: linux/amd64
 
 jobs:
   e2e:

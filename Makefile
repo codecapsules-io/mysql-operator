@@ -42,6 +42,14 @@ GO_INTEGRATION_TESTS_PARAMS ?= -timeout 50m \
 TEST_FILTER_PARAM += $(GO_INTEGRATION_TESTS_PARAMS)
 include build/makelib/golang.mk
 
+# Ginkgo specs live in test/e2e (cluster/backups imported there). Do not use ./test/e2e/...
+# or ginkgo also compiles test/e2e/framework as a separate suite without e2e flags.
+go.test.integration: $(GINKGO)
+	@$(INFO) ginkgo integration-tests
+	@mkdir -p $(GO_TEST_OUTPUT) || $(FAIL)
+	@CGO_ENABLED=0 $(GINKGO) $(GO_TEST_FLAGS) $(GO_STATIC_FLAGS) ./test/e2e $(TEST_FILTER_PARAM) || $(FAIL)
+	@$(OK) go test integration-tests
+
 DOCKER_REGISTRY ?= docker.io/codecapsules-io
 IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4
 include build/makelib/image.mk

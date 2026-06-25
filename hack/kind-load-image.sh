@@ -12,6 +12,8 @@ set -euo pipefail
 cluster_name="${1:?cluster name required}"
 image="${2:?image reference required}"
 platform="${3:-linux/amd64}"
+node="${cluster_name}-control-plane"
+ctr_ns="k8s.io"
 
 # Emit deduplicated alias refs for a pulled image.
 image_aliases() {
@@ -36,7 +38,42 @@ image_aliases() {
 	printf '%s\n' "${aliases[@]}" | awk '!seen[$0]++'
 }
 
-load_one() {
+is_digest_ref() {
+	[[ "$1" == *@sha256:* ]]
+}
+
+ctr_images() {
+	docker exec "${node}" ctr -n "${ctr_ns}" images ls -q 2>/dev/null || true
+}
+
+find_src_ref() {
+	local ref needle digest
+	for ref in ${image}; do
+		if ctr_images | grep -qxF "${ref}"; then
+			echo "${ref}"
+			return 0
+		fi
+	done
+	while IFS= read -r ref; do
+		if ctr_images | grep -qxF "${ref}"; then
+			echo "${ref}"
+			return 0
+		fi
+	done < <(image_aliases "${image}")
+
+	if is_digest_ref "${image}"; then
+		digest="${image##*@}"
+		needle="$(ctr_images | grep -F "${digest}" | head -n 1 || true)"
+		if [[ -n "${needle}" ]]; then
+			echo "${needle}"
+			return 0
+		fi
+	fi
+
+	return 1
+}
+
+load_into_kind() {
 	local ref="$1"
 	if kind load docker-image --name "${cluster_name}" "${ref}" 2>/dev/null; then
 		echo "loaded ${ref} into kind cluster ${cluster_name}"
@@ -52,12 +89,24 @@ load_one() {
 	echo "loaded ${ref} via archive into kind cluster ${cluster_name}"
 }
 
+tag_in_kind() {
+	local src="$1" dst="$2"
+	[[ "${src}" == "${dst}" ]] && return 0
+	docker exec "${node}" ctr -n "${ctr_ns}" images tag "${src}" "${dst}"
+	echo "tagged ${src} -> ${dst} in ${cluster_name}"
+}
+
 echo "pulling ${image} (${platform})"
 docker pull --platform "${platform}" "${image}"
 
+load_into_kind "${image}"
+
+src_ref="$(find_src_ref)" || {
+	echo "error: ${image} not found in kind node ${node} after load" >&2
+	exit 1
+}
+
 while IFS= read -r alias; do
-	if [[ "${alias}" != "${image}" ]]; then
-		docker tag "${image}" "${alias}"
-	fi
-	load_one "${alias}"
+	[[ "${alias}" == "${src_ref}" ]] && continue
+	tag_in_kind "${src_ref}" "${alias}"
 done < <(image_aliases "${image}")

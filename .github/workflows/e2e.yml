@@ -69,22 +69,10 @@ jobs:
           )
           EXPORTER_IMAGE="prom/mysqld-exporter:v0.16.0"
           PLATFORM="linux/amd64"
-          load_external_image() {
-            local image="$1"
-            docker pull --platform "${PLATFORM}" "${image}"
-            if kind load docker-image --name "${CLUSTER_NAME}" "${image}"; then
-              return 0
-            fi
-            echo "kind load docker-image failed for ${image}; trying image-archive import..." >&2
-            archive="$(mktemp -t kind-image.XXXXXX.tar)"
-            docker save --platform "${PLATFORM}" -o "${archive}" "${image}"
-            kind load image-archive --name "${CLUSTER_NAME}" "${archive}"
-            rm -f "${archive}"
-          }
           for image in "${SERVER_IMAGES[@]}"; do
-            load_external_image "${image}"
+            bash hack/kind-load-image.sh "${CLUSTER_NAME}" "${image}" "${PLATFORM}"
           done
-          load_external_image "${EXPORTER_IMAGE}"
+          bash hack/kind-load-image.sh "${CLUSTER_NAME}" "${EXPORTER_IMAGE}" "${PLATFORM}"
           docker exec "${CLUSTER_NAME}-control-plane" crictl images
 
       - name: Run e2e tests
@@ -101,4 +89,5 @@ jobs:
             --sidecar-mysql57-image mysql-operator-sidecar-5.7:${E2E_IMAGE_TAG} \
             --sidecar-mysql8-image mysql-operator-sidecar-8.0:${E2E_IMAGE_TAG} \
             --sidecar-mysql84-image mysql-operator-sidecar-8.4:${E2E_IMAGE_TAG} \
-            --orchestrator-image mysql-operator-orchestrator:${E2E_IMAGE_TAG}"
+            --orchestrator-image mysql-operator-orchestrator:${E2E_IMAGE_TAG} \
+            --metrics-exporter-image prom/mysqld-exporter:v0.16.0"

@@ -171,24 +171,7 @@ load_external_image() {
 	local platform
 	platform="$(kind_node_platform)"
 
-	echo "loading external image ${image} (${platform})"
-	docker pull --platform "${platform}" "${image}"
-
-	if kind load docker-image --name "${CLUSTER_NAME}" "${image}"; then
-		return 0
-	fi
-
-	echo "kind load docker-image failed for ${image}; trying image-archive import..." >&2
-	local archive
-	archive="$(mktemp -t kind-image.XXXXXX.tar)"
-	if docker save --platform "${platform}" -o "${archive}" "${image}" \
-		&& kind load image-archive --name "${CLUSTER_NAME}" "${archive}"; then
-		rm -f "${archive}"
-		return 0
-	fi
-	rm -f "${archive}"
-
-	echo "warning: could not preload ${image}; cluster will pull it at runtime (needs network)" >&2
+	bash "${ROOT_DIR}/hack/kind-load-image.sh" "${CLUSTER_NAME}" "${image}" "${platform}"
 }
 
 load_images() {
@@ -217,6 +200,7 @@ run_e2e() {
 		--sidecar-mysql8-image "mysql-operator-sidecar-8.0:${E2E_IMAGE_TAG}"
 		--sidecar-mysql84-image "mysql-operator-sidecar-8.4:${E2E_IMAGE_TAG}"
 		--orchestrator-image "mysql-operator-orchestrator:${E2E_IMAGE_TAG}"
+		--metrics-exporter-image "${EXPORTER_IMAGE}"
 	)
 
 	local params="${ginkgo_args[*]} -- ${test_args[*]}"

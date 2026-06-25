@@ -130,6 +130,7 @@ func patchOperatorArgs(args []string) []string {
 	args = setArg(args, "--sidecar-image", TestContext.SidecarMysql57Image)
 	args = setArg(args, "--sidecar-mysql8-image", TestContext.SidecarMysql8Image)
 	args = setArg(args, "--sidecar-mysql84-image", TestContext.SidecarMysql84Image)
+	args = setArg(args, "--metrics-exporter-image", TestContext.MetricsExporterImage)
 	args = setArg(args, "--image-pull-policy", "IfNotPresent")
 	return ensureFlag(args, "--debug")
 }

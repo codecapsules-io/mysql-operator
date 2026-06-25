@@ -73,7 +73,7 @@ func VerifyKindImages() {
 		if ref == "" {
 			continue
 		}
-		if !strings.Contains(crictlOut, ref) {
+		if !imageRefPresentInCrictl(crictlOut, ref) {
 			missing = append(missing, ref)
 		}
 	}

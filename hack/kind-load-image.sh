@@ -49,18 +49,40 @@ load_into_kind() {
 	rm -f "${archive}"
 }
 
+# crictl stores short refs under docker.io/library/ or docker.io/; kubelet resolves the same way.
+containerd_image_ref_aliases() {
+	local ref="$1"
+	local name tag host
+	name="${ref%:*}"
+	tag="${ref##*:}"
+	printf '%s\n' "${ref}"
+	if [[ "${name}" != */* ]]; then
+		printf 'docker.io/library/%s:%s\n' "${name}" "${tag}"
+		return 0
+	fi
+	host="${name%%/*}"
+	case "${host}" in
+	*.* | *:* | localhost) return 0 ;;
+	esac
+	printf 'docker.io/%s:%s\n' "${name}" "${tag}"
+}
+
 verify_image_present() {
 	local ref="$1"
-	if docker exec "${node}" crictl images -o json 2>/dev/null \
-		| grep -Fq "\"${ref}\""; then
-		echo "verified ${ref} on ${node}"
-		return 0
-	fi
-	# crictl table output as fallback (older clusters).
-	if docker exec "${node}" crictl images 2>/dev/null | awk '{print $1":"$2}' | grep -qxF "${ref}"; then
-		echo "verified ${ref} on ${node}"
-		return 0
-	fi
+	local alias json table_lines
+	json="$(docker exec "${node}" crictl images -o json 2>/dev/null || true)"
+	table_lines="$(docker exec "${node}" crictl images 2>/dev/null | tail -n +2 | awk '{print $1":"$2}' || true)"
+	while IFS= read -r alias; do
+		[[ -z "${alias}" ]] && continue
+		if [[ -n "${json}" ]] && grep -Fq "\"${alias}\"" <<< "${json}"; then
+			echo "verified ${ref} on ${node} (as ${alias})"
+			return 0
+		fi
+		if grep -qxF "${alias}" <<< "${table_lines}"; then
+			echo "verified ${ref} on ${node} (as ${alias})"
+			return 0
+		fi
+	done < <(containerd_image_ref_aliases "${ref}")
 	echo "error: ${ref} not found on kind node ${node} after load" >&2
 	docker exec "${node}" crictl images >&2 || true
 	return 1

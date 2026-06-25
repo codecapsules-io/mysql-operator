@@ -42,35 +42,24 @@ is_digest_ref() {
 	[[ "$1" == *@sha256:* ]]
 }
 
-ctr_images() {
-	docker exec "${node}" ctr -n "${ctr_ns}" images ls -q 2>/dev/null || true
-}
+# After docker pull, return the ref docker stores locally (RepoDigest for pins, RepoTag otherwise).
+docker_local_ref() {
+	local ref="$1"
+	local repo_digest repo_tag
 
-find_src_ref() {
-	local ref needle digest
-	for ref in ${image}; do
-		if ctr_images | grep -qxF "${ref}"; then
-			echo "${ref}"
-			return 0
-		fi
-	done
-	while IFS= read -r ref; do
-		if ctr_images | grep -qxF "${ref}"; then
-			echo "${ref}"
-			return 0
-		fi
-	done < <(image_aliases "${image}")
-
-	if is_digest_ref "${image}"; then
-		digest="${image##*@}"
-		needle="$(ctr_images | grep -F "${digest}" | head -n 1 || true)"
-		if [[ -n "${needle}" ]]; then
-			echo "${needle}"
-			return 0
-		fi
+	repo_digest="$(docker image inspect "${ref}" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+	if [[ -n "${repo_digest}" && "${repo_digest}" != "<no value>" ]]; then
+		echo "${repo_digest}"
+		return 0
 	fi
 
-	return 1
+	repo_tag="$(docker image inspect "${ref}" --format '{{index .RepoTags 0}}' 2>/dev/null || true)"
+	if [[ -n "${repo_tag}" && "${repo_tag}" != "<no value>" ]]; then
+		echo "${repo_tag}"
+		return 0
+	fi
+
+	echo "${ref}"
 }
 
 load_into_kind() {
@@ -92,21 +81,30 @@ load_into_kind() {
 tag_in_kind() {
 	local src="$1" dst="$2"
 	[[ "${src}" == "${dst}" ]] && return 0
-	docker exec "${node}" ctr -n "${ctr_ns}" images tag "${src}" "${dst}"
-	echo "tagged ${src} -> ${dst} in ${cluster_name}"
+	if docker exec "${node}" ctr -n "${ctr_ns}" images tag "${src}" "${dst}" 2>/dev/null; then
+		echo "tagged ${src} -> ${dst} in ${cluster_name}"
+		return 0
+	fi
+	return 1
 }
 
 echo "pulling ${image} (${platform})"
 docker pull --platform "${platform}" "${image}"
 
-load_into_kind "${image}"
+# Load using docker's canonical local ref (e.g. docker.io/library/percona@sha256:...).
+# kind/containerd stores that name; short refs like percona@sha256:... are added via ctr tag.
+load_ref="$(docker_local_ref "${image}")"
+load_into_kind "${load_ref}"
 
-src_ref="$(find_src_ref)" || {
-	echo "error: ${image} not found in kind node ${node} after load" >&2
-	exit 1
-}
-
+src_ref="${load_ref}"
 while IFS= read -r alias; do
 	[[ "${alias}" == "${src_ref}" ]] && continue
-	tag_in_kind "${src_ref}" "${alias}"
+	if tag_in_kind "${src_ref}" "${alias}"; then
+		continue
+	fi
+	# kind may have imported under the requested ref instead of the canonical digest name.
+	if tag_in_kind "${image}" "${alias}"; then
+		continue
+	fi
+	echo "warning: could not tag ${alias} in ${cluster_name}; kubelet may pull at runtime" >&2
 done < <(image_aliases "${image}")

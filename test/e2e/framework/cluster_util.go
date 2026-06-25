@@ -47,6 +47,8 @@ import (
 
 var (
 	POLLING = 2 * time.Second
+	// Tail length per container when logging during cluster readiness waits.
+	clusterReadinessLogTailLines int64 = 120
 )
 
 func (f *Framework) ClusterEventuallyCondition(cluster *api.MysqlCluster,
@@ -293,6 +295,7 @@ func (f *Framework) LogClusterReadinessDiagnostics(cluster *api.MysqlCluster, cl
 
 	f.logClusterStatefulSet(cluster)
 	f.logClusterPods(cluster)
+	f.logClusterPodLogs(cluster)
 	f.logClusterPVCs(cluster)
 	f.logClusterEvents(cluster)
 	Logf("=== end cluster readiness diagnostics: %s/%s ===", cluster.Namespace, cluster.Name)
@@ -378,6 +381,87 @@ func logContainerStatus(kind string, cs corev1.ContainerStatus) {
 			cs.State.Terminated.Reason, cs.State.Terminated.ExitCode, cs.State.Terminated.Message)
 	}
 	Logf(msg)
+}
+
+func (f *Framework) logClusterPodLogs(cluster *api.MysqlCluster) {
+	podList, err := f.ClientSet.CoreV1().Pods(cluster.Namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(GetClusterLabels(cluster)).String(),
+	})
+	if err != nil {
+		Logf("cluster pod logs: list failed: %v", err)
+		return
+	}
+	if len(podList.Items) == 0 {
+		return
+	}
+
+	for _, pod := range podList.Items {
+		if podIsReady(pod) {
+			continue
+		}
+		Logf("cluster pod logs: %s/%s (phase=%s)", pod.Namespace, pod.Name, pod.Status.Phase)
+		for _, c := range pod.Spec.InitContainers {
+			f.logPodContainerTail(pod.Namespace, pod.Name, c.Name, containerRestartCount(pod, c.Name, true))
+		}
+		for _, c := range pod.Spec.Containers {
+			if containerIsReady(pod, c.Name) {
+				continue
+			}
+			f.logPodContainerTail(pod.Namespace, pod.Name, c.Name, containerRestartCount(pod, c.Name, false))
+		}
+	}
+}
+
+func podIsReady(pod corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func containerIsReady(pod corev1.Pod, name string) bool {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == name {
+			return cs.Ready
+		}
+	}
+	return false
+}
+
+func containerRestartCount(pod corev1.Pod, name string, init bool) int32 {
+	var statuses []corev1.ContainerStatus
+	if init {
+		statuses = pod.Status.InitContainerStatuses
+	} else {
+		statuses = pod.Status.ContainerStatuses
+	}
+	for _, cs := range statuses {
+		if cs.Name == name {
+			return cs.RestartCount
+		}
+	}
+	return 0
+}
+
+func (f *Framework) logPodContainerTail(namespace, podName, containerName string, restartCount int32) {
+	logs, err := GetPodLogsTail(f.ClientSet, namespace, podName, containerName, clusterReadinessLogTailLines)
+	if err != nil {
+		Logf("  logs %s/%s:%s (tail): %v", namespace, podName, containerName, err)
+	} else if strings.TrimSpace(logs) != "" {
+		Logf("  logs %s/%s:%s (last %d lines):\n%s", namespace, podName, containerName, clusterReadinessLogTailLines, logs)
+	} else {
+		Logf("  logs %s/%s:%s: (empty)", namespace, podName, containerName)
+	}
+	if restartCount > 0 {
+		prev, err := getPreviousPodLogs(f.ClientSet, namespace, podName, containerName)
+		if err != nil {
+			Logf("  previous logs %s/%s:%s: %v", namespace, podName, containerName, err)
+		} else if strings.TrimSpace(prev) != "" {
+			Logf("  previous logs %s/%s:%s (last attempt):\n%s", namespace, podName, containerName, prev)
+		}
+	}
 }
 
 func (f *Framework) logClusterPVCs(cluster *api.MysqlCluster) {

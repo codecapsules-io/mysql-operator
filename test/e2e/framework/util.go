@@ -183,20 +183,31 @@ func GetPodLogs(c clientset.Interface, namespace, podName, containerName string)
 	return getPodLogsInternal(c, namespace, podName, containerName, false)
 }
 
+// GetPodLogsTail returns the last tailLines lines of a container log.
+func GetPodLogsTail(c clientset.Interface, namespace, podName, containerName string, tailLines int64) (string, error) {
+	return getPodLogsInternalWithTail(c, namespace, podName, containerName, false, tailLines)
+}
+
 func getPreviousPodLogs(c clientset.Interface, namespace, podName, containerName string) (string, error) {
 	return getPodLogsInternal(c, namespace, podName, containerName, true)
 }
 
 // utility function for gomega Eventually
 func getPodLogsInternal(c clientset.Interface, namespace, podName, containerName string, previous bool) (string, error) {
-	logs, err := c.CoreV1().RESTClient().Get().
+	return getPodLogsInternalWithTail(c, namespace, podName, containerName, previous, 0)
+}
+
+func getPodLogsInternalWithTail(c clientset.Interface, namespace, podName, containerName string, previous bool, tailLines int64) (string, error) {
+	req := c.CoreV1().RESTClient().Get().
 		Resource("pods").
 		Namespace(namespace).
 		Name(podName).SubResource("log").
 		Param("container", containerName).
-		Param("previous", strconv.FormatBool(previous)).
-		Do(context.TODO()).
-		Raw()
+		Param("previous", strconv.FormatBool(previous))
+	if tailLines > 0 {
+		req = req.Param("tailLines", strconv.FormatInt(tailLines, 10))
+	}
+	logs, err := req.Do(context.TODO()).Raw()
 	if err != nil {
 		return "", err
 	}

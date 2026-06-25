@@ -38,8 +38,8 @@ import (
 )
 
 const (
-	POLLING                     = 500 * time.Millisecond
-	clusterReadinessDiagInterval = 30 * time.Second
+	POLLING                      = 500 * time.Millisecond
+	clusterReadinessDiagInterval = 15 * time.Second
 )
 
 var (

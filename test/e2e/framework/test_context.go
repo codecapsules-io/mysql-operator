@@ -43,10 +43,9 @@ type TestContextType struct {
 	SidecarMysql57Image string
 	SidecarMysql8Image  string
 	SidecarMysql84Image string
-	OrchestratorImage    string
-	MetricsExporterImage string
-	KindE2eRegistry      string
-	KindE2eTag           string
+	OrchestratorImage      string
+	MetricsExporterImage   string
+	VerifyKindLocalImages  bool
 
 	TimeoutSeconds    int
 	DumpLogsOnFailure bool
@@ -80,8 +79,7 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from operator args).")
 	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "docker.io/codecapsules-io/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
 	flag.StringVar(&TestContext.MetricsExporterImage, "metrics-exporter-image", "prom/mysqld-exporter:v0.16.0", "Image for mysqld_exporter in cluster pods.")
-	flag.StringVar(&TestContext.KindE2eRegistry, "kind-e2e-registry", "", "Kind e2e registry prefix for MySQL server images (e.g. kind-e2e).")
-	flag.StringVar(&TestContext.KindE2eTag, "kind-e2e-tag", "", "Kind e2e image tag for MySQL server images (e.g. local).")
+	flag.BoolVar(&TestContext.VerifyKindLocalImages, "verify-kind-local-images", false, "Verify locally built operator images are preloaded on the kind node.")
 
 	flag.IntVar(&TestContext.TimeoutSeconds, "pod-wait-timeout", 100, "Timeout to wait for a pod to be ready.")
 	flag.BoolVar(&TestContext.DumpLogsOnFailure, "dump-logs-on-failure", true, "Dump pods logs when a test fails.")

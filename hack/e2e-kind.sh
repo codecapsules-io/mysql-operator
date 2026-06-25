@@ -4,6 +4,12 @@
 #
 # Run the Kind-based e2e flow (same contract as .github/workflows/e2e.yml).
 #
+# Image contract (kind load + IfNotPresent — see kind.sigs.k8s.io docs):
+#   - Locally built operator/sidecar/orchestrator images: tag :local (never :latest),
+#     kind load docker-image, referenced with imagePullPolicy IfNotPresent in e2e patches.
+#   - Public images (Percona server, mysqld-exporter): NOT preloaded; kind nodes pull
+#     from Docker Hub when cluster pods are created (GHA runners have network).
+#
 # Usage:
 #   hack/e2e-kind.sh                 # create cluster, build, load images, run all cluster e2e tests
 #   hack/e2e-kind.sh --focus 'scales up'   # run a single spec (faster smoke test)
@@ -27,20 +33,12 @@ cpu_count() {
 CLUSTER_NAME="${CLUSTER_NAME:-mysql-operator}"
 E2E_IMAGE_REGISTRY="${E2E_IMAGE_REGISTRY:-mysql-operator-ci}"
 E2E_IMAGE_TAG="${E2E_IMAGE_TAG:-local}"
-KIND_E2E_REGISTRY="${KIND_E2E_REGISTRY:-kind-e2e}"
 CI_BUILD_NUMBER="${CI_BUILD_NUMBER:-local}"
 POD_WAIT_TIMEOUT="${POD_WAIT_TIMEOUT:-600}"
 EXPORTER_IMAGE="${EXPORTER_IMAGE:-prom/mysqld-exporter:v0.16.0}"
 
-# Upstream digests from pkg/util/constants/constants.go → kind-e2e local tags for offline Kind.
-EXTERNAL_IMAGES=(
-	"percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393|${KIND_E2E_REGISTRY}/percona-5.7:${E2E_IMAGE_TAG}"
-	"percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc|${KIND_E2E_REGISTRY}/percona-8.0:${E2E_IMAGE_TAG}"
-	"docker.io/percona/percona-server@sha256:eaa4cf955f8a01a43faa6ef656bf8fb69a17c17c278a3b0514212291ca0448b1|${KIND_E2E_REGISTRY}/percona-8.4:${E2E_IMAGE_TAG}"
-	"${EXPORTER_IMAGE}|${EXPORTER_IMAGE}"
-)
-
-OPERATOR_IMAGES=(
+# Built locally by make — the only images we kind load.
+LOCAL_IMAGES=(
 	mysql-operator
 	mysql-operator-orchestrator
 	mysql-operator-sidecar-5.7
@@ -55,7 +53,7 @@ GINKGO_FOCUS=""
 GINKGO_SKIP="Mysql backups"
 
 usage() {
-	sed -n '2,14p' "$0" | tr -d '#'
+	sed -n '2,18p' "$0" | tr -d '#'
 }
 
 require_cmd() {
@@ -151,7 +149,7 @@ build_images() {
 		PLATFORMS="${make_platform}" BUILD_PLATFORMS="${make_platform}"
 	make .img.release.build
 
-	for img in "${OPERATOR_IMAGES[@]}"; do
+	for img in "${LOCAL_IMAGES[@]}"; do
 		built="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}-${arch_suffix}"
 		ref="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}"
 		docker tag "${built}" "${ref}"
@@ -159,32 +157,16 @@ build_images() {
 	done
 }
 
-load_operator_images() {
-	local platform
-	platform="$(kind_node_platform)"
-	for img in "${OPERATOR_IMAGES[@]}"; do
-		local kind_ref="${img}:${E2E_IMAGE_TAG}"
-		bash "${ROOT_DIR}/hack/kind-load-image.sh" \
-			"${CLUSTER_NAME}" "${kind_ref}" "${kind_ref}" "${platform}"
+load_local_images() {
+	local img kind_ref
+	for img in "${LOCAL_IMAGES[@]}"; do
+		kind_ref="${img}:${E2E_IMAGE_TAG}"
+		echo "loading ${kind_ref} into kind cluster ${CLUSTER_NAME}"
+		kind load docker-image --name "${CLUSTER_NAME}" "${kind_ref}"
 	done
-}
-
-load_external_images() {
-	local platform spec upstream kind_ref
-	platform="$(kind_node_platform)"
-	for spec in "${EXTERNAL_IMAGES[@]}"; do
-		upstream="${spec%%|*}"
-		kind_ref="${spec##*|}"
-		bash "${ROOT_DIR}/hack/kind-load-image.sh" \
-			"${CLUSTER_NAME}" "${upstream}" "${kind_ref}" "${platform}"
-	done
-}
-
-load_images() {
-	load_operator_images
-	load_external_images
-	echo "images loaded into kind cluster ${CLUSTER_NAME}:"
-	docker exec "${CLUSTER_NAME}-control-plane" crictl images
+	echo "locally built images on ${CLUSTER_NAME}-control-plane:"
+	docker exec "${CLUSTER_NAME}-control-plane" crictl images \
+		| grep -E 'mysql-operator|REPOSITORY' || true
 }
 
 run_e2e() {
@@ -205,8 +187,7 @@ run_e2e() {
 		--sidecar-mysql84-image "mysql-operator-sidecar-8.4:${E2E_IMAGE_TAG}"
 		--orchestrator-image "mysql-operator-orchestrator:${E2E_IMAGE_TAG}"
 		--metrics-exporter-image "${EXPORTER_IMAGE}"
-		--kind-e2e-registry "${KIND_E2E_REGISTRY}"
-		--kind-e2e-tag "${E2E_IMAGE_TAG}"
+		--verify-kind-local-images
 	)
 
 	local params="${ginkgo_args[*]} -- ${test_args[*]}"
@@ -225,5 +206,5 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
 	build_images
 fi
 
-load_images
+load_local_images
 run_e2e

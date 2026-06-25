@@ -274,8 +274,8 @@ func (f *Framework) LogClusterReadinessDiagnostics(cluster *api.MysqlCluster, cl
 	}
 
 	Logf("=== cluster readiness diagnostics: %s/%s ===", cluster.Namespace, cluster.Name)
-	Logf("spec.replicas=%d status.readyNodes=%d appliedMysqlVersion=%q",
-		replicas, cl.Status.ReadyNodes, cl.Status.AppliedMysqlVersion)
+	Logf("spec.replicas=%d status.readyNodes=%d appliedMysqlVersion=%q spec.mysqlVersion=%q spec.image=%q",
+		replicas, cl.Status.ReadyNodes, cl.Status.AppliedMysqlVersion, cl.Spec.MysqlVersion, cl.Spec.Image)
 
 	for _, cond := range cl.Status.Conditions {
 		Logf("cluster condition %s=%s reason=%q message=%q",

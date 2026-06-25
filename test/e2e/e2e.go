@@ -78,6 +78,11 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	}
 	framework.ApplyOperatorManifests(operatorNamespace)
 
+	if framework.TestContext.KindE2eRegistry != "" && framework.TestContext.KindE2eTag != "" {
+		ginkgo.By("Verify kind images are preloaded on the node")
+		framework.VerifyKindImages()
+	}
+
 	// Create a tunnel, port-forward orchestrator port to local port
 	ginkgo.By("Port-forward orchestrator")
 	orcTunnel = pf.NewTunnel(restClient, kubeCfg, operatorNamespace,

@@ -132,7 +132,26 @@ func patchOperatorArgs(args []string) []string {
 	args = setArg(args, "--sidecar-mysql84-image", TestContext.SidecarMysql84Image)
 	args = setArg(args, "--metrics-exporter-image", TestContext.MetricsExporterImage)
 	args = setArg(args, "--image-pull-policy", "IfNotPresent")
+	for version, image := range KindE2eMysqlVersionOverrides() {
+		args = appendMysqlVersionImage(args, version, image)
+	}
 	return ensureFlag(args, "--debug")
+}
+
+func appendMysqlVersionImage(args []string, version, image string) []string {
+	if image == "" {
+		return args
+	}
+	prefix := "--mysql-versions-to-image=" + version + "="
+	out := make([]string, 0, len(args)+1)
+	for _, arg := range args {
+		if strings.HasPrefix(arg, prefix) {
+			continue
+		}
+		out = append(out, arg)
+	}
+	out = append(out, prefix+image)
+	return out
 }
 
 func ensureFlag(args []string, name string) []string {

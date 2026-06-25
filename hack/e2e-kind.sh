@@ -2,13 +2,13 @@
 # Copyright 2026 Code Capsules
 # SPDX-License-Identifier: Apache-2.0
 #
-# Run the same Kind-based e2e flow as .github/workflows/e2e.yml locally.
+# Run the Kind-based e2e flow (same contract as .github/workflows/e2e.yml).
 #
 # Usage:
 #   hack/e2e-kind.sh                 # create cluster, build, load images, run all cluster e2e tests
 #   hack/e2e-kind.sh --focus 'scales up'   # run a single spec (faster smoke test)
 #   hack/e2e-kind.sh --skip-build    # reuse existing images
-#   hack/e2e-kind.sh --skip-cluster  # reuse existing kind cluster
+#   hack/e2e-kind.sh --skip-cluster  # reuse existing kind cluster (CI: cluster from helm/kind-action)
 #   hack/e2e-kind.sh --down          # delete the kind cluster and exit
 #
 # Requires: docker (running), kind, kubectl, go, make
@@ -27,19 +27,20 @@ cpu_count() {
 CLUSTER_NAME="${CLUSTER_NAME:-mysql-operator}"
 E2E_IMAGE_REGISTRY="${E2E_IMAGE_REGISTRY:-mysql-operator-ci}"
 E2E_IMAGE_TAG="${E2E_IMAGE_TAG:-local}"
+KIND_E2E_REGISTRY="${KIND_E2E_REGISTRY:-kind-e2e}"
 CI_BUILD_NUMBER="${CI_BUILD_NUMBER:-local}"
 POD_WAIT_TIMEOUT="${POD_WAIT_TIMEOUT:-600}"
 EXPORTER_IMAGE="${EXPORTER_IMAGE:-prom/mysqld-exporter:v0.16.0}"
-# MySQL server images from pkg/util/constants/constants.go (MysqlImageVersions).
-# E2e clusters default to 5.7.35 (MySQLDefaultVersion); only that image is required today.
-# Sidecars 5.7/8.0/8.4 are built locally; server images are pulled from Docker Hub.
-SERVER_IMAGES=(
-	"percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393"              # 5.7.35 (default)
-	"percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc"              # 8.0.20
-	"docker.io/percona/percona-server@sha256:eaa4cf955f8a01a43faa6ef656bf8fb69a17c17c278a3b0514212291ca0448b1" # 8.4.8
+
+# Upstream digests from pkg/util/constants/constants.go → kind-e2e local tags for offline Kind.
+EXTERNAL_IMAGES=(
+	"percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393|${KIND_E2E_REGISTRY}/percona-5.7:${E2E_IMAGE_TAG}"
+	"percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc|${KIND_E2E_REGISTRY}/percona-8.0:${E2E_IMAGE_TAG}"
+	"docker.io/percona/percona-server@sha256:eaa4cf955f8a01a43faa6ef656bf8fb69a17c17c278a3b0514212291ca0448b1|${KIND_E2E_REGISTRY}/percona-8.4:${E2E_IMAGE_TAG}"
+	"${EXPORTER_IMAGE}|${EXPORTER_IMAGE}"
 )
 
-IMAGES=(
+OPERATOR_IMAGES=(
 	mysql-operator
 	mysql-operator-orchestrator
 	mysql-operator-sidecar-5.7
@@ -123,7 +124,6 @@ create_cluster() {
 	kind create cluster --name "${CLUSTER_NAME}"
 }
 
-# Kind nodes are linux/$arch; pull and load a single platform to avoid manifest-list import bugs.
 kind_node_platform() {
 	local arch
 	arch="$(docker exec "${CLUSTER_NAME}-control-plane" uname -m)"
@@ -140,7 +140,6 @@ build_images() {
 	make_platform="${platform//\//_}"
 	arch_suffix="${make_platform#linux_}"
 
-	# Docker images must match the kind node architecture.
 	export BUILD_ARGS="${BUILD_ARGS:---load}"
 	export CI=true
 	export CI_BUILD_NUMBER="${CI_BUILD_NUMBER}"
@@ -152,7 +151,7 @@ build_images() {
 		PLATFORMS="${make_platform}" BUILD_PLATFORMS="${make_platform}"
 	make .img.release.build
 
-	for img in "${IMAGES[@]}"; do
+	for img in "${OPERATOR_IMAGES[@]}"; do
 		built="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}-${arch_suffix}"
 		ref="${E2E_IMAGE_REGISTRY}/${img}:${E2E_IMAGE_TAG}"
 		docker tag "${built}" "${ref}"
@@ -161,25 +160,30 @@ build_images() {
 }
 
 load_operator_images() {
-	for img in "${IMAGES[@]}"; do
-		kind load docker-image --name "${CLUSTER_NAME}" "${img}:${E2E_IMAGE_TAG}"
+	local platform
+	platform="$(kind_node_platform)"
+	for img in "${OPERATOR_IMAGES[@]}"; do
+		local kind_ref="${img}:${E2E_IMAGE_TAG}"
+		bash "${ROOT_DIR}/hack/kind-load-image.sh" \
+			"${CLUSTER_NAME}" "${kind_ref}" "${kind_ref}" "${platform}"
 	done
 }
 
-load_external_image() {
-	local image="$1"
-	local platform
+load_external_images() {
+	local platform spec upstream kind_ref
 	platform="$(kind_node_platform)"
-
-	bash "${ROOT_DIR}/hack/kind-load-image.sh" "${CLUSTER_NAME}" "${image}" "${platform}"
+	for spec in "${EXTERNAL_IMAGES[@]}"; do
+		upstream="${spec%%|*}"
+		kind_ref="${spec##*|}"
+		bash "${ROOT_DIR}/hack/kind-load-image.sh" \
+			"${CLUSTER_NAME}" "${upstream}" "${kind_ref}" "${platform}"
+	done
 }
 
 load_images() {
 	load_operator_images
-	for image in "${SERVER_IMAGES[@]}"; do
-		load_external_image "${image}"
-	done
-	load_external_image "${EXPORTER_IMAGE}"
+	load_external_images
+	echo "images loaded into kind cluster ${CLUSTER_NAME}:"
 	docker exec "${CLUSTER_NAME}-control-plane" crictl images
 }
 
@@ -201,6 +205,8 @@ run_e2e() {
 		--sidecar-mysql84-image "mysql-operator-sidecar-8.4:${E2E_IMAGE_TAG}"
 		--orchestrator-image "mysql-operator-orchestrator:${E2E_IMAGE_TAG}"
 		--metrics-exporter-image "${EXPORTER_IMAGE}"
+		--kind-e2e-registry "${KIND_E2E_REGISTRY}"
+		--kind-e2e-tag "${E2E_IMAGE_TAG}"
 	)
 
 	local params="${ginkgo_args[*]} -- ${test_args[*]}"

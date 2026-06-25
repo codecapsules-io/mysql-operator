@@ -1,3 +1,7 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+
 # Kind cluster config for GitHub Actions e2e.
 #
 # Runners (e.g. ubuntu-26.04-arm) share RAM between Docker, the kind node, image

@@ -38,7 +38,8 @@ import (
 )
 
 const (
-	POLLING = 500 * time.Millisecond
+	POLLING                     = 500 * time.Millisecond
+	clusterReadinessDiagInterval = 30 * time.Second
 )
 
 var (
@@ -310,12 +311,33 @@ func testClusterReadiness(f *framework.Framework, cluster *api.MysqlCluster) {
 		timeout = time.Duration(*cluster.Spec.Replicas) * f.Timeout
 	}
 
-	// wait for pods to be ready
+	clusterKey := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	desired := int(*cluster.Spec.Replicas)
+
+	var latest *api.MysqlCluster
+	defer func() {
+		if CurrentGinkgoTestDescription().Failed {
+			f.LogClusterReadinessDiagnostics(cluster, latest)
+		}
+	}()
+
+	f.LogClusterReadinessDiagnostics(cluster, nil)
+
+	lastDiag := time.Now()
 	Eventually(func() int {
 		cl := &api.MysqlCluster{}
-		f.Client.Get(context.TODO(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, cl)
+		if err := f.Client.Get(context.TODO(), clusterKey, cl); err != nil {
+			framework.Logf("waiting for cluster %s readiness: get failed: %v", cluster.Name, err)
+			return 0
+		}
+		latest = cl
+
+		if time.Since(lastDiag) >= clusterReadinessDiagInterval {
+			f.LogClusterReadinessDiagnostics(cluster, cl)
+			lastDiag = time.Now()
+		}
 		return cl.Status.ReadyNodes
-	}, timeout, POLLING).Should(Equal(int(*cluster.Spec.Replicas)), "Not ready replicas of cluster '%s'", cluster.Name)
+	}, timeout, POLLING).Should(Equal(desired), "Not ready replicas of cluster '%s'", cluster.Name)
 
 	f.ClusterEventuallyCondition(cluster, api.ClusterConditionReady, core.ConditionTrue, timeout)
 	f.ClusterEventuallyCondition(cluster, api.ClusterConditionFailoverAck, core.ConditionFalse, timeout)

@@ -19,7 +19,7 @@ env:
 
 jobs:
   e2e:
-    runs-on: ubuntu-26.04-arm
+    runs-on: ubuntu-26.04
     timeout-minutes: 120
     steps:
       - name: Checkout code

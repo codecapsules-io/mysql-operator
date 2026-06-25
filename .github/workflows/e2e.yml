@@ -27,7 +27,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: '1.22'
           cache: true
 
       - name: Create kind cluster
@@ -61,18 +61,35 @@ jobs:
           for img in mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4; do
             kind load docker-image --name "${CLUSTER_NAME}" "${img}:${E2E_IMAGE_TAG}"
           done
-          # Default MySQL 5.7.35 server image and metrics exporter used by cluster pods.
-          PERCONA_IMAGE="percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393"
+          # MySQL server images (pkg/util/constants/constants.go). E2e defaults to 5.7.35; preload all profile lines.
+          SERVER_IMAGES=(
+            "percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393"
+            "percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc"
+            "docker.io/percona/percona-server@sha256:eaa4cf955f8a01a43faa6ef656bf8fb69a17c17c278a3b0514212291ca0448b1"
+          )
           EXPORTER_IMAGE="prom/mysqld-exporter:v0.16.0"
-          docker pull "${PERCONA_IMAGE}"
-          docker pull "${EXPORTER_IMAGE}"
-          kind load docker-image --name "${CLUSTER_NAME}" "${PERCONA_IMAGE}"
-          kind load docker-image --name "${CLUSTER_NAME}" "${EXPORTER_IMAGE}"
+          PLATFORM="linux/amd64"
+          load_external_image() {
+            local image="$1"
+            docker pull --platform "${PLATFORM}" "${image}"
+            if kind load docker-image --name "${CLUSTER_NAME}" "${image}"; then
+              return 0
+            fi
+            echo "kind load docker-image failed for ${image}; trying image-archive import..." >&2
+            archive="$(mktemp -t kind-image.XXXXXX.tar)"
+            docker save --platform "${PLATFORM}" -o "${archive}" "${image}"
+            kind load image-archive --name "${CLUSTER_NAME}" "${archive}"
+            rm -f "${archive}"
+          }
+          for image in "${SERVER_IMAGES[@]}"; do
+            load_external_image "${image}"
+          done
+          load_external_image "${EXPORTER_IMAGE}"
           docker exec "${CLUSTER_NAME}-control-plane" crictl images
 
       - name: Run e2e tests
         env:
-          ACK_GINKGO_DEPRECATIONS: "1.16.4"
+          ACK_GINKGO_DEPRECATIONS: '1.16.4'
         run: |
           make e2e GO_INTEGRATION_TESTS_PARAMS="-timeout 75m \
             -ginkgo.slowSpecThreshold 600 \

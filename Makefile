@@ -105,3 +105,10 @@ kind-load-images:
 		for image in $(IMAGES); do \
 		kind load docker-image --name $(CLUSTER_NAME) $(E2E_IMAGE_REGISTRY)/$${image}$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG); \
 	done
+
+.PHONY: e2e-kind e2e-kind-down
+e2e-kind:
+	@bash hack/e2e-kind.sh
+
+e2e-kind-down:
+	@bash hack/e2e-kind.sh --down

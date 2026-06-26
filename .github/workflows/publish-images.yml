@@ -1,7 +1,7 @@
 # Copyright 2026 Code Capsules
 # SPDX-License-Identifier: Apache-2.0
 #
-# Publishes operator images to GHCR (manual trigger only).
+# Publishes operator images to GHCR (manual trigger only on release branches).
 #
 
 name: Publish Release Images

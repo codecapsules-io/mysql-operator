@@ -1,25 +1,40 @@
-<!--
-Copyright 2026 Code Capsules
+# Version profiles
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+Server **images** are resolved by the image resolver (see [MySQL versions & upgrades](mysql-versions-and-upgrades.md)): `spec.image`, CLI overrides, catalog file, then built-in constants.
 
-    http://www.apache.org/licenses/LICENSE-2.0
+**Profiles** describe version-line behavior: replication SQL dialect, grant metadata, operator `my.cnf` fragments, sidecar logical key, and validation. Built-in Percona profiles are:
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
+| Profile key | MySQL line |
+|-------------|------------|
+| `percona-5.7` | 5.7.x |
+| `percona-8.0` | 8.0.x through 8.3.x |
+| `percona-8.4` | 8.4 LTS and newer |
 
-# MySQL version profiles (operator behavior)
+Unrecognized semvers fall back to `fallback-unknown` with limited guarantees.
 
-Server **images** are resolved by `ImageResolver` (see [mysql-version-upgrades.md](mysql-version-upgrades.md)): `spec.image`, CLI overrides, catalog file, then built-in constants.
+## Sidecar mapping
 
-**Profiles** describe version-line behavior: replication SQL dialect, grant metadata, operator `my.cnf` fragments, sidecar logical key, and validation. Built-in Percona profiles are `percona-5.7`, `percona-8.0`, `percona-8.4` (MySQL 8.4+), plus a last-resort `fallback-unknown` for unrecognized semvers.
+Each profile maps to a dedicated sidecar image configured on the operator:
+
+| Profile | Operator flag |
+|---------|---------------|
+| `percona-5.7` | `--sidecar-image` |
+| `percona-8.0` | `--sidecar-mysql8-image` |
+| `percona-8.4` | `--sidecar-mysql84-image` |
+
+There is **no cross-profile fallback**. If you run 8.4 clusters, you must set `--sidecar-mysql84-image` on the operator (included in `deploy/manifests/v0.7.0` defaults).
+
+Override per cluster with `spec.sidecarImage` when needed.
 
 ## Orchestrator and mysqld_exporter
 
-Discovery and failover depend on the **Orchestrator** build in this repo’s Docker image (`images/mysql-operator-orchestrator/Dockerfile`), built from **[percona/orchestrator](https://github.com/percona/orchestrator)** at a pinned commit so topology discovery uses **MySQL 8.4+ replication SQL** (`SHOW REPLICA STATUS`, etc.). Older **openark/orchestrator** 3.2.x binaries hit parse errors on 8.4 (`near 'slave status'` / `near 'master status'`). Override the orchestrator container image in the operator deployment if you use a different build (see [`deploy/manifests/`](../deploy/manifests/README.md)). The **mysqld_exporter** image is set with `--metrics-exporter-image` (default `prom/mysqld-exporter:v0.16.0` in versioned manifests).
+Discovery and failover depend on the **Orchestrator** build in this repository's Docker image (`images/mysql-operator-orchestrator/Dockerfile`), built from **[percona/orchestrator](https://github.com/percona/orchestrator)** at a pinned commit so topology discovery uses **MySQL 8.4+ replication SQL** (`SHOW REPLICA STATUS`, etc.). Older openark/orchestrator 3.2.x binaries hit parse errors on 8.4.
+
+Override the orchestrator container image in the operator deployment if you use a different build — see [Install the operator](install-operator.md).
+
+The **mysqld_exporter** image is set with `--metrics-exporter-image` (default `prom/mysqld-exporter:v0.16.0` in versioned manifests). See [Monitoring](monitoring.md).
+
+## Related pages
+
+- [MySQL versions & upgrades](mysql-versions-and-upgrades.md)
+- [Operator configuration](operator-configuration.md)

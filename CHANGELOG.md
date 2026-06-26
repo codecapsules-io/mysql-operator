@@ -78,7 +78,7 @@ From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
 - **Helm charts** under `deploy/charts/` (operator and mysql-cluster). Use `deploy/manifests/` instead.
 - **Automated auth plugin migration:** the operator no longer runs a pre-rollout auth-migrate step or
   sidecar `auth-migrate` command. Before upgrading 8.0 → 8.4+, migrate `mysql_native_password`
-  accounts manually on the primary; see [docs/mysql-version-upgrades.md](docs/mysql-version-upgrades.md).
+  accounts manually on the primary; see [docs/mysql-versions-and-upgrades.md](docs/mysql-versions-and-upgrades.md).
 
 ### Fixed
 

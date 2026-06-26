@@ -47,4 +47,4 @@ The following are **not** part of active maintenance unless explicitly called ou
 - **Security issues:** follow responsible disclosure practices for your organization; do not post credentials in public issues.
 - **Roadmap:** Not published publicly; prioritization is handled internally by Code Capsules.
 
-For version-specific behavior, see [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md) and [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md).
+For version-specific behavior, see the [documentation site](https://codecapsules-io.github.io/mysql-operator/mysql-versions-and-upgrades/) (MySQL versions & upgrades and version profiles).

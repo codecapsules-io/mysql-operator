@@ -27,9 +27,46 @@ limitations under the License.
   <a href="https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator">https://codecapsules.io</a>
 </p>
 
-The **Code Capsules MySQL Operator** is a Kubernetes controller used to run and manage MySQL workloads for **Code Capsules** hosting. It deploys highly available MySQL clusters, handles backups, failover, and day‑to‑day operations needed to host MySQL-based capsules on our platform infrastructure.
+The **Code Capsules MySQL Operator** is a Kubernetes controller used to run and manage MySQL workloads for **Code Capsules** hosting. It deploys highly available MySQL clusters, handles failover, and day-to-day operations needed to host MySQL-based capsules on our platform infrastructure.
 
 This repository is a maintained fork of the open-source [mysql-operator](https://github.com/bitpoke/mysql-operator) project. **It does not track or adopt upstream changes from Bitpoke**; feature work, releases, and operational practices are owned by Code Capsules.
+
+## Documentation
+
+**Full documentation:** [https://codecapsules-io.github.io/mysql-operator/](https://codecapsules-io.github.io/mysql-operator/)
+
+| Topic                     | Location                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| Getting started & install | [Docs site](https://codecapsules-io.github.io/mysql-operator/getting-started/)             |
+| `MysqlCluster` reference  | [Docs site](https://codecapsules-io.github.io/mysql-operator/mysql-cluster/)               |
+| MySQL 8.4 & upgrades      | [Docs site](https://codecapsules-io.github.io/mysql-operator/mysql-versions-and-upgrades/) |
+| Migrating from Helm       | [Docs site](https://codecapsules-io.github.io/mysql-operator/migrate-from-helm/)           |
+| Active maintenance scope  | [`MAINTENANCE.md`](MAINTENANCE.md)                                                         |
+| Contributing              | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                                       |
+| Manifest maintainer guide | [`deploy/manifests/README.md`](deploy/manifests/README.md)                                 |
+
+### Running docs locally
+
+The docs site is built with [MkDocs](https://www.mkdocs.org/) and the [Material theme](https://squidfunk.github.io/mkdocs-material/). Source lives in [`docs/`](docs/); navigation and site settings are in [`mkdocs.yml`](mkdocs.yml).
+
+Requires Python 3 (3.12+ recommended). From the repository root:
+
+```shell
+python3 -m venv .venv-docs
+source .venv-docs/bin/activate
+pip install -r docs/requirements.txt
+mkdocs serve
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). `mkdocs serve` reloads when you edit files under `docs/`.
+
+To validate the site the same way CI does:
+
+```shell
+mkdocs build --strict
+```
+
+Built output is written to `site/` (gitignored).
 
 ## Relationship to upstream
 
@@ -41,27 +78,14 @@ This repository is a maintained fork of the open-source [mysql-operator](https:/
 The operator is intended to:
 
 1. Deploy and operate MySQL clusters on Kubernetes (cluster-per-service model).
-2. Provide HA, monitoring hooks, backups, and point-in-time recovery patterns suitable for managed hosting.
-3. Support scheduled and on-demand backups and cluster cloning where configured.
+2. Provide HA, monitoring hooks, and failover suitable for managed hosting.
+3. Support Percona Server 5.7, 8.0, and 8.4 with operator-orchestrated upgrades.
 
-For version-specific behavior (MySQL 8.4, upgrades, catalogs, profiles), see the documentation in [`docs/`](docs/).
-
-## Documentation
-
-| Topic                            | Location                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------- |
-| Active maintenance scope         | [`MAINTENANCE.md`](MAINTENANCE.md)                                                  |
-| Contributing & pull requests     | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                                |
-| Operator install & releases      | [`deploy/manifests/README.md`](deploy/manifests/README.md)                          |
-| Migrating from Helm (v0.6.3)     | [`deploy/manifests/README.md`](deploy/manifests/README.md#migrating-from-helm-v063) |
-| MySQL version catalog & upgrades | [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md)                  |
-| Version profiles                 | [`docs/mysql-version-profiles.md`](docs/mysql-version-profiles.md)                  |
+Built-in backup and restore features exist but are **not actively maintained** for new deployments. See [Legacy backups](https://codecapsules-io.github.io/mysql-operator/legacy-backups/) on the docs site.
 
 ## Deploying the controller
 
-Install and upgrade using versioned Kubernetes manifests under [`deploy/manifests/`](deploy/manifests/). See [`deploy/manifests/README.md`](deploy/manifests/README.md) for install steps and [migrating from Helm v0.6.3](deploy/manifests/README.md#migrating-from-helm-v063).
-
-**Full install guide:** [`deploy/manifests/README.md`](deploy/manifests/README.md) — prerequisites, fresh install, verify, upgrade, uninstall, and deploying a MySQL cluster.
+Install and upgrade using versioned Kubernetes manifests under [`deploy/manifests/`](deploy/manifests/).
 
 Quick start:
 
@@ -73,11 +97,11 @@ kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/operator"
 kubectl rollout status statefulset/mysql-operator -n mysql-operator
 ```
 
-**Kubernetes version:** Confirm cluster compatibility with your target operator release before upgrading; see [`docs/mysql-version-upgrades.md`](docs/mysql-version-upgrades.md) for MySQL server upgrade behavior.
+See the [install guide](https://codecapsules-io.github.io/mysql-operator/install-operator/) for prerequisites, customization, and upgrades.
 
 ## Deploying a MySQL cluster
 
-Example manifests are under [`examples/`](examples/). Apply a secret and cluster CR in your target namespace, for example:
+Example manifests are under [`examples/`](examples/). Apply a secret and cluster CR in your target namespace:
 
 ```shell
 kubectl apply -f examples/example-cluster-secret.yaml
@@ -88,17 +112,17 @@ Adapt names, storage classes, and `mysqlVersion` to your environment before use 
 
 ## Roadmap and support
 
-**Active maintenance:** See [`MAINTENANCE.md`](MAINTENANCE.md) for what this fork actively maintains (MySQL version support, core infrastructure fixes, ease-of-use work) and what is out of scope (including built-in backups).
+**Active maintenance:** See [`MAINTENANCE.md`](MAINTENANCE.md) for in-scope and out-of-scope areas.
 
-**Contributing:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how pull requests and public contributions are handled (PR-only workflow, Code Capsules approval, CI, and quality expectations).
+**Contributing:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the PR workflow and CI expectations.
 
-**Roadmap:** Not published publicly. Planning and prioritization are handled internally by Code Capsules.
+**Roadmap:** Not published publicly. Planning is handled internally by Code Capsules.
 
-**Support:** This operator is maintained for Code Capsules platform use. It is not affiliated with Bitpoke commercial support, sponsorship, or upstream issue SLAs.
+**Support:** This operator is maintained for Code Capsules platform use. It is not affiliated with Bitpoke commercial support or upstream issue SLAs.
 
 ## Tech notes
 
-Clusters use **Percona Server for MySQL** (5.7 / 8.0 / 8.4 lines as configured) for backup tooling, monitoring, and operational features. Failover topology uses **Orchestrator** (see [`NOTICE`](NOTICE) for third-party attribution).
+Clusters use **Percona Server for MySQL** (5.7 / 8.0 / 8.4 lines as configured). Failover topology uses **Orchestrator** (see [`NOTICE`](NOTICE) for third-party attribution).
 
 ## License and legal notices
 
@@ -106,7 +130,7 @@ This project is licensed under the **Apache License, Version 2.0**.
 
 ### License text
 
-You must comply with the full license terms. The complete license text is in the root [`LICENSE`](LICENSE) file:
+The complete license text is in the root [`LICENSE`](LICENSE) file:
 
 > http://www.apache.org/licenses/LICENSE-2.0
 

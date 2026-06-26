@@ -10,6 +10,8 @@ spec:
   ## the image field has priority over mysqlVersion.
   # image: percona:5.7
   # mysqlVersion: "5.7"
+  # mysqlVersion: "8.0"
+  # mysqlVersion: "8.4"   # Percona Server 8.4 LTS — see docs/mysql-versions-and-upgrades.md
 
   # initBucketURL: gs://bucket_name/backup.xtrabackup.gz
   # initBucketSecretName:

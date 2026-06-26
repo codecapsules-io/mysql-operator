@@ -25,6 +25,8 @@ import (
 
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 // nolint: unparam
@@ -151,17 +153,17 @@ const (
 
 func defaultSidecarMysql57Image() string {
 	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL57_IMAGE",
-		"docker.io/codecapsules-io/mysql-operator-sidecar-5.7:latest")
+		constants.OperatorImage("mysql-operator-sidecar-5.7", "latest"))
 }
 
 func defaultSidecarMysql8Image() string {
 	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL8_IMAGE",
-		"docker.io/codecapsules-io/mysql-operator-sidecar-8.0:latest")
+		constants.OperatorImage("mysql-operator-sidecar-8.0", "latest"))
 }
 
 func defaultSidecarMysql84Image() string {
 	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL84_IMAGE",
-		"docker.io/codecapsules-io/mysql-operator-sidecar-8.4:latest")
+		constants.OperatorImage("mysql-operator-sidecar-8.4", "latest"))
 }
 
 func namespace() string {

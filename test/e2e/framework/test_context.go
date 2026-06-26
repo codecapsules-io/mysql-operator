@@ -21,6 +21,7 @@ import (
 
 	"github.com/onsi/ginkgo/config"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 	"github.com/codecapsules-io/mysql-operator/pkg/version"
 
 	"k8s.io/client-go/tools/clientcmd"
@@ -73,11 +74,11 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.ReportDir, "report-dir", "", "Optional directory to store junit and pod logs output in. If not specified, no junit or logs files will be output")
 	flag.StringVar(&TestContext.OperatorManifestsPath, "operator-manifests-path", "../../deploy/manifests/v0.7.0", "Path to versioned operator manifests (crds/ and operator/ subdirs).")
 
-	flag.StringVar(&TestContext.OperatorImage, "operator-image", "docker.io/codecapsules-io/mysql-operator:"+commit, "Image for mysql operator.")
-	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", "docker.io/codecapsules-io/mysql-operator-sidecar-5.7:"+commit, "Image for mysql helper.")
-	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", "docker.io/codecapsules-io/mysql-operator-sidecar-8.0:"+commit, "Image for mysql helper.")
+	flag.StringVar(&TestContext.OperatorImage, "operator-image", constants.OperatorImage("mysql-operator", commit), "Image for mysql operator.")
+	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", constants.OperatorImage("mysql-operator-sidecar-5.7", commit), "Image for mysql helper.")
+	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", constants.OperatorImage("mysql-operator-sidecar-8.0", commit), "Image for mysql helper.")
 	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from operator args).")
-	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "docker.io/codecapsules-io/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
+	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", constants.OperatorImage("mysql-operator-orchestrator", commit), "Image for mysql orchestrator.")
 	flag.StringVar(&TestContext.MetricsExporterImage, "metrics-exporter-image", "prom/mysqld-exporter:v0.16.0", "Image for mysqld_exporter in cluster pods.")
 	flag.BoolVar(&TestContext.VerifyKindLocalImages, "verify-kind-local-images", false, "Verify locally built operator images are preloaded on the kind node.")
 

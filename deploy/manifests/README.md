@@ -7,111 +7,26 @@ SPDX-License-Identifier: Apache-2.0
 
 This directory stores **frozen Kubernetes manifests** for each operator release: CRDs and operator runtime resources (RBAC, StatefulSet, Services, ConfigMaps, and so on).
 
-Use these manifests to install or upgrade the operator. Helm charts were removed in **0.7.0**; frozen **v0.6.3** manifests are available for migration off the legacy chart (see [Migrating from Helm (v0.6.3)](#migrating-from-helm-v063)).
+## User documentation
 
----
+Install, upgrade, customize, and migrate from Helm using the **[documentation site](https://codecapsules-io.github.io/mysql-operator/)**:
 
-## Install the operator (cluster operators)
+- [Install the operator](https://codecapsules-io.github.io/mysql-operator/install-operator/)
+- [Getting started](https://codecapsules-io.github.io/mysql-operator/getting-started/)
+- [Migrating from Helm](https://codecapsules-io.github.io/mysql-operator/migrate-from-helm/)
+- [Operator upgrades](https://codecapsules-io.github.io/mysql-operator/operator-upgrades/)
 
-### Prerequisites
+Helm charts were removed in **0.7.0**. Frozen **v0.6.3** manifests remain for migration reference.
 
-- A Kubernetes cluster with `kubectl` configured for it
-- `kubectl` **1.14+** (built-in `kubectl apply -k` uses kustomize)
-- Cluster admin permissions to install CRDs and cluster-scoped RBAC
-
-Pick the operator release that matches the git tag you are deploying (directory name includes the `v` prefix, e.g. `v0.7.0`).
-
-### Fresh install
-
-From a checkout of this repository (or after extracting a release archive that includes `deploy/manifests/`):
+### Quick install
 
 ```shell
 export OPERATOR_VERSION=v0.7.0
-export OPERATOR_NAMESPACE=mysql-operator
-
-kubectl create namespace "${OPERATOR_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace mysql-operator --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/crds"
 kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/operator"
-```
-
-Apply order matters: **CRDs first**, then operator resources.
-
-One-step alternative (same result; operator namespace is set to `mysql-operator` in kustomize):
-
-```shell
-kubectl apply -k "deploy/manifests/v0.7.0"
-```
-
-### Verify the install
-
-```shell
-kubectl get crd | grep mysql.presslabs.org
-kubectl get pods,svc -n mysql-operator
 kubectl rollout status statefulset/mysql-operator -n mysql-operator
 ```
-
-The operator runs as a StatefulSet named `mysql-operator` in the `mysql-operator` namespace by default.
-
-### Deploy a MySQL cluster
-
-After the operator is running, create cluster resources in your **application namespace** (not necessarily `mysql-operator`). Example manifests are in [`examples/`](../../examples/):
-
-```shell
-kubectl apply -f examples/example-cluster-secret.yaml
-kubectl apply -f examples/example-cluster.yaml
-```
-
-Adapt names, storage classes, and `mysqlVersion` before production use. See [`docs/mysql-version-upgrades.md`](../../docs/mysql-version-upgrades.md) for MySQL version and upgrade behavior.
-
-### Upgrade an existing install
-
-1. Apply the **new** version’s CRDs: `kubectl apply -k deploy/manifests/<new-version>/crds`
-2. Apply the **new** operator manifests: `kubectl apply -k deploy/manifests/<new-version>/operator`
-3. Wait for rollout: `kubectl rollout status statefulset/mysql-operator -n mysql-operator`
-
-Review release notes and [`docs/mysql-version-upgrades.md`](../../docs/mysql-version-upgrades.md) before upgrading across minor versions.
-
-### Migrating from Helm (v0.6.3)
-
-If you currently run the operator via the **Helm chart** from upstream Bitpoke or an older fork release (**v0.6.3** or earlier), use the frozen manifests under `deploy/manifests/v0.6.3/` as a reference for what the chart deployed, then move to **v0.7.0** manifests for ongoing installs.
-
-**Typical path:**
-
-1. **Note your Helm values** — image repositories/tags, `extraArgs`, orchestrator topology password, `watchNamespace`, and any custom sidecar or exporter images.
-2. **Compare with** `deploy/manifests/v0.6.3/operator/statefulset.yaml` — defaults use `docker.io/bitpoke/*:v0.6.3` images and `prom/mysqld-exporter:v0.13.0`.
-3. **Uninstall the Helm release** (does not remove CRDs or `MysqlCluster` resources in app namespaces by default):
-   ```shell
-   helm uninstall <release-name> -n mysql-operator
-   ```
-4. **Apply v0.7.0 manifests** — edit `deploy/manifests/v0.7.0/operator/statefulset.yaml` first if you need non-default images or operator flags, then:
-   ```shell
-   kubectl apply -k deploy/manifests/v0.7.0/crds
-   kubectl apply -k deploy/manifests/v0.7.0/operator
-   kubectl rollout status statefulset/mysql-operator -n mysql-operator
-   ```
-5. **Verify** CRDs, operator pod, and existing `MysqlCluster` resources reconcile.
-
-The **v0.6.3** manifest set is not maintained for new features; it exists so manifest-based installs can match the last Helm chart layout before upgrading to **v0.7.0**.
-
-To regenerate **v0.6.3** files from the `v0.6.3` git tag (maintainers only): `./hack/generate-v063-manifests.sh` (requires `helm`).
-
-### Uninstall
-
-```shell
-export OPERATOR_VERSION=v0.7.0
-
-# Remove operator workload and RBAC (does not remove MysqlCluster CRs in other namespaces)
-kubectl delete -k "deploy/manifests/${OPERATOR_VERSION}/operator"
-
-# Remove CRDs only when no MysqlCluster / MysqlUser / MysqlDatabase / MysqlBackup resources remain
-kubectl delete -k "deploy/manifests/${OPERATOR_VERSION}/crds"
-```
-
-Deleting CRDs removes all custom resources of those kinds cluster-wide. Ensure application namespaces are cleaned up first.
-
-### Customizing your install
-
-Default images and operator flags are defined in `deploy/manifests/<version>/operator/` (especially `statefulset.yaml`). To use private registries, different sidecar tags, or extra operator arguments, edit those YAML files **before** applying, or maintain a forked copy of the version directory.
 
 ---
 
@@ -235,3 +150,7 @@ make deploy.crds VERSION=v0.7.0
 ```
 
 This overwrites `crds/` only and leaves `operator/` untouched.
+
+### Regenerating v0.6.3 manifests (legacy)
+
+The `v0.6.3` tree is frozen for Helm migration reference and is not regenerated as part of normal releases. To inspect the original chart output, check out the `v0.6.3` git tag in the upstream or fork history.

@@ -55,7 +55,7 @@ make test
 ./hack/license-check
 ```
 
-If your change touches CRDs or cluster behavior, run additional validation described in [`docs/`](docs/) or ask in the PR which extra steps reviewers expect.
+If your change touches CRDs or cluster behavior, run additional validation described in the [documentation site](https://codecapsules-io.github.io/mysql-operator/) or ask in the PR which extra steps reviewers expect.
 
 CI configuration may evolve; **the workflows and Makefile targets in this repository are the source of truth** for what must pass before merge.
 

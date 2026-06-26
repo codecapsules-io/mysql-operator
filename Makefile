@@ -50,7 +50,7 @@ go.test.integration: $(GINKGO)
 	@CGO_ENABLED=0 $(GINKGO) $(GO_TEST_FLAGS) $(GO_STATIC_FLAGS) ./test/e2e $(TEST_FILTER_PARAM) || $(FAIL)
 	@$(OK) go test integration-tests
 
-DOCKER_REGISTRY ?= docker.io/codecapsules-io
+DOCKER_REGISTRY ?= ghcr.io/codecapsules-io
 IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4
 include build/makelib/image.mk
 

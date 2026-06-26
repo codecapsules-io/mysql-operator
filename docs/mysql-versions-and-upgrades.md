@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MySQL versions and upgrades
 
 This operator resolves the Percona (or other) **server image** for a `MysqlCluster` in this order:

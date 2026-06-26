@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Troubleshooting
 
 Common issues when running the Code Capsules MySQL operator.

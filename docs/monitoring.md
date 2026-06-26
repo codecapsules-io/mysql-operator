@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Monitoring
 
 The operator and each MySQL cluster expose Prometheus-compatible metrics.

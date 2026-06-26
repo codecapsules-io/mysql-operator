@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Storage and configuration
 
 This page covers how the operator stores MySQL data and how you can tune server configuration.

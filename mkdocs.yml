@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 site_name: Code Capsules MySQL Operator
 site_description: Kubernetes operator for highly available MySQL clusters
 site_url: https://codecapsules-io.github.io/mysql-operator/

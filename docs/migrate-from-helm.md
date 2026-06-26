@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Migrating from Helm
 
 Helm charts were **removed in v0.7.0**. If you currently run the operator via the upstream Bitpoke Helm chart (or an older fork release at **v0.6.3** or earlier), you can migrate to manifest-based installs.

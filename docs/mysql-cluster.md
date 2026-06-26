@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MysqlCluster
 
 The `MysqlCluster` custom resource (`mysql.presslabs.org/v1alpha1`) describes a highly available MySQL cluster. The operator creates a StatefulSet, Services, secrets, config maps, and related objects from your spec.

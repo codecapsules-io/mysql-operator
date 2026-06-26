@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Operator configuration
 
 The operator process accepts command-line flags (and some environment variables) that control images, Orchestrator connectivity, watch scope, and security behavior. Defaults for a release are set in `deploy/manifests/<version>/operator/statefulset.yaml`.

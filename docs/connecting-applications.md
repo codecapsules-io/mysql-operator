@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Connecting applications
 
 Each `MysqlCluster` exposes several Kubernetes Services for different connection patterns. You can wire your application Deployments, Jobs, or external tools to these endpoints.

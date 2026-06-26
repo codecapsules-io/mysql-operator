@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Legacy backups
 
 The operator includes a built-in backup subsystem: on-demand `MysqlBackup` resources, scheduled backups via `spec.backupSchedule`, and cluster initialization from `spec.initBucketURL`. This functionality is **not actively maintained** in the Code Capsules fork.

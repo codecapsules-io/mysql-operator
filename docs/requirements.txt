@@ -1,2 +1,5 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 mkdocs==1.6.1
 mkdocs-material==9.7.6

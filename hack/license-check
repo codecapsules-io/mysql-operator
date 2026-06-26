@@ -150,6 +150,7 @@ fi
 MISSING_SPDX=()
 while IFS= read -r f; do
 	[[ -f "$f" ]] || continue
+	git check-ignore -q "$f" && continue
 	case "$f" in
 	*.go|go.mod|LICENSE|NOTICE|.gitignore|*/CODEOWNERS) continue ;;
 	esac

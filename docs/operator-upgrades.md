@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Operator upgrades
 
 This page covers upgrading the **operator controller** (the software in `mysql-operator` namespace), not MySQL server version changes on your clusters.

@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Orchestrator
 
 [Orchestrator](https://github.com/percona/orchestrator) manages MySQL replication topology and performs automatic failover. This operator bundles Orchestrator as a sidecar container in the `mysql-operator` StatefulSet.

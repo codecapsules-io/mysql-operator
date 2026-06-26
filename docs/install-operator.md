@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Install the operator
 
 This page describes how to install, verify, customize, and upgrade the operator using versioned Kubernetes manifests under [`deploy/manifests/`](https://github.com/codecapsules-io/mysql-operator/tree/master/deploy/manifests).

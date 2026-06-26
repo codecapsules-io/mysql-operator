@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MysqlUser and MysqlDatabase
 
 Beyond bootstrap credentials in the cluster secret, you can manage MySQL users and databases declaratively with `MysqlUser` and `MysqlDatabase` resources.

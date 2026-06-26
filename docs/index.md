@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Code Capsules MySQL Operator
 
 The **Code Capsules MySQL Operator** is a Kubernetes controller for running highly available MySQL clusters. You can declare clusters, users, and databases as custom resources; the operator handles replication, failover, and day-to-day operations.

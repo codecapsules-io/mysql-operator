@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Version profiles
 
 Server **images** are resolved by the image resolver (see [MySQL versions & upgrades](mysql-versions-and-upgrades.md)): `spec.image`, CLI overrides, catalog file, then built-in constants.

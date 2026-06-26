@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 Code Capsules
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Getting started
 
 This guide walks you through installing the operator and deploying your first MySQL cluster.

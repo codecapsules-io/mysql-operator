@@ -24,6 +24,9 @@ on:
         default: true
 
 env:
+  # Canonical repo for GHCR publishes. Do not use repository.fork — this repo is a
+  # GitHub fork of bitpoke/mysql-operator but is the sole authorized publish target.
+  ALLOWED_PUBLISH_REPOSITORY: codecapsules-io/mysql-operator
   REGISTRY: ghcr.io/${{ github.repository_owner }}
   DEFAULT_BRANCH: master
 
@@ -36,12 +39,27 @@ concurrency:
 
 jobs:
   guard:
-    if: github.event.repository.fork == false
+    if: github.repository == 'codecapsules-io/mysql-operator'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       branch: ${{ steps.branch.outputs.name }}
     steps:
+      - name: Verify canonical publish repository
+        run: |
+          set -euo pipefail
+          CANONICAL="${{ env.ALLOWED_PUBLISH_REPOSITORY }}"
+
+          if [[ "${{ github.repository }}" != "${CANONICAL}" ]]; then
+            echo "::error::Publishing is restricted to ${CANONICAL} (got ${{ github.repository }})."
+            exit 1
+          fi
+
+          if [[ "${{ github.repository_owner }}" != "codecapsules-io" ]]; then
+            echo "::error::Publishing is restricted to the codecapsules-io organization."
+            exit 1
+          fi
+
       - name: Validate release branch
         id: branch
         run: |
@@ -85,7 +103,9 @@ jobs:
 
   publish:
     needs: guard
-    if: github.event.repository.fork == false
+    if: >-
+      needs.guard.result == 'success'
+      && github.repository == 'codecapsules-io/mysql-operator'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: ghcr-release

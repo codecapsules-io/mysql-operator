@@ -96,6 +96,13 @@ ifeq ($(V),0)
 BUILD_ARGS ?= -q
 endif
 
+# buildx keeps images in its cache unless --load is set; publish tags from the local daemon.
+ifeq ($(CI),true)
+ifeq ($(findstring --load,$(BUILD_ARGS)),)
+BUILD_ARGS += --load
+endif
+endif
+
 # if PULL=1 we will always check if there is a newer base image
 PULL ?= 1
 ifeq ($(PULL),1)

@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,10 +24,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	// add mysql driver
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (
@@ -37,6 +40,10 @@ const (
 // SQLInterface expose abstract operations that can be applied on a MySQL node
 type SQLInterface interface {
 	Wait(ctx context.Context) error
+	// WaitForOperatorStatusTable blocks until operator init-file has finished (or ctx is done).
+	// MySQL can accept connections while init-file is still running grants and replication reset;
+	// the status table is created at the start of init-file, so table existence alone is not enough.
+	WaitForOperatorStatusTable(ctx context.Context) error
 	DisableSuperReadOnly(ctx context.Context) (func(), error)
 	ChangeMasterTo(ctx context.Context, host string, user string, pass string) error
 	MarkConfigurationDone(ctx context.Context) error
@@ -51,15 +58,17 @@ type nodeSQLRunner struct {
 	host string
 
 	enableBinLog bool
+	rep          mysqlversioning.ReplicationDialect
 }
 
-type sqlFactoryFunc func(dsn, host string) SQLInterface
+type sqlFactoryFunc func(dsn, host string, mysqlVer semver.Version) SQLInterface
 
-func newNodeConn(dsn, host string) SQLInterface {
+func newNodeConn(dsn, host string, mysqlVer semver.Version) SQLInterface {
 	return &nodeSQLRunner{
 		dsn:          dsn,
 		host:         host,
 		enableBinLog: false,
+		rep:          mysqlversioning.ProfileFor(mysqlVer).Replication(),
 	}
 }
 
@@ -80,6 +89,42 @@ func (r *nodeSQLRunner) Wait(ctx context.Context) error {
 	}
 }
 
+func (r *nodeSQLRunner) WaitForOperatorStatusTable(ctx context.Context) error {
+	log.V(1).Info("wait for init-file completion", "host", r.Host())
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for init-file completion: %w", ctx.Err())
+		case <-time.After(time.Second):
+			done, err := r.isInitFileComplete(ctx)
+			if err != nil {
+				log.V(1).Info("init-file not complete yet", "host", r.Host(), "error", err)
+				continue
+			}
+			if done {
+				return nil
+			}
+		}
+	}
+}
+
+func (r *nodeSQLRunner) isInitFileComplete(ctx context.Context) (bool, error) {
+	complete, err := r.readStatusValue(ctx, constants.OperatorInitFileCompleteKey)
+	if err != nil {
+		return false, err
+	}
+	if complete == constants.OperatorInitFileCompleteValue {
+		return true, nil
+	}
+
+	// Pre-marker clusters: init-file does not re-run on restart; node controller already set configured.
+	configured, err := r.readStatusValue(ctx, constants.OperatorConfiguredKey)
+	if err != nil {
+		return false, err
+	}
+	return configured == constants.OperatorConfiguredDoneValue, nil
+}
+
 func (r *nodeSQLRunner) DisableSuperReadOnly(ctx context.Context) (func(), error) {
 	enable := func() {
 		err := r.runQuery(ctx, "SET GLOBAL SUPER_READ_ONLY = 1;")
@@ -90,35 +135,20 @@ func (r *nodeSQLRunner) DisableSuperReadOnly(ctx context.Context) (func(), error
 	return enable, r.runQuery(ctx, "SET GLOBAL READ_ONLY = 1; SET GLOBAL SUPER_READ_ONLY = 0;")
 }
 
-// ChangeMasterTo changes the master host and starts slave.
+// ChangeMasterTo changes the master host and starts replication.
 func (r *nodeSQLRunner) ChangeMasterTo(ctx context.Context, masterHost, user, pass string) error {
-	// slave node
-	query := `
-      STOP SLAVE;
-	  CHANGE MASTER TO MASTER_AUTO_POSITION=1,
-		MASTER_HOST=?,
-		MASTER_USER=?,
-		MASTER_PASSWORD=?,
-		MASTER_CONNECT_RETRY=?;
-	`
+	d := r.rep
+	query := d.StopReplication + "\n" + d.ChangeSourceSQL
 	if err := r.runQuery(ctx, query,
 		masterHost, user, pass, connRetry,
 	); err != nil {
 		return fmt.Errorf("failed to configure slave node, err: %s", err)
 	}
 
-	query = "START SLAVE;"
-	if err := r.runQuery(ctx, query); err != nil {
+	if err := r.runQuery(ctx, d.StartReplication); err != nil {
 		log.Info("failed to start slave in the simple mode, trying a second method", "host", r.Host())
 		// TODO: https://bugs.mysql.com/bug.php?id=83713
-		query2 := `
-		  reset slave;
-		  start slave IO_THREAD;
-		  stop slave IO_THREAD;
-		  reset slave;
-		  start slave;
-		`
-		if err := r.runQuery(ctx, query2); err != nil {
+		if err := r.runQuery(ctx, d.FallbackStartSQL); err != nil {
 			return fmt.Errorf("failed to start slave node, err: %s", err)
 		}
 	}
@@ -127,13 +157,13 @@ func (r *nodeSQLRunner) ChangeMasterTo(ctx context.Context, masterHost, user, pa
 
 // MarkConfigurationDone write in a MEMORY table value. The readiness probe checks for that value to exist to succeed.
 func (r *nodeSQLRunner) MarkConfigurationDone(ctx context.Context) error {
-	return r.writeStatusValue(ctx, "configured", "1")
+	return r.writeStatusValue(ctx, constants.OperatorConfiguredKey, constants.OperatorConfiguredDoneValue)
 }
 
 // IsConfigured returns true if MySQL was configured, a key was set in the status table
 func (r *nodeSQLRunner) IsConfigured(ctx context.Context) (bool, error) {
-	val, err := r.readStatusValue(ctx, "configured")
-	return val == "1", err
+	val, err := r.readStatusValue(ctx, constants.OperatorConfiguredKey)
+	return val == constants.OperatorConfiguredDoneValue, err
 }
 
 func (r *nodeSQLRunner) MarkSetGTIDPurged(ctx context.Context) error {
@@ -221,17 +251,19 @@ func (r *nodeSQLRunner) SetPurgedGTID(ctx context.Context) error {
 		return nil
 	}
 
+	resetBinlogs := r.rep.ResetBinaryLogsStatement()
+
 	// GTID exists and should be set in a transaction
 	// nolint: gosec
 	query := fmt.Sprintf(`
 	  SET @@SESSION.SQL_LOG_BIN = 0;
 	  START TRANSACTION;
 		SELECT value INTO @gtid FROM %[1]s.%[2]s WHERE name='%[3]s';
-		RESET MASTER;
+		%[5]s
 		SET @@GLOBAL.GTID_PURGED = @gtid;
 		REPLACE INTO %[1]s.%[2]s VALUES ('%[4]s', @gtid);
 	  COMMIT;
-    `, constants.OperatorDbName, constants.OperatorStatusTableName, "backup_gtid_purged", "set_gtid_purged")
+    `, constants.OperatorDbName, constants.OperatorStatusTableName, "backup_gtid_purged", "set_gtid_purged", resetBinlogs)
 
 	if err := r.runQuery(ctx, query); err != nil {
 		return err

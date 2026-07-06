@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	"github.com/imdario/mergo"
 	"github.com/presslabs/controller-util/mergo/transformers"
 	"github.com/presslabs/controller-util/syncer"
@@ -31,16 +33,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlbackup"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlbackup"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (
 	// RemoteStorageFinalizer is the finalizer name used when hardDelete policy is used
-	RemoteStorageFinalizer = "backups.mysql.presslabs.org/remote-storage-cleanup"
+	RemoteStorageFinalizer = domain.FinalizerRemoteStorageCleanup
 
 	// RemoteDeletionFailedEvent is the event that is set on the cluster when the cleanup job fails
 	RemoteDeletionFailedEvent = "RemoteDeletionFailed"
@@ -167,9 +171,11 @@ func (s *deletionJobSyncer) ensureContainers() []core.Container {
 
 	rcloneCommand = append(rcloneCommand, "delete", bucketForRclone(s.backup.Spec.BackupURL))
 
-	image := s.opt.SidecarMysql57Image
+	image := s.opt.SidecarMysql8Image
 	if s.cluster != nil {
 		image = s.cluster.GetSidecarImage()
+	} else if rt := mysqlversioning.Default(); rt != nil {
+		image = rt.Resolver.SidecarImage(rt.Registry.MustResolve(semver.MustParse("8.0.30")).SidecarProfileKey())
 	}
 
 	container := core.Container{

@@ -1,5 +1,7 @@
 /*
 Copyright 2016 The Kubernetes Authors.
+Copyright 2026 Code Capsules
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -19,7 +21,8 @@ import (
 
 	"github.com/onsi/ginkgo/config"
 
-	"github.com/bitpoke/mysql-operator/pkg/version"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/version"
 
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -35,13 +38,15 @@ type TestContextType struct {
 
 	ReportDir string
 
-	ChartPath   string
-	ChartValues string
+	OperatorManifestsPath string
 
 	OperatorImage       string
 	SidecarMysql57Image string
 	SidecarMysql8Image  string
-	OrchestratorImage   string
+	SidecarMysql84Image string
+	OrchestratorImage      string
+	MetricsExporterImage   string
+	VerifyKindLocalImages  bool
 
 	TimeoutSeconds    int
 	DumpLogsOnFailure bool
@@ -67,13 +72,15 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.KubeContext, "kubernetes-context", "", "config context to use for kuberentes. If unset, will use value from 'current-context'")
 
 	flag.StringVar(&TestContext.ReportDir, "report-dir", "", "Optional directory to store junit and pod logs output in. If not specified, no junit or logs files will be output")
-	flag.StringVar(&TestContext.ChartPath, "operator-chart-path", "../../deploy/charts/mysql-operator", "The chart name or path for mysql operator")
-	flag.StringVar(&TestContext.ChartValues, "operator-chart-values-path", "../../test/e2e-values.yaml", "Path to a values file for mysql-operator chart.")
+	flag.StringVar(&TestContext.OperatorManifestsPath, "operator-manifests-path", "../../deploy/manifests/v0.7.0", "Path to versioned operator manifests (crds/ and operator/ subdirs).")
 
-	flag.StringVar(&TestContext.OperatorImage, "operator-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator:"+commit, "Image for mysql operator.")
-	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-sidecar-5.7:"+commit, "Image for mysql helper.")
-	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-sidecar-8.0:"+commit, "Image for mysql helper.")
-	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", "eu.gcr.io/bitpoke-mysql-operator-testing/mysql-operator-orchestrator:"+commit, "Image for mysql orchestrator.")
+	flag.StringVar(&TestContext.OperatorImage, "operator-image", constants.OperatorImage("mysql-operator", commit), "Image for mysql operator.")
+	flag.StringVar(&TestContext.SidecarMysql57Image, "sidecar-mysql57-image", constants.OperatorImage("mysql-operator-sidecar-5.7", commit), "Image for mysql helper.")
+	flag.StringVar(&TestContext.SidecarMysql8Image, "sidecar-mysql8-image", constants.OperatorImage("mysql-operator-sidecar-8.0", commit), "Image for mysql helper.")
+	flag.StringVar(&TestContext.SidecarMysql84Image, "sidecar-mysql84-image", "", "Optional image for Percona 8.4 sidecar (empty = omit from operator args).")
+	flag.StringVar(&TestContext.OrchestratorImage, "orchestrator-image", constants.OperatorImage("mysql-operator-orchestrator", commit), "Image for mysql orchestrator.")
+	flag.StringVar(&TestContext.MetricsExporterImage, "metrics-exporter-image", "prom/mysqld-exporter:v0.16.0", "Image for mysqld_exporter in cluster pods.")
+	flag.BoolVar(&TestContext.VerifyKindLocalImages, "verify-kind-local-images", false, "Verify locally built operator images are preloaded on the kind node.")
 
 	flag.IntVar(&TestContext.TimeoutSeconds, "pod-wait-timeout", 100, "Timeout to wait for a pod to be ready.")
 	flag.BoolVar(&TestContext.DumpLogsOnFailure, "dump-logs-on-failure", true, "Dump pods logs when a test fails.")

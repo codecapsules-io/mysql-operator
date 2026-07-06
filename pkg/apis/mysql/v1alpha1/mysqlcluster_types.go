@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,7 +46,7 @@ type MysqlClusterSpec struct {
 	SecretName string `json:"secretName"`
 
 	// Represents the MySQL version that will be run. The available version can be found here:
-	// https://github.com/bitpoke/mysql-operator/blob/0fd4641ce4f756a0aab9d31c8b1f1c44ee10fcb2/pkg/util/constants/constants.go#L87
+	// https://github.com/codecapsules-io/mysql-operator/blob/main/pkg/util/constants/mysql_versions.go
 	// This field should be set even if the Image is set to let the operator know which mysql version is running.
 	// Based on this version the operator can take decisions which features can be used.
 	// Defaults to 5.7
@@ -328,6 +329,11 @@ const (
 	// ClusterConditionFailoverInProgress indicates if there is a current failover in progress
 	// done by the Orchestrator
 	ClusterConditionFailoverInProgress ClusterConditionType = "FailoverInProgress"
+
+	// ClusterConditionUpgradeBlocked indicates the requested spec.mysqlVersion change cannot proceed
+	// (invalid path: downgrade or skipping an LTS line).
+	// The cluster remains operational on its current version; no Ready condition is affected.
+	ClusterConditionUpgradeBlocked ClusterConditionType = "UpgradeBlocked"
 )
 
 // NodeStatus defines type for status of a node into cluster.
@@ -360,6 +366,10 @@ const (
 
 // MysqlClusterStatus defines the observed state of MysqlCluster
 type MysqlClusterStatus struct {
+	// AppliedMysqlVersion is the MySQL server version confirmed on the cluster data plane.
+	// The operator sets this when all replicas are ready on that version (status subresource, not spec).
+	// +optional
+	AppliedMysqlVersion string `json:"appliedMysqlVersion,omitempty"`
 	// ReadyNodes represents number of the nodes that are in ready state
 	ReadyNodes int `json:"readyNodes,omitempty"`
 	// Conditions contains the list of the cluster conditions fulfilled
@@ -376,7 +386,6 @@ type MysqlClusterStatus struct {
 // +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="The number of desired nodes"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:shortName=mysql
-//
 type MysqlCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -387,7 +396,6 @@ type MysqlCluster struct {
 
 // MysqlClusterList contains a list of MysqlCluster
 // +kubebuilder:object:root=true
-//
 type MysqlClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

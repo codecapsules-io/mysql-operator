@@ -1,0 +1,54 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+
+env:
+  CI: true
+  CI_BUILD_NUMBER: ${{ github.run_id }}
+  E2E_IMAGE_REGISTRY: mysql-operator-ci
+  E2E_IMAGE_TAG: local
+  CLUSTER_NAME: mysql-operator
+
+jobs:
+  e2e:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Disable Docker containerd snapshotter
+        # Workaround for https://github.com/kubernetes-sigs/kind/issues/3795
+        run: |
+          sudo mkdir -p /etc/docker
+          if [ -s /etc/docker/daemon.json ]; then
+            jq '. + {"features":{"containerd-snapshotter": false}}' /etc/docker/daemon.json \
+              | sudo tee /etc/docker/daemon.json.tmp >/dev/null
+          else
+            echo '{"features":{"containerd-snapshotter": false}}' \
+              | sudo tee /etc/docker/daemon.json.tmp >/dev/null
+          fi
+          sudo mv -f /etc/docker/daemon.json.tmp /etc/docker/daemon.json
+          sudo systemctl restart docker
+
+      # Build before kind so peak RAM is not "kind + kube-system + docker builds".
+      - name: Build operator images
+        run: bash hack/e2e-kind.sh --build-only
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: mysql-operator
+
+      - name: Run e2e tests
+        run: bash hack/e2e-kind.sh --skip-build --skip-cluster

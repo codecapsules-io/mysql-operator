@@ -1,5 +1,6 @@
 /*
 Copyright 2015 The Kubernetes Authors.
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,16 +38,16 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	core "k8s.io/client-go/kubernetes/typed/core/v1"
 
-	"github.com/bitpoke/mysql-operator/test/e2e/framework"
-	"github.com/bitpoke/mysql-operator/test/e2e/framework/ginkgowrapper"
-	pf "github.com/bitpoke/mysql-operator/test/e2e/framework/portforward"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework/ginkgowrapper"
+	pf "github.com/codecapsules-io/mysql-operator/test/e2e/framework/portforward"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 const (
 	operatorNamespace = "mysql-operator"
-	releaseName       = "operator"
+	operatorPodName   = "mysql-operator-0"
 
 	orchestratorPort = 3000
 )
@@ -75,12 +76,17 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 			ginkgo.Fail(fmt.Sprintf("can't create mysql-operator namespace: %s", err))
 		}
 	}
-	framework.HelmInstallChart(releaseName, operatorNamespace)
+	framework.ApplyOperatorManifests(operatorNamespace)
+
+	if framework.TestContext.VerifyKindLocalImages {
+		ginkgo.By("Verify locally built images are preloaded on the kind node")
+		framework.VerifyKindLocalImages()
+	}
 
 	// Create a tunnel, port-forward orchestrator port to local port
 	ginkgo.By("Port-forward orchestrator")
 	orcTunnel = pf.NewTunnel(restClient, kubeCfg, operatorNamespace,
-		fmt.Sprintf("%s-mysql-operator-0", releaseName),
+		operatorPodName,
 		orchestratorPort,
 	)
 	if err := orcTunnel.ForwardPort(); err != nil {
@@ -118,8 +124,8 @@ var _ = ginkgo.SynchronizedAfterSuite(func() {
 	client, err := clientset.NewForConfig(kubeCfg)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-	ginkgo.By("Remove operator release")
-	framework.HelmPurgeRelease(releaseName, operatorNamespace)
+	ginkgo.By("Remove operator manifests")
+	framework.RemoveOperatorManifests(operatorNamespace)
 
 	ginkgo.By("Delete operator namespace")
 

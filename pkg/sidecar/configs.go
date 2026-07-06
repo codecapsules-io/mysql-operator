@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,11 +28,13 @@ import (
 	// add mysql driver
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	"github.com/presslabs/controller-util/rand"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 // Config contains information related with the pod.
@@ -216,16 +219,30 @@ func (cfg *Config) XtrabackupPrepareArgs() []string {
 
 // NewConfig returns a pointer to Config configured from environment variables
 func NewConfig() *Config {
+	if err := mysqlversioning.InitDefault(options.GetOptions()); err != nil {
+		panic(err)
+	}
+
 	var (
 		err          error
-		hbPass       string
 		eData        bool
 		offset       int
 		customOffset string
 	)
 
-	if hbPass, err = rand.AlphaNumericString(10); err != nil {
-		panic(err)
+	hbUser := strings.TrimSpace(getEnvValue("HEARTBEAT_USER"))
+	if hbUser == "" {
+		hbUser = constants.HeartBeatMySQLUser
+	}
+	hbPass := strings.TrimSpace(getEnvValue("HEARTBEAT_PASSWORD"))
+	if hbPass == "" {
+		if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+			panic("HEARTBEAT_PASSWORD is unset in-cluster: ensure the operated secret includes HEARTBEAT_PASSWORD " +
+				"(upgrade mysql-operator and let it reconcile the secret), then restart mysql pods")
+		}
+		if hbPass, err = rand.AlphaNumericString(10); err != nil {
+			panic(err)
+		}
 	}
 
 	if eData, err = checkIfDataExists(); err != nil {
@@ -269,7 +286,7 @@ func NewConfig() *Config {
 		OrchestratorUser:     getEnvValue("ORC_TOPOLOGY_USER"),
 		OrchestratorPassword: getEnvValue("ORC_TOPOLOGY_PASSWORD"),
 
-		HeartBeatUser:     heartBeatUserName,
+		HeartBeatUser:     hbUser,
 		HeartBeatPassword: hbPass,
 
 		ExistsMySQLData: eData,
@@ -288,6 +305,24 @@ func NewConfig() *Config {
 
 		MySQLVersion: mysqlVersion,
 	}
+
+	prof := mysqlversioning.ProfileFor(mysqlVersion)
+	log.Info("sidecar NewConfig summary",
+		"hostname", cfg.Hostname,
+		"cluster", cfg.ClusterName,
+		"namespace", cfg.Namespace,
+		"mysqlVersion", mysqlVersion.String(),
+		"profile", prof.Name(),
+		"existsMySQLData", eData,
+		"operatorUser", cfg.OperatorUser,
+		"operatorPasswordLen", len(cfg.OperatorPassword),
+		"heartbeatUser", cfg.HeartBeatUser,
+		"heartbeatPasswordLen", len(cfg.HeartBeatPassword),
+		"metricsUser", cfg.MetricsUser,
+		"metricsPasswordLen", len(cfg.MetricsPassword),
+		"orchestratorUser", cfg.OrchestratorUser,
+		"orchestratorPasswordLen", len(cfg.OrchestratorPassword),
+	)
 
 	return cfg
 }

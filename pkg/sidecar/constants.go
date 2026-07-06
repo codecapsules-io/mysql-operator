@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +24,7 @@ import (
 	// add mysql driver
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 var (
@@ -48,6 +49,9 @@ var (
 	// confHeartbeatPath the path where to put the heartbeat.conf file
 	confHeartbeatPath = constants.ConfHeartBeatPath
 
+	// confPtKillPath the path where to put the pt-kill.conf file
+	confPtKillPath = constants.ConfPtKillPath
+
 	// DataDir is the mysql data. /var/lib/mysql
 	dataDir = constants.DataVolumeMountPath
 
@@ -57,15 +61,13 @@ var (
 	// toolsHeartbeatTableName is the name used for pt-heartbeat table
 	toolsHeartbeatTableName = "heartbeat"
 
-	// heartBeatUserName is the MySQL user that is used for pt-heartbeat
-	heartBeatUserName = "sys_heartbeat"
-
 	// ServerPort http server port
 	serverPort = constants.SidecarServerPort
 	// ServerProbeEndpoint is the http server endpoint for probe
 	serverProbeEndpoint = constants.SidecarServerProbePath
 	// ServerBackupEndpoint is the http server endpoint for backups
 	serverBackupEndpoint = "/xbackup"
+
 	// ServerDialTimeout is the connect timeout (not http timeout) for requesting a backup from the sidecar server
 	serverConnectTimeout = 5 * time.Second
 

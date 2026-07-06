@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,22 +40,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
+	apps "k8s.io/api/apps/v1"
+
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 var log = logf.Log.WithName(controllerName)
 
 const controllerName = "controller.mysqlNode"
 
-// mysqlReconciliationTimeout the time that should last a reconciliation (this is used as a MySQL timout too)
-const mysqlReconciliationTimeout = 5 * time.Second
+// mysqlReconciliationTimeout bounds a single reconcile (MySQL waits, init SQL, node setup).
+// First mysqld start can take longer than a few seconds; init-file may still be running grants
+// and replication reset after the server begins accepting connections.
+const mysqlReconciliationTimeout = 2 * time.Minute
 
 // skipGTIDPurgedAnnotations, if this annotations is set on the cluster then the node controller skip setting GTID_PURGED variable.
 // this is the case for the upgrade when the old cluster has already set GTID_PURGED
-const skipGTIDPurgedAnnotation = "mysql.presslabs.org/skip-gtid-purged"
 
 // Add creates a new MysqlCluster Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -81,16 +87,7 @@ func newReconciler(mgr manager.Manager, sqlI sqlFactoryFunc) reconcile.Reconcile
 }
 
 func isOwnedByMySQL(meta metav1.Object) bool {
-	if meta == nil {
-		return false
-	}
-
-	labels := meta.GetLabels()
-	if val, ok := labels["app.kubernetes.io/managed-by"]; ok {
-		return val == "mysql.presslabs.org"
-	}
-
-	return false
+	return domain.IsManagedByMySQL(meta.GetLabels())
 }
 
 func isReady(obj runtime.Object) bool {
@@ -125,8 +122,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		},
 
 		// trigger node initialization only on pod update, after pod is created for a while
-		// also the pod should not be initialized before and should be running because the init
-		// timeout is ~5s (see above) and the cluster status can become obsolete
+		// also the pod should not be initialized before and should be running because the reconcile
+		// uses a bounded MySQL wait context (see mysqlReconciliationTimeout) and the cluster status can become obsolete
 		UpdateFunc: func(evt event.UpdateEvent) bool {
 			return isOwnedByMySQL(evt.ObjectNew) && isRunning(evt.ObjectNew) && !isReady(evt.ObjectNew)
 		},
@@ -206,7 +203,7 @@ func (r *ReconcileMysqlNode) Reconcile(ctx context.Context, request reconcile.Re
 		if cluster.Annotations == nil {
 			cluster.Annotations = make(map[string]string)
 		}
-		cluster.Annotations[skipGTIDPurgedAnnotation] = "true"
+		cluster.Annotations[domain.AnnotationSkipGTIDPurged] = "true"
 		return reconcile.Result{}, r.Update(ctx, cluster.Unwrap())
 	}
 
@@ -216,11 +213,21 @@ func (r *ReconcileMysqlNode) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	sts, stsErr := r.getClusterStatefulSet(ctx, cluster)
+	if stsErr != nil {
+		return reconcile.Result{}, stsErr
+	}
+
 	// initialize SQL interface
-	sql := r.getMySQLConnection(cluster, pod, creds)
+	sql := r.getMySQLConnection(cluster, pod, creds, sts)
 
 	// wait for mysql to be ready
 	if err = sql.Wait(ctx); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// init-file (operator-init.sql) may still be running after TCP accepts connections
+	if err = sql.WaitForOperatorStatusTable(ctx); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -276,7 +283,7 @@ func (r *ReconcileMysqlNode) initializeMySQL(ctx context.Context, sql SQLInterfa
 
 	// check if the skip GTID_PURGED annotation is set on the cluster first
 	// and if it's set then mark the GTID_PURGED set in status table
-	if _, ok := cluster.Annotations[skipGTIDPurgedAnnotation]; ok {
+	if _, ok := cluster.Annotations[domain.AnnotationSkipGTIDPurged]; ok {
 		if err := sql.MarkSetGTIDPurged(ctx); err != nil {
 			return err
 		}
@@ -321,8 +328,9 @@ func (r *ReconcileMysqlNode) getNodeCluster(ctx context.Context, pod *corev1.Pod
 	return cluster, err
 }
 
-// getMySQLConnectionString returns the DSN that contains credentials to connect to given pod from a MySQL cluster
-func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, c *credentials) SQLInterface {
+// getMySQLConnection returns a SQL runner for the pod's mysqld. Replication dialect follows the
+// data-plane version because spec.mysqlVersion may already target an upgrade while mysqld is still on the prior line.
+func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, c *credentials, sts *apps.StatefulSet) SQLInterface {
 	host := fmt.Sprintf("%s.%s.%s", pod.Spec.Hostname,
 		cluster.GetNameForResource(mysqlcluster.HeadlessSVC), pod.Namespace)
 
@@ -330,7 +338,28 @@ func (r *ReconcileMysqlNode) getMySQLConnection(cluster *mysqlcluster.MysqlClust
 		c.User, c.Password, host, constants.MysqlPort,
 	)
 
-	return r.sqlFactory(dsn, host)
+	return r.sqlFactory(dsn, host, replicationSQLVersion(cluster, pod, sts))
+}
+
+// replicationSQLVersion prefers the pod's MY_MYSQL_VERSION (accurate during rollout), then cluster effective.
+func replicationSQLVersion(cluster *mysqlcluster.MysqlCluster, pod *corev1.Pod, sts *apps.StatefulSet) semver.Version {
+	if v := mysqlcluster.SemVerFromPod(pod); !v.IsZero() {
+		return v
+	}
+	return cluster.EffectiveVersion(sts)
+}
+
+func (r *ReconcileMysqlNode) getClusterStatefulSet(ctx context.Context, cluster *mysqlcluster.MysqlCluster) (*apps.StatefulSet, error) {
+	sts := &apps.StatefulSet{}
+	key := types.NamespacedName{
+		Name:      cluster.GetNameForResource(mysqlcluster.StatefulSet),
+		Namespace: cluster.Namespace,
+	}
+	err := r.Get(ctx, key, sts)
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	return sts, err
 }
 
 type credentials struct {
@@ -425,7 +454,7 @@ func podCondIndex(p *corev1.Pod, condType corev1.PodConditionType) (int, bool) {
 func shouldUpdateToVersion(cluster *mysqlcluster.MysqlCluster, targetVersion int) bool {
 	var version string
 	var ok bool
-	if version, ok = cluster.ObjectMeta.Annotations["mysql.presslabs.org/version"]; !ok {
+	if version, ok = cluster.ObjectMeta.Annotations[domain.AnnotationVersion]; !ok {
 		// no version annotation present, (it's a cluster older than 0.3.0) or it's a new cluster
 		log.Info("annotation not set on cluster", "key", cluster)
 		return true

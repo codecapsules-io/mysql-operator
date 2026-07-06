@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +26,7 @@ import (
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/bitpoke/mysql-operator/pkg/version"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 // nolint: unparam
@@ -41,8 +42,10 @@ func getFromEnvOrDefault(key, def string) string {
 type Options struct {
 	// SidecarMysql57Image is the image used in sidecar container to serve backups and configure MySQL
 	SidecarMysql57Image string
-	// SidecarMysql8Image as above but used when cluster uses mysql 8.0 and above
+	// SidecarMysql8Image is used for MySQL / Percona Server 8.0 through 8.3 (XtraBackup 8.0 line).
 	SidecarMysql8Image string
+	// SidecarMysql84Image is used for Percona Server 8.4 LTS (no cross-profile fallback).
+	SidecarMysql84Image string
 
 	// MetricsExporterImage is the image for exporter container
 	MetricsExporterImage string
@@ -64,7 +67,7 @@ type Options struct {
 
 	// LeaderElectionNamespace the namespace where the lock resource will be created
 	LeaderElectionNamespace string
-	// LederElectionID the name of the lock resource
+	// LeaderElectionID the name of the lock resource
 	LeaderElectionID string
 
 	// Namespace where to look after objects. This will limit the operator action range.
@@ -74,12 +77,23 @@ type Options struct {
 	// This overrides the default versions and has priority.
 	MySQLVersionImageOverride map[string]string
 
+	// MySQLVersionCatalogFile, if set, is merged after built-in defaults and before CLI overrides
+	// for each exact semver key (e.g. mount a ConfigMap at this path).
+	MySQLVersionCatalogFile string
+
+	// mysqlVersionCatalog is populated from MySQLVersionCatalogFile during Validate.
+	mysqlVersionCatalog map[string]string
+
 	// OrchestratorConcurrentReconciles sets the orchestrator controller workers
 	OrchestratorConcurrentReconciles int32
 
 	// FailoverBeforeShutdownEnabled if enabled inserts a pre-stop lifecycle hook into pod
 	// to trigger a failover before shutdown
 	FailoverBeforeShutdownEnabled bool
+
+	// ClusterRestrictPrivilegeEscalation when enabled sets securityContext.allowPrivilegeEscalation
+	// to false on every init container and container in managed MySQL cluster pods.
+	ClusterRestrictPrivilegeEscalation bool
 
 	// AllowCrossNamespaceUser allow creating users resources in clusters that are not in the same namespace.
 	AllowCrossNamespaceUsers bool
@@ -98,11 +112,11 @@ type Options struct {
 type pullpolicy corev1.PullPolicy
 
 func (pp *pullpolicy) String() string {
-	return string(*pp)
+	return string(corev1.PullPolicy(*pp))
 }
 
 func (pp *pullpolicy) Set(value string) error {
-	*pp = pullpolicy(value)
+	*pp = pullpolicy(corev1.PullPolicy(value))
 	return nil
 }
 
@@ -117,7 +131,7 @@ func newPullPolicyValue(defaultValue corev1.PullPolicy, v *corev1.PullPolicy) *p
 }
 
 const (
-	defaultExporterImage = "prom/mysqld-exporter:v0.13.0"
+	defaultExporterImage = "prom/mysqld-exporter:v0.16.0"
 
 	defaultImagePullPolicy     = corev1.PullIfNotPresent
 	defaultImagePullSecretName = ""
@@ -131,14 +145,26 @@ const (
 
 	defaultFailoverBeforeShutdownEnabled = true
 
+	defaultClusterRestrictPrivilegeEscalation = false
+
 	defaultMetricsBindAddress     = ":8080"
 	defaultHealthProbeBindAddress = ":8081"
 )
 
-var (
-	defaultSidecarMysql57Image = "docker.io/bitpoke/mysql-operator-sidecar-5.7:" + version.GetInfo().GitVersion
-	defaultSidecarMysql8Image  = "docker.io/bitpoke/mysql-operator-sidecar-8.0:" + version.GetInfo().GitVersion
-)
+func defaultSidecarMysql57Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL57_IMAGE",
+		constants.OperatorImage("mysql-operator-sidecar-5.7", "latest"))
+}
+
+func defaultSidecarMysql8Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL8_IMAGE",
+		constants.OperatorImage("mysql-operator-sidecar-8.0", "latest"))
+}
+
+func defaultSidecarMysql84Image() string {
+	return getFromEnvOrDefault("MYSQL_OPERATOR_SIDECAR_MYSQL84_IMAGE",
+		constants.OperatorImage("mysql-operator-sidecar-8.4", "latest"))
+}
 
 func namespace() string {
 	if ns := os.Getenv("KUBE_NAMESPACE"); ns != "" {
@@ -160,11 +186,14 @@ func namespace() string {
 
 // AddFlags registers all mysql-operator needed flags
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.SidecarMysql57Image, "sidecar-image", defaultSidecarMysql57Image,
+	fs.StringVar(&o.SidecarMysql57Image, "sidecar-image", defaultSidecarMysql57Image(),
 		"The image that is used for mysql node instrumentation.")
 
-	fs.StringVar(&o.SidecarMysql8Image, "sidecar-mysql8-image", defaultSidecarMysql8Image,
-		"The image that is used for mysql (version 8.0 or above) node instrumentation.")
+	fs.StringVar(&o.SidecarMysql8Image, "sidecar-mysql8-image", defaultSidecarMysql8Image(),
+		"The image that is used for mysql (version 8.0 through 8.3) node instrumentation.")
+
+	fs.StringVar(&o.SidecarMysql84Image, "sidecar-mysql84-image", defaultSidecarMysql84Image(),
+		"The image used for Percona Server 8.4 LTS sidecar (XtraBackup 8.4 line).")
 
 	fs.StringVar(&o.MetricsExporterImage, "metrics-exporter-image", defaultExporterImage,
 		"The image for mysql metrics exporter.")
@@ -176,9 +205,9 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&o.OrchestratorURI, "orchestrator-uri", "",
 		"The orchestrator uri")
-	fs.StringVar(&o.OrchestratorTopologyPassword, "orchestrator-topology-password", defaultOrchestratorTopologyUser,
+	fs.StringVar(&o.OrchestratorTopologyPassword, "orchestrator-topology-password", defaultOrchestratorTopologyPassword,
 		"The orchestrator topology password. Can also be set as ORC_TOPOLOGY_PASSWORD environment variable.")
-	fs.StringVar(&o.OrchestratorTopologyUser, "orchestrator-topology-user", defaultOrchestratorTopologyPassword,
+	fs.StringVar(&o.OrchestratorTopologyUser, "orchestrator-topology-user", defaultOrchestratorTopologyUser,
 		"The orchestrator topology user. Can also be set as ORC_TOPOLOGY_USER environment variable.")
 
 	fs.StringVar(&o.LeaderElectionNamespace, "leader-election-namespace", namespace(),
@@ -192,11 +221,18 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringToStringVar(&o.MySQLVersionImageOverride, "mysql-versions-to-image", map[string]string{},
 		"A map to override default image for different mysql versions. Example: 5.7.23=mysql:5.7,5.7.24=mysql:5.7")
 
+	fs.StringVar(&o.MySQLVersionCatalogFile, "mysql-version-catalog-file", "",
+		"Path to a file of lines 'semver=image' merged after built-in defaults (e.g. ConfigMap mount).")
+
 	fs.Int32Var(&o.OrchestratorConcurrentReconciles, "orchestrator-concurrent-reconciles", 10,
 		"Set the number of workers for orchestrator reconciler.")
 
 	fs.BoolVar(&o.FailoverBeforeShutdownEnabled, "failover-before-shutdown", defaultFailoverBeforeShutdownEnabled,
 		"In pre-stop hook trigger a failover from Orchestrator")
+
+	fs.BoolVar(&o.ClusterRestrictPrivilegeEscalation, "cluster-restrict-privilege-escalation",
+		defaultClusterRestrictPrivilegeEscalation,
+		"Set securityContext.allowPrivilegeEscalation to false on every init container and container in managed MySQL cluster pods")
 
 	fs.BoolVar(&o.AllowCrossNamespaceUsers, "allow-cross-namespace-user", false,
 		"Allow the operator create users in clusters from other namespaces. Enabling this may be a security issue")
@@ -209,6 +245,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 			" It can be set to \"0\" to disable the metrics serving.")
 	fs.StringVar(&o.HealthProbeBindAddress, "healthz-addr", defaultHealthProbeBindAddress,
 		"The TCP address that the controller should bind to for serving health probes.")
+
 }
 
 var instance *Options
@@ -218,8 +255,9 @@ var once sync.Once
 func GetOptions() *Options {
 	once.Do(func() {
 		instance = &Options{
-			SidecarMysql57Image:  defaultSidecarMysql57Image,
-			SidecarMysql8Image:   defaultSidecarMysql8Image,
+			SidecarMysql57Image:  defaultSidecarMysql57Image(),
+			SidecarMysql8Image:   defaultSidecarMysql8Image(),
+			SidecarMysql84Image:  defaultSidecarMysql84Image(),
 			MetricsExporterImage: defaultExporterImage,
 
 			ImagePullPolicy:     defaultImagePullPolicy,
@@ -234,8 +272,12 @@ func GetOptions() *Options {
 
 			FailoverBeforeShutdownEnabled: defaultFailoverBeforeShutdownEnabled,
 
+			ClusterRestrictPrivilegeEscalation: defaultClusterRestrictPrivilegeEscalation,
+
 			MetricsBindAddress:     defaultMetricsBindAddress,
 			HealthProbeBindAddress: defaultHealthProbeBindAddress,
+
+			mysqlVersionCatalog: map[string]string{},
 		}
 	})
 
@@ -251,5 +293,25 @@ func (o *Options) Validate() error {
 	if len(o.OrchestratorTopologyPassword) == 0 {
 		o.OrchestratorTopologyPassword = getFromEnvOrDefault("ORC_TOPOLOGY_PASSWORD", "")
 	}
+
+	if o.MySQLVersionCatalogFile != "" {
+		m, err := LoadMySQLVersionCatalogFile(o.MySQLVersionCatalogFile)
+		if err != nil {
+			return err
+		}
+		o.mysqlVersionCatalog = m
+	}
+	if o.mysqlVersionCatalog == nil {
+		o.mysqlVersionCatalog = map[string]string{}
+	}
 	return nil
+}
+
+// MysqlImageFromCatalog returns an image from the catalog file for an exact semver key, if present.
+func (o *Options) MysqlImageFromCatalog(versionKey string) (string, bool) {
+	if o.mysqlVersionCatalog == nil {
+		return "", false
+	}
+	img, ok := o.mysqlVersionCatalog[versionKey]
+	return img, ok
 }

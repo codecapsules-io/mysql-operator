@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,8 +16,6 @@ limitations under the License.
 */
 
 package constants
-
-import "github.com/blang/semver"
 
 const (
 	// MysqlPort is the default mysql port.
@@ -36,6 +35,14 @@ const (
 	// ExporterPath is the path on which metrics are expose
 	ExporterPath = "/metrics"
 
+	// MetricsExporterMySQLUser is the MySQL login used by the mysqld_exporter sidecar (bound to 127.0.0.1 in GRANTs).
+	// Must match the operated secret key METRICS_EXPORTER_USER / sidecar init SQL.
+	MetricsExporterMySQLUser = "sys_exporter"
+
+	// HeartBeatMySQLUser is the MySQL login used by pt-heartbeat (GRANTs for localhost socket + 127.0.0.1).
+	// Must match operated secret key HEARTBEAT_USER and sidecar env / init SQL.
+	HeartBeatMySQLUser = "sys_heartbeat"
+
 	// OperatorDbName represent the database name that is used by operator to
 	// manage the mysql cluster. This database contains a table with
 	// initialization history and table managed by pt-heartbeat. Be aware that
@@ -46,6 +53,19 @@ const (
 	// OperatorStatusTableName represents the name of the table that contains information about MySQL status, like:
 	// if mysql is configure by the operator, if PURGE_GTID is set or not, etc
 	OperatorStatusTableName = "status"
+
+	// OperatorConfiguredKey tracks whether the node controller finished MySQL setup.
+	OperatorConfiguredKey = "configured"
+	// OperatorConfiguredPendingValue is set at init-file start before node controller runs.
+	OperatorConfiguredPendingValue = "0"
+	// OperatorConfiguredDoneValue is set when node initialization completes.
+	OperatorConfiguredDoneValue = "1"
+
+	// OperatorInitFileCompleteKey is written as the last statement in operator init-file so callers can
+	// distinguish "status table exists" from "init-file finished".
+	OperatorInitFileCompleteKey = "init_file_complete"
+	// OperatorInitFileCompleteValue is the value stored for OperatorInitFileCompleteKey.
+	OperatorInitFileCompleteValue = "1"
 
 	// ConfVolumeMountPath is the path where mysql configs will be mounted
 	ConfVolumeMountPath = "/etc/mysql"
@@ -66,9 +86,17 @@ const (
 	// it's important to have a different extension than .cnf to be ignore by MySQL include
 	ConfClientPath = "/etc/mysql/client.conf"
 
+	// ConfClientLoopbackPath is a password-free [client] snippet (host, port, get-server-public-key) for
+	// manual debugging, e.g.: mysql --defaults-file=/etc/mysql/client-loopback.cnf -uroot -p
+	ConfClientLoopbackPath = "/etc/mysql/client-loopback.cnf"
+
 	// ConfHeartBeatPath the path where to put the heartbeat.conf file
 	// it's important to have a different extension than .cnf to be ignore by MySQL include
 	ConfHeartBeatPath = "/etc/mysql/heartbeat.conf"
+
+	// ConfPtKillPath the path where to put the pt-kill.conf file
+	// it's important to have a different extension than .cnf to be ignore by MySQL include
+	ConfPtKillPath = "/etc/mysql/pt-kill.conf"
 
 	// RcloneConfigFile represents the path to the file that contains rclone
 	// configs. This path should be the same as defined in docker entrypoint
@@ -81,27 +109,29 @@ const (
 )
 
 var (
-	// MySQLDefaultVersion is the version for mysql that should be used
-	MySQLDefaultVersion = semver.MustParse("5.7.35")
-	// MySQLTagsToSemVer maps simple version to semver versions
+	// MySQLDefaultVersion is the version for mysql that should be used when spec.mysqlVersion is unset.
+	MySQLDefaultVersion = MySQLVersion5735.String()
+	// MySQLTagsToSemVer maps simple version tags to canonical semver strings.
 	MySQLTagsToSemVer = map[string]string{
-		"5.7": "5.7.35",
-		"8.0": "8.0.20",
+		MySQLTag57: MySQLVersion5735.String(),
+		MySQLTag80: MySQLVersion8020.String(),
+		MySQLTag84: MySQLVersion848.String(),
 	}
 	// MysqlImageVersions is a map of supported mysql version and their image
 	MysqlImageVersions = map[string]string{
 		// percona:5.7.35 CentOS based image
-		"5.7.35": "percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393",
+		MySQLVersion5735.String(): "percona@sha256:caab4e854bd75040d07802bf1862bfef1d2b4db0acbc9c4aaf5c21c698fdd393",
 		// percona:5.7.31-centos
-		"5.7.31": "percona@sha256:68dad5e2efeb6893e2d7d116a1eae144f2c641c17d00e7869397395590c91651",
+		MySQLVersion5731.String(): "percona@sha256:68dad5e2efeb6893e2d7d116a1eae144f2c641c17d00e7869397395590c91651",
 		// This version of mysql has a bug and doesn't work with the operator,
-		// see: https://github.com/bitpoke/mysql-operator/issues/509
-		"5.7.29": "percona@sha256:d801123bbfaf750924f993f5c59189d144a93feb928b8aef95e541dd61c62881",
+		MySQLVersion5729.String(): "percona@sha256:d801123bbfaf750924f993f5c59189d144a93feb928b8aef95e541dd61c62881",
 		// Percona:5.7.26 CentOS based image
-		"5.7.26": "percona@sha256:713c1817615b333b17d0fbd252b0ccc53c48a665d4cfcb42178167435a957322",
+		MySQLVersion5726.String(): "percona@sha256:713c1817615b333b17d0fbd252b0ccc53c48a665d4cfcb42178167435a957322",
 		// Percona:5.7.24 CentOS based image
-		"5.7.24": "percona@sha256:b3b7fb177b416563c46fe012298e042ec1607cc0539ce6014146380b0d27b08c",
+		MySQLVersion5724.String(): "percona@sha256:b3b7fb177b416563c46fe012298e042ec1607cc0539ce6014146380b0d27b08c",
 		// Percona:8.0.20-11 CentOS based image
-		"8.0.20": "percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc",
+		MySQLVersion8020.String(): "percona@sha256:6d4524eccd26af7bd7fb623c567159dfbd7f3d9a0e2f7bebd54af1e9ca9903dc",
+		// Percona Server 8.4.8 LTS
+		MySQLVersion848.String(): "docker.io/percona/percona-server@sha256:eaa4cf955f8a01a43faa6ef656bf8fb69a17c17c278a3b0514212291ca0448b1",
 	}
 )

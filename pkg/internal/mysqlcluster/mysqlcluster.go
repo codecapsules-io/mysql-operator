@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,14 +21,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (
@@ -42,7 +45,7 @@ type MysqlCluster struct {
 
 // NodeInitializedConditionType is the extended new pod condition that marks the pod as initialized from MySQL
 // point of view.
-const NodeInitializedConditionType core.PodConditionType = "mysql.presslabs.org/NodeInitialized"
+const NodeInitializedConditionType core.PodConditionType = domain.NodeInitializedConditionType
 
 // New returns a wrapper for mysqlcluster
 func New(mc *api.MysqlCluster) *MysqlCluster {
@@ -70,13 +73,13 @@ func (c *MysqlCluster) GetLabels() labels.Set {
 	}
 
 	labels := labels.Set{
-		"mysql.presslabs.org/cluster": c.Name,
+		domain.LabelCluster: c.Name,
 
 		"app.kubernetes.io/name":       "mysql",
 		"app.kubernetes.io/instance":   instance,
-		"app.kubernetes.io/version":    c.GetMySQLSemVer().String(),
+		"app.kubernetes.io/version":    c.DesiredVersion().String(),
 		"app.kubernetes.io/component":  component,
-		"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+		"app.kubernetes.io/managed-by": domain.ManagedBy,
 	}
 
 	if part, ok := c.Annotations["app.kubernetes.io/part-of"]; ok {
@@ -89,10 +92,10 @@ func (c *MysqlCluster) GetLabels() labels.Set {
 // GetSelectorLabels returns the labels that will be used as selector
 func (c *MysqlCluster) GetSelectorLabels() labels.Set {
 	return labels.Set{
-		"mysql.presslabs.org/cluster": c.Name,
+		domain.LabelCluster: c.Name,
 
 		"app.kubernetes.io/name":       "mysql",
-		"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+		"app.kubernetes.io/managed-by": domain.ManagedBy,
 	}
 }
 
@@ -159,7 +162,7 @@ func (c *MysqlCluster) GetClusterAlias() string {
 	return fmt.Sprintf("%s.%s", c.Name, c.Namespace)
 }
 
-// GetMasterHost returns name of current master host in a cluster
+// GetMasterHost returns the headless-service FQDN of the current master pod.
 func (c *MysqlCluster) GetMasterHost() string {
 	masterHost := c.GetPodHostname(0)
 
@@ -173,43 +176,27 @@ func (c *MysqlCluster) GetMasterHost() string {
 	return masterHost
 }
 
-// GetMySQLSemVer returns the MySQL server version in semver format, or the default one
+// GetMasterServiceHost returns in-cluster DNS for the Service that targets the pod labeled role=master.
+// Prefer this for Jobs and controllers connecting over TCP from other pods.
+func (c *MysqlCluster) GetMasterServiceHost() string {
+	return fmt.Sprintf("%s.%s.svc", c.GetNameForResource(MasterService), c.Namespace)
+}
+
+// GetMySQLSemVer returns the desired MySQL server version (spec → default). Prefer DesiredVersion.
 func (c *MysqlCluster) GetMySQLSemVer() semver.Version {
-	version := c.Spec.MysqlVersion
-	// lookup for an alias, usually this will solve 5.7 to 5.7.x
-	if v, ok := constants.MySQLTagsToSemVer[version]; ok {
-		version = v
-	}
-
-	sv, err := semver.Make(version)
-	if err != nil {
-		log.Error(err, "failed to parse given MySQL version", "input", version)
-	}
-
-	// if there is an error will return 0.0.0
-	return sv
+	return c.DesiredVersion()
 }
 
 // GetMysqlImage returns the mysql image for current mysql cluster
 func (c *MysqlCluster) GetMysqlImage() string {
-	if len(c.Spec.Image) != 0 {
-		return c.Spec.Image
-	}
-
-	// check if the user set some overrides
 	opt := options.GetOptions()
-	if img, ok := opt.MySQLVersionImageOverride[c.GetMySQLSemVer().String()]; ok {
-		return img
+	img, err := mysqlversioning.ServerImage(opt, c.DesiredVersion(), &c.Spec)
+	if err != nil {
+		log.Error(err, "no image found with given MySQL version, the image can manually be set by setting .spec.image on cluster",
+			"version", c.DesiredVersion())
+		return ""
 	}
-
-	if img, ok := constants.MysqlImageVersions[c.GetMySQLSemVer().String()]; ok {
-		return img
-	}
-
-	// this means the cluster has a wrong MysqlVersion set
-	log.Error(nil, "no image found with given MySQL version, the image can manually be set by setting .spec.image on cluster",
-		"version", c.GetMySQLSemVer())
-	return ""
+	return img
 }
 
 // UpdateSpec updates the cluster specs that need to be saved
@@ -227,9 +214,7 @@ func (c *MysqlCluster) IsPerconaImage() bool {
 
 // ShouldHaveInitContainerForMysql checks the MySQL version and returns true or false if the docker image supports or not init only
 func (c *MysqlCluster) ShouldHaveInitContainerForMysql() bool {
-	expectedRange := semver.MustParseRange(">=5.7.26 <8.0.0 || >=8.0.15")
-
-	return c.IsPerconaImage() && expectedRange(c.GetMySQLSemVer())
+	return c.WantsPerconaInitContainerFor(c.DesiredVersion())
 }
 
 // String returns the cluster name and namespace
@@ -268,14 +253,7 @@ func (c *MysqlCluster) GetNamespacedName() types.NamespacedName {
 
 // GetSidecarImage selects the sidecar docker image based on mysql version
 func (c *MysqlCluster) GetSidecarImage() string {
-	if c.Spec.SidecarImage != "" {
-		return c.Spec.SidecarImage
-	}
-	// decide the sidecar image based on mysql version
-	if c.GetMySQLSemVer().Major == 8 {
-		return options.GetOptions().SidecarMysql8Image
-	}
-	return options.GetOptions().SidecarMysql57Image
+	return mysqlversioning.SidecarImageFor(c.DesiredVersion(), &c.Spec, c.Spec.SidecarImage)
 }
 
 // IsClusterReady checks if the cluster is ready or not.

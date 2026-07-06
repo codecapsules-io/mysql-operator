@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 // NewHealthyReplicasSVCSyncer returns a service syncer for healthy replicas service
@@ -38,7 +40,7 @@ func NewHealthyReplicasSVCSyncer(c client.Client, scheme *runtime.Scheme, cluste
 	return syncer.NewObjectSyncer("HealthyReplicasSVC", cluster.Unwrap(), service, c, func() error {
 		// set service labels
 		service.Labels = cluster.GetLabels()
-		service.Labels["mysql.presslabs.org/service-type"] = "ready-replicas"
+		service.Labels[domain.LabelServiceType] = domain.ServiceTypeReadyReplicas
 
 		// set selectors for healthy replica (non-master) mysql pods only
 		service.Spec.Selector = cluster.GetSelectorLabels()

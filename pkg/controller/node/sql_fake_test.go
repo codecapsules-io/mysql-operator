@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,6 +31,10 @@ type fakeSQLRunner struct{}
 var _ SQLInterface = &fakeSQLRunner{}
 
 func (f *fakeSQLRunner) Wait(ctx context.Context) error {
+	return nil
+}
+
+func (f *fakeSQLRunner) WaitForOperatorStatusTable(ctx context.Context) error {
 	return nil
 }
 

@@ -1,0 +1,22 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Kind cluster config for GitHub Actions e2e.
+#
+# Runners (e.g. ubuntu-26.04-arm) share RAM between Docker, the kind node, image
+# builds, and workload pods. Reserve memory so the kubelet does not over-schedule.
+# ARM hosted runners are often smaller than ubuntu-latest (amd64); keep reservations modest.
+#
+# See: https://github.com/kubernetes-sigs/kind/issues/1524
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            system-reserved: memory=2Gi
+            kube-reserved: memory=512Mi

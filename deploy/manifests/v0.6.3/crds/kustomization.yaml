@@ -1,0 +1,11 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+# Frozen CRDs from mysql-operator v0.6.3 (formerly shipped in the Helm chart).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - mysql.presslabs.org_mysqlbackups.yaml
+  - mysql.presslabs.org_mysqlclusters.yaml
+  - mysql.presslabs.org_mysqldatabases.yaml
+  - mysql.presslabs.org_mysqlusers.yaml

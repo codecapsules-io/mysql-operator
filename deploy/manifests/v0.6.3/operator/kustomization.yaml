@@ -1,0 +1,16 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+# Operator workload from mysql-operator v0.6.3 (rendered from the legacy Helm chart defaults).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mysql-operator
+resources:
+  - serviceaccount.yaml
+  - orchestrator-secret.yaml
+  - orchestrator-config.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+  - orchestrator-raft-service.yaml
+  - service.yaml
+  - statefulset.yaml

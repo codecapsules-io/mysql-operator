@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,9 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
 )
 
 const (
@@ -143,18 +145,26 @@ func (ou *orcUpdater) getFromOrchestrator() (instances []orc.Instance, master *o
 		ou.log.V(0).Info("can't get master from Orchestrator", "error", "not found")
 	}
 
-	// check if it's the same master with one that is determined from all instances
+	// Prefer the orchestrator Master() result when present; otherwise use topology (DetermineMaster).
+	// A nil Master() is common when every instance is still read-only in Orc (e.g. single-node boot),
+	// but DetermineMaster() can still identify the primary — the old `master == nil` branch wrongly
+	// treated that as a "clash" and cleared the master, so all pods got role=replica.
 	insts := InstancesSet(instances)
 	m := insts.DetermineMaster()
-	if master == nil || m == nil || master.Key.Hostname != m.Key.Hostname {
-		// throw a warning
+	if master != nil && m != nil && master.Key.Hostname != m.Key.Hostname {
 		ou.log.V(0).Info("master clash, between what is determined and what is in Orc",
 			"in_orchestrator", instToLog(master), "determined", instToLog(m))
 		return instances, nil, nil
 	}
-
-	ou.log.V(1).Info("cluster master", "master", master.Key.Hostname)
-	return instances, master, nil
+	if master != nil {
+		ou.log.V(1).Info("cluster master", "master", master.Key.Hostname)
+		return instances, master, nil
+	}
+	if m != nil {
+		ou.log.V(1).Info("cluster master (from topology)", "master", m.Key.Hostname)
+		return instances, m, nil
+	}
+	return instances, nil, nil
 }
 
 func (ou *orcUpdater) updateClusterReadyStatus() {
@@ -543,7 +553,7 @@ func (ou *orcUpdater) markReadOnlyNodesInOrc(insts InstancesSet, master *orc.Ins
 	// master is determined
 	for _, inst := range insts {
 		// give time to stabilize in case of a failover
-		// https://github.com/bitpoke/mysql-operator/issues/566
+		// https://github.com/codecapsules-io/mysql-operator/issues/566
 		if !inst.IsUpToDate || inst.Uptime < uptimeGraceTime {
 			ou.log.Info("skip set read-only/writable", "instance", instToLog(&inst))
 			continue
@@ -672,7 +682,7 @@ func instToLog(inst *orc.Instance) map[string]string {
 }
 
 func shouldRemoveOldNode(node *api.NodeStatus, cluster *mysqlcluster.MysqlCluster) bool {
-	if version, ok := cluster.ObjectMeta.Annotations["mysql.presslabs.org/version"]; ok && version == "300" {
+	if version, ok := cluster.ObjectMeta.Annotations[domain.AnnotationVersion]; ok && version == "300" {
 		return strings.Contains(node.Name, "-mysql-nodes")
 	}
 

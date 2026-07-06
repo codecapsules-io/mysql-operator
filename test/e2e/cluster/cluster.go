@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,13 +32,14 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
-	"github.com/bitpoke/mysql-operator/test/e2e/framework"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework"
 )
 
 const (
-	POLLING = 500 * time.Millisecond
+	POLLING                      = 500 * time.Millisecond
+	clusterReadinessDiagInterval = 15 * time.Second
 )
 
 var (
@@ -309,15 +311,36 @@ func testClusterReadiness(f *framework.Framework, cluster *api.MysqlCluster) {
 		timeout = time.Duration(*cluster.Spec.Replicas) * f.Timeout
 	}
 
-	// wait for pods to be ready
+	clusterKey := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	desired := int(*cluster.Spec.Replicas)
+
+	var latest *api.MysqlCluster
+	defer func() {
+		if CurrentGinkgoTestDescription().Failed {
+			f.LogClusterReadinessDiagnostics(cluster, latest)
+		}
+	}()
+
+	f.LogClusterReadinessDiagnostics(cluster, nil)
+
+	lastDiag := time.Now()
 	Eventually(func() int {
 		cl := &api.MysqlCluster{}
-		f.Client.Get(context.TODO(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, cl)
-		return cl.Status.ReadyNodes
-	}, timeout, POLLING).Should(Equal(int(*cluster.Spec.Replicas)), "Not ready replicas of cluster '%s'", cluster.Name)
+		if err := f.Client.Get(context.TODO(), clusterKey, cl); err != nil {
+			framework.Logf("waiting for cluster %s readiness: get failed: %v", cluster.Name, err)
+			return 0
+		}
+		latest = cl
 
-	f.ClusterEventuallyCondition(cluster, api.ClusterConditionReady, core.ConditionTrue, f.Timeout)
-	f.ClusterEventuallyCondition(cluster, api.ClusterConditionFailoverAck, core.ConditionFalse, f.Timeout)
+		if time.Since(lastDiag) >= clusterReadinessDiagInterval {
+			f.LogClusterReadinessDiagnostics(cluster, cl)
+			lastDiag = time.Now()
+		}
+		return cl.Status.ReadyNodes
+	}, timeout, POLLING).Should(Equal(desired), "Not ready replicas of cluster '%s'", cluster.Name)
+
+	f.ClusterEventuallyCondition(cluster, api.ClusterConditionReady, core.ConditionTrue, timeout)
+	f.ClusterEventuallyCondition(cluster, api.ClusterConditionFailoverAck, core.ConditionFalse, timeout)
 }
 
 type clusterOrchestratorRegistrationOptions struct {

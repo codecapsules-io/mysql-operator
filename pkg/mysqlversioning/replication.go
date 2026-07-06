@@ -1,0 +1,96 @@
+/*
+Copyright 2026 Code Capsules
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package mysqlversioning
+
+// ReplicationDialect holds replication control and introspection SQL for a server line.
+type ReplicationDialect struct {
+	StopReplication string
+	// ChangeSourceSQL uses placeholders: MASTER_HOST/SOURCE_HOST order in exec args.
+	ChangeSourceSQL  string
+	StartReplication string
+	FallbackStartSQL string
+	// ResetBinaryLogsForGTID is used inside SetPurgedGTID transaction; empty uses ResetMaster.
+	ResetBinaryLogsForGTID string
+	ResetMaster            string
+	ShowReplicaStatusCmd   string
+	ShowReplicasCmd        string
+	LogLabelPreStop        string
+}
+
+// MasterSlaveReplication is for MySQL / Percona Server before 8.4 replication terminology.
+func MasterSlaveReplication() ReplicationDialect {
+	return ReplicationDialect{
+		StopReplication: "STOP SLAVE;",
+		ChangeSourceSQL: `
+	  CHANGE MASTER TO MASTER_AUTO_POSITION=1,
+		MASTER_HOST=?,
+		MASTER_USER=?,
+		MASTER_PASSWORD=?,
+		MASTER_CONNECT_RETRY=?;
+	`,
+		StartReplication: "START SLAVE;",
+		FallbackStartSQL: `
+		  reset slave;
+		  start slave IO_THREAD;
+		  stop slave IO_THREAD;
+		  reset slave;
+		  start slave;
+		`,
+		ResetMaster:            "RESET MASTER;",
+		ResetBinaryLogsForGTID: "",
+		ShowReplicaStatusCmd:   `SHOW SLAVE STATUS\G`,
+		ShowReplicasCmd:        `SHOW SLAVE HOSTS\G`,
+		LogLabelPreStop:        "show_slave_status",
+	}
+}
+
+// SourceReplicaReplication is for MySQL 8.4+ / 9.x replication terminology.
+func SourceReplicaReplication() ReplicationDialect {
+	return ReplicationDialect{
+		StopReplication: "STOP REPLICA;",
+		// GET_SOURCE_PUBLIC_KEY allows replicas to authenticate to the source over TCP
+		// with caching_sha2_password (server default on 8.4+) without replication SSL.
+		ChangeSourceSQL: `
+	  CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION=1,
+		SOURCE_HOST=?,
+		SOURCE_USER=?,
+		SOURCE_PASSWORD=?,
+		SOURCE_CONNECT_RETRY=?,
+		GET_SOURCE_PUBLIC_KEY=1;
+	`,
+		StartReplication: "START REPLICA;",
+		FallbackStartSQL: `
+		  RESET REPLICA;
+		  START REPLICA IO_THREAD;
+		  STOP REPLICA IO_THREAD;
+		  RESET REPLICA;
+		  START REPLICA;
+		`,
+		ResetMaster:            "",
+		ResetBinaryLogsForGTID: "RESET BINARY LOGS AND GTIDS;",
+		ShowReplicaStatusCmd:   `SHOW REPLICA STATUS\G`,
+		ShowReplicasCmd:        `SHOW REPLICAS\G`,
+		LogLabelPreStop:        "show_replica_status",
+	}
+}
+
+// ResetBinaryLogsStatement returns the statement to clear binary logs before SET GTID_PURGED.
+func (d ReplicationDialect) ResetBinaryLogsStatement() string {
+	if d.ResetBinaryLogsForGTID != "" {
+		return d.ResetBinaryLogsForGTID
+	}
+	return d.ResetMaster
+}

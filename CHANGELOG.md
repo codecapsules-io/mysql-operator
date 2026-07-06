@@ -1,3 +1,19 @@
+<!--
+Copyright 2026 Code Capsules
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -5,94 +21,151 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Upstream history
 
-### Added
-* Add `KeepAfterDelete` in `.Spec.VolumeSpec` to keep pvc after mysql cluster been deleted.
-* Add default resource to init container.
-* Add SidecarImage fields to `.Spec` to allow specifying custom sidecar image.
+Release notes for version `[0.6.3]` and earlier describe the upstream
+[bitpoke/mysql-operator](https://github.com/bitpoke/mysql-operator) project (originally
+[presslabs/mysql-operator](https://github.com/presslabs/mysql-operator)). Historical compare
+links at the bottom of this file for those versions point to the upstream repositories.
+
+From `[0.7.0]` onward, entries document the **Code Capsules** fork maintained at
+[codecapsules-io/mysql-operator](https://github.com/codecapsules-io/mysql-operator).
+
+## [0.7.0] - Unreleased
 
 ### Changed
+
+- Rebrand Go module and import paths from `github.com/bitpoke/mysql-operator` to
+  `github.com/codecapsules-io/mysql-operator`.
+- **Built-in `"8.0"` catalog tag** maps to **`8.0.20`** again (reverts the interim `8.0.32` pin).
+- **`status.appliedMysqlVersion` is SQL-backed:** legacy clusters backfill via `SELECT VERSION()` on
+  operator upgrade; version-sensitive rollouts hold until the data plane is observable.
+- **Helm charts removed** — install and upgrade via versioned manifests under `deploy/manifests/`
+  (see [`deploy/manifests/README.md`](deploy/manifests/README.md)). Frozen **v0.6.3** manifests are
+  included for users migrating off the legacy chart.
+- Add Apache 2.0 modification notices (`Copyright 2026 Code Capsules`) to source files touched
+  by the fork.
+- Updated versions to shift towards `go 1.26.3`.
+
+### Added
+
+- **Frozen v0.6.3 manifests** under `deploy/manifests/v0.6.3/` for migration from the legacy Helm chart.
+- **Percona Server / MySQL 8.4 LTS support:** deploy clusters with `spec.mysqlVersion: "8.4"` (or a
+  patch semver such as `8.4.0`); built-in image catalog and the `percona-8.4` version profile drive
+  server and sidecar selection. Optional dedicated `mysql-operator-sidecar-8.4` image via
+  `--sidecar-mysql84-image`.
+- **8.4-specific runtime behavior:** version profiles apply MySQL 8.4 semantics including
+  SOURCE/REPLICA replication terminology, `innodb-redo-log-capacity` sizing, default
+  `caching_sha2_password` authentication, and Percona 8.4 pod security context (`fsGroup` /
+  `runAsUser` 1001).
+- **MySQL server version upgrades:** orchestrated upgrade pipeline when `spec.mysqlVersion` changes on
+  clusters with existing data, including path validation, StatefulSet rollout, and completion gates.
+- **`status.appliedMysqlVersion`:** tracks the MySQL version fully running on the data plane; populated and
+  advanced only from unanimous `SELECT VERSION()` on ready mysqld pods (not from spec, image tags, or
+  `MY_MYSQL_VERSION`). Rollout and completion gates compare spec against this SQL-confirmed status.
+- **Pre-upgrade path validation:** blocks downgrades and skipping LTS lines (e.g. must upgrade
+  5.7 → 8.0 → 8.4 one step at a time).
+- **`mysql-datadir-chown` init container:** injected for Percona 8.0 → 8.4 upgrades to fix datadir
+  ownership before the new server image starts.
+- **Extensible upgrade step registry:** profile transitions (e.g. 8.0→8.4) declare ordered rollout
+  init steps such as datadir chown.
+- Add `KeepAfterDelete` in `.Spec.VolumeSpec` to keep pvc after mysql cluster been deleted.
+- Add default resource to init container.
+- Add SidecarImage fields to `.Spec` to allow specifying custom sidecar image.
+
 ### Removed
+
+- **Helm charts** under `deploy/charts/` (operator and mysql-cluster). Use `deploy/manifests/` instead.
+- **Automated auth plugin migration:** the operator no longer runs a pre-rollout auth-migrate step or
+  sidecar `auth-migrate` command. Before upgrading 8.0 → 8.4+, migrate `mysql_native_password`
+  accounts manually on the primary; see [docs/mysql-versions-and-upgrades.md](docs/mysql-versions-and-upgrades.md).
+
 ### Fixed
-* Avoid set read_only conflict when graceful takeover
+
+- Avoid set read_only conflict when graceful takeover
+- **Percona 8.0→8.4 chown regression:** upgrade source is `status.appliedMysqlVersion` only (SQL-confirmed),
+  so `mysql-datadir-chown` is not dropped on the reconcile after the StatefulSet template advances to 8.4
+  while pods still run 8.0.x.
+- preStop replication SQL dialect: when `MY_MYSQL_VERSION` is unset (e.g. operator rollout before
+  pod recreate), detect the running server via `SELECT VERSION()` so MySQL 8.4+ pods use
+  `SHOW REPLICA STATUS` / `SHOW REPLICAS` instead of removed `SHOW SLAVE` commands
 
 ## [0.6.3] - 2023-05-22
 
 ### Added
 
-* `MysqlDatabase` `MysqlUser` Add delete policy
-* Add `PtHeartbeatResources` in `.Spec.PodSpec` to allow the user specifying resources for pt-heartbeat.
-* Set `MysqlCluter.Spec.BackupSchedule` to empty string to disable recurrent backups
-* Add support for backing up to HDFS
+- `MysqlDatabase` `MysqlUser` Add delete policy
+- Add `PtHeartbeatResources` in `.Spec.PodSpec` to allow the user specifying resources for pt-heartbeat.
+- Set `MysqlCluter.Spec.BackupSchedule` to empty string to disable recurrent backups
+- Add support for backing up to HDFS
 
 ### Changed
 
-* Set default MySQL server version to `5.7.35`
-* Bump Orchestrator to `3.2.6`
-* Change policy/v1beta1 to policy/v1
-* Add RBAC permissions when deploying on OpenShift
+- Set default MySQL server version to `5.7.35`
+- Bump Orchestrator to `3.2.6`
+- Change policy/v1beta1 to policy/v1
+- Add RBAC permissions when deploying on OpenShift
 
 ### Removed
 
-* Remove PodSecurityPolicy
+- Remove PodSecurityPolicy
 
 ### Fixed
 
-* Bump `golang.org/x/net` to 0.8 (fix: CVE-2022-41723, CVE-2022-27664, CVE-2021-33194)
-* Orchestrator can't properly update or migrate when it more than one
-* Operator service account have no access to update mysqlbackups/status
-* Recurrent backup remote delete policy can not update according to the `cluster.Spec.BackupRemoteDeletePolicy`
-* When the operator is restarted, it will process the Pod list once to prevent the state of the pod from being changed automatically because it is not updated (especially if the PVC is full).
+- Bump `golang.org/x/net` to 0.8 (fix: CVE-2022-41723, CVE-2022-27664, CVE-2021-33194)
+- Orchestrator can't properly update or migrate when it more than one
+- Operator service account have no access to update mysqlbackups/status
+- Recurrent backup remote delete policy can not update according to the `cluster.Spec.BackupRemoteDeletePolicy`
+- When the operator is restarted, it will process the Pod list once to prevent the state of the pod from being changed automatically because it is not updated (especially if the PVC is full).
 
 ## [0.6.2] - 2021-12-28
 
 ### Fixed
- * `orchestrator.secretName` is ignored in helm charts
 
+- `orchestrator.secretName` is ignored in helm charts
 
 ## [0.6.1] - 2021-12-22
 
 ### Changed
 
-* Bump <https://github.com/bitpoke/build> to 0.7.1
+- Bump <https://github.com/bitpoke/build> to 0.7.1
 
 ### Fixed
 
-* Fix the app version in the published Helm charts
+- Fix the app version in the published Helm charts
 
 ## [0.6.0] - 2021-12-21
 
 ### Added
 
-* If you want to save mysql backup to AWS S3, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` were the only options, but now you can use `AWS_SESSION_TOKEN` or `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE`
-* Add `orchestrator.persistence.selector.matchLabels` and `orchestrator.persistence.annotations` for
-   persistence depolyment with constraints
-* Add `orchestrator.persistence.fsGroupWorkaroundEnabled` for persistent volume
-   provisioners wich don't support fsGroup in security context (fixes #615)
-* Add `appSecretLabels`, `appSecretAnnotations`, `backupSecretLabels`, `backupSecretAnnotations` to provide
-   custom labels and annotations to created app and backup secrets
-* Update rclone to `v1.57.0`
-* For s3, enable the no_check_bucket option for rclone
-* Allow setting metrics and health checking listening addresses
+- If you want to save mysql backup to AWS S3, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` were the only options, but now you can use `AWS_SESSION_TOKEN` or `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE`
+- Add `orchestrator.persistence.selector.matchLabels` and `orchestrator.persistence.annotations` for
+  persistence depolyment with constraints
+- Add `orchestrator.persistence.fsGroupWorkaroundEnabled` for persistent volume
+  provisioners wich don't support fsGroup in security context (fixes #615)
+- Add `appSecretLabels`, `appSecretAnnotations`, `backupSecretLabels`, `backupSecretAnnotations` to provide
+  custom labels and annotations to created app and backup secrets
+- Update rclone to `v1.57.0`
+- For s3, enable the no_check_bucket option for rclone
+- Allow setting metrics and health checking listening addresses
 
 ### Changed
 
-* Allow setting pod security context when deploying with Helm
-* Use [distroless](https://github.com/GoogleContainerTools/distroless) as base image for orchestrator container
-* Use networking.k8s.io/v1 instead of extensions/v1beta1 for ingress
-* Use `Service.spec.publishNotReadyAddresses` instead of `service.alpha.kubernetes.io/tolerate-unready-endpoints`
-* Use [git-semver](https://github.com/mdomke/git-semver) for setting versions
-* Gracefull shutdown is enabled by default
+- Allow setting pod security context when deploying with Helm
+- Use [distroless](https://github.com/GoogleContainerTools/distroless) as base image for orchestrator container
+- Use networking.k8s.io/v1 instead of extensions/v1beta1 for ingress
+- Use `Service.spec.publishNotReadyAddresses` instead of `service.alpha.kubernetes.io/tolerate-unready-endpoints`
+- Use [git-semver](https://github.com/mdomke/git-semver) for setting versions
+- Gracefull shutdown is enabled by default
 
 ### Removed
 
-* Removed support for Helm 2
+- Removed support for Helm 2
 
 ### Fixed
 
-* Make sure orchestrator can find its templates [#741](https://github.com/bitpoke/mysql-operator/issues/741)
-* Workaround CRD generation with `preserveUnknownFields=false` [kubernetes-sigs/controller-tools#476](https://github.com/kubernetes-sigs/controller-tools/issues/476)
+- Make sure orchestrator can find its templates [#741](https://github.com/bitpoke/mysql-operator/issues/741)
+- Workaround CRD generation with `preserveUnknownFields=false` [kubernetes-sigs/controller-tools#476](https://github.com/kubernetes-sigs/controller-tools/issues/476)
 
 ## [0.5.3] - 2021-12-06
 
@@ -104,35 +177,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-* Workaround CRD generation with `preserveUnknownFields=false` [kubernetes-sigs/controller-tools#476](https://github.com/kubernetes-sigs/controller-tools/issues/476)
+- Workaround CRD generation with `preserveUnknownFields=false` [kubernetes-sigs/controller-tools#476](https://github.com/kubernetes-sigs/controller-tools/issues/476)
 
 ## [0.5.2] - 2021-11-23
 
 ### Added
 
-* If you want to save mysql backup to AWS S3, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` were the only options, but now you can use `AWS_SESSION_TOKEN` or `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE`
+- If you want to save mysql backup to AWS S3, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` were the only options, but now you can use `AWS_SESSION_TOKEN` or `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE`
 
 ### Changed
 
-* Update rclone to `v1.57.0`
+- Update rclone to `v1.57.0`
 
 ### Removed
 
 ### Fixed
 
-* Make sure orchestrator can find its templates [#741](https://github.com/bitpoke/mysql-operator/issues/741)
+- Make sure orchestrator can find its templates [#741](https://github.com/bitpoke/mysql-operator/issues/741)
 
 ## [0.5.1] - 2021-10-12
 
 ### Added
 
-* Add `orchestrator.persistence.fsGroupWorkaroundEnabled` for persistent volume
-   provisioners wich don't support fsGroup in security context (fixes #615)
+- Add `orchestrator.persistence.fsGroupWorkaroundEnabled` for persistent volume
+  provisioners wich don't support fsGroup in security context (fixes #615)
 
 ### Changed
 
-* Allow setting pod security context when deploying with Helm
-* Use [distroless](https://github.com/GoogleContainerTools/distroless) as base image for orchestrator container
+- Allow setting pod security context when deploying with Helm
+- Use [distroless](https://github.com/GoogleContainerTools/distroless) as base image for orchestrator container
 
 ### Removed
 
@@ -142,261 +215,264 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-* Add `image` and `mysqlVersion` options to MysqlCluster chart. This bumps the chart version to `0.3.1`
-* Add `backupAffinity`, `backupNodeSelector`, `backupPriorityClassName`, `backupTolerations`
-   to `.Spec.PodSpec` to allow specifying custom scheduling constraints for backup jobs.
-* Add the ability to set the `imagePullSecrets` for the operator statefulset.
-* Add Google Drive via service account as backup option.
-* Add `initBucketURL` and `initBucketSecretName` options to MysqlCluster chart. This bumps the chart version to `0.3.0`
-* Add an example of how initContainers can be used to fix hostPath permissions.
-* Add a lifecycle preStop hook for the `mysql` container. Before killing the master MySQL process,
-   it triggers a `graceful-master-takeover-auto` command in Orchestrator. This is disabled by
-   default, to enable it set `gracefulShutdown.enabled=true` in chart values or set the controller
-   command argument `failover-before-shutdown` to `true`.
-* Add `mysqlLifecycle` to `.Spec.PodSpec` to allow overriding the default lifecycle hook for the
-   `mysql` container.
-* Add `backupCompressCommand` and `backupDecompressCommand` to allow using
-   different compressors/decompressors when backing up or restoring.
-* Add support for MySQL version 8.0
-* Add `go modules` cache
-* Support cron timezone
+- Add `image` and `mysqlVersion` options to MysqlCluster chart. This bumps the chart version to `0.3.1`
+- Add `backupAffinity`, `backupNodeSelector`, `backupPriorityClassName`, `backupTolerations`
+  to `.Spec.PodSpec` to allow specifying custom scheduling constraints for backup jobs.
+- Add the ability to set the `imagePullSecrets` for the operator statefulset.
+- Add Google Drive via service account as backup option.
+- Add `initBucketURL` and `initBucketSecretName` options to MysqlCluster chart. This bumps the chart version to `0.3.0`
+- Add an example of how initContainers can be used to fix hostPath permissions.
+- Add a lifecycle preStop hook for the `mysql` container. Before killing the master MySQL process,
+  it triggers a `graceful-master-takeover-auto` command in Orchestrator. This is disabled by
+  default, to enable it set `gracefulShutdown.enabled=true` in chart values or set the controller
+  command argument `failover-before-shutdown` to `true`.
+- Add `mysqlLifecycle` to `.Spec.PodSpec` to allow overriding the default lifecycle hook for the
+  `mysql` container.
+- Add `backupCompressCommand` and `backupDecompressCommand` to allow using
+  different compressors/decompressors when backing up or restoring.
+- Add support for MySQL version 8.0
+- Add `go modules` cache
+- Support cron timezone
 
 ### Changed
 
-* Only add `binlog-space-limit` for `percona` image
-* Make user-defined InitContainer take the precedence
-* Set timeout of 15s on connection between the operator and Orchestrator
-* Bump controller-util dependency to 0.3.0 which fixes some updates on pod spec.
-* Removed `NO_AUTO_VALUE_ON_ZERO` from `sql-mode` to be inline with MySQL default value
-* Remove use go module instead of dep
-* Update k8s client to `v0.21.2`
-* Update kubebuilder (to `v2.3.1`) along with controller-runtime (to `v0.9.2`) and controller-gen
-* Update rclone to `v1.53.1`
-* Update `Orchestrator` version from `v3.1.2` to `v3.2.3`
-* Set default MySQL server version to `5.7.31`
-* Generate CRDs with controller-gen `v0.5.0`
-* Update `getOrdinalFromHostname` and `IsFirstPodInSet`
-* Use `klog` for logging
-* Use <https://github.com/bitpoke/build> for building the project
+- Only add `binlog-space-limit` for `percona` image
+- Make user-defined InitContainer take the precedence
+- Set timeout of 15s on connection between the operator and Orchestrator
+- Bump controller-util dependency to 0.3.0 which fixes some updates on pod spec.
+- Removed `NO_AUTO_VALUE_ON_ZERO` from `sql-mode` to be inline with MySQL default value
+- Remove use go module instead of dep
+- Update k8s client to `v0.21.2`
+- Update kubebuilder (to `v2.3.1`) along with controller-runtime (to `v0.9.2`) and controller-gen
+- Update rclone to `v1.53.1`
+- Update `Orchestrator` version from `v3.1.2` to `v3.2.3`
+- Set default MySQL server version to `5.7.31`
+- Generate CRDs with controller-gen `v0.5.0`
+- Update `getOrdinalFromHostname` and `IsFirstPodInSet`
+- Use `klog` for logging
+- Use <https://github.com/bitpoke/build> for building the project
 
 ### Removed
 
 ### Fixed
 
-* Fix insufficient permissions during startup
-* Fix the `xtrabackup` `--tables-exclude` cannot take effect
-* Fix the pod unable to connect `Orchestrator`
-* Fix pod labels diff of map
-* Fixed backup cleanup job bug (#577)
-* Fix Kubebuilder path in Makefile.
-* Fix #632 lifeCycle preStop script is not copied to given directory.
-* Fix #637 mysqlbackup status is not updated correctly.
-* Fix #647 custom conf can't overwrite the default conf
-* Fix #627 let Orchestrator do the failover
-* Fix #694 the error caused by backing up without waiting for master to be created.
+- Fix insufficient permissions during startup
+- Fix the `xtrabackup` `--tables-exclude` cannot take effect
+- Fix the pod unable to connect `Orchestrator`
+- Fix pod labels diff of map
+- Fixed backup cleanup job bug (#577)
+- Fix Kubebuilder path in Makefile.
+- Fix #632 lifeCycle preStop script is not copied to given directory.
+- Fix #637 mysqlbackup status is not updated correctly.
+- Fix #647 custom conf can't overwrite the default conf
+- Fix #627 let Orchestrator do the failover
+- Fix #694 the error caused by backing up without waiting for master to be created.
 
 ## [0.4.0] - 2020-06-17
 
 ### Added
 
-* Added a `ServiceMonitor` to the operator chart that scrapes all MySQL instances.
-* Added a test suite for RunCloneCommand logic, along with a mock backup server.
-* Added checks for service availability when cloning.
-* Added "fail fast" logic when unexpected errors occur during cloning/download.
-* Added `dataDir` cleanup code so that interrupted cloning does not leave dataDir in an
-   inconsistent state.
-* Added e2e test demonstrating cloning failure when PVC is removed and pod recreated.
-* Add `MetricsExporterExtraArgs` field on MySQLCluster resource that allows to specify command line
-   arguments to pass to MySQL metrics exporter.
-* Allow using custom secret for app credentials in `mysql-cluster` chart.
-* Add `XbstreamExtraArgs` field on MySQLCluster resource that allows to specify extra command line
-   arguments to xbstream.
-* Add `XtrabackupExtraArgs`, `XtrabackupPrepareExtraArgs`, `XtrabackupTargetDir` to parametrize
-   xtrabackup.
-* Add `RcloneExtraArgs` to parametrize rclone command.
-* Add `InitFileExtraSQL` to insert custom init SQL queries that will be run at MySQL
-   initialization.
-* Add `Volumes` and `VolumesMounts` in `.Spec.PodSpec` to allow the user specifying custom volume
-   mounts.
-* Add `InitContainers` and `Containers` in `.Spec.PodSpec` to allow the user specifying custom containers.
-* Add `MetricsExporterResources` and `MySQLOperatorSidecarResrouces` in `.Spec.PodSpec` to allow
-   the user specifying resources for thos sidecars containers.
-* Add command line flag to configure number of workers for orchestrator controller.
-* Add livenessProbe to controller
+- Added a `ServiceMonitor` to the operator chart that scrapes all MySQL instances.
+- Added a test suite for RunCloneCommand logic, along with a mock backup server.
+- Added checks for service availability when cloning.
+- Added "fail fast" logic when unexpected errors occur during cloning/download.
+- Added `dataDir` cleanup code so that interrupted cloning does not leave dataDir in an
+  inconsistent state.
+- Added e2e test demonstrating cloning failure when PVC is removed and pod recreated.
+- Add `MetricsExporterExtraArgs` field on MySQLCluster resource that allows to specify command line
+  arguments to pass to MySQL metrics exporter.
+- Allow using custom secret for app credentials in `mysql-cluster` chart.
+- Add `XbstreamExtraArgs` field on MySQLCluster resource that allows to specify extra command line
+  arguments to xbstream.
+- Add `XtrabackupExtraArgs`, `XtrabackupPrepareExtraArgs`, `XtrabackupTargetDir` to parametrize
+  xtrabackup.
+- Add `RcloneExtraArgs` to parametrize rclone command.
+- Add `InitFileExtraSQL` to insert custom init SQL queries that will be run at MySQL
+  initialization.
+- Add `Volumes` and `VolumesMounts` in `.Spec.PodSpec` to allow the user specifying custom volume
+  mounts.
+- Add `InitContainers` and `Containers` in `.Spec.PodSpec` to allow the user specifying custom containers.
+- Add `MetricsExporterResources` and `MySQLOperatorSidecarResrouces` in `.Spec.PodSpec` to allow
+  the user specifying resources for thos sidecars containers.
+- Add command line flag to configure number of workers for orchestrator controller.
+- Add livenessProbe to controller
 
 ### Changed
 
-* [#422](https://github.com/presslabs/mysql-operator/pull/422) adds the `SidecarServerPort` to the
-   `MasterService` and introduces one new service, HealthyReplicasService, so that we can try to
-   clone from replicas first, then fall back to master.
-* Changed the connect timeout from the default of 30s to 5s so that an empty k8s service will not
-   cause cloning attempts to hang unnecessarily for 30s.
-* Update documentation structure and formatting.
-* Update Orchestrator version to v3.1.4
-* Update orchestrator base image to `alpine:3.11`.
-* Update FailoverInProgress condition to false when both Replicas and ReadyNodes are 0.
-* Fall back to current master, not pod 0, when no healthy replicas found for backup candidate.
-* Change the `mysql-operator` chart to be helm v3 compatible while keeping backward compatibility.
-* Change logging: change `cluster` logging field to `key`; normalize logging and more details;
-   output Stackdrive compatible format.
-* Decrease `MASTER_CONNECT_RETRY` interval from 10 to 1 second.
-* Deprecate `TmpfsSize` because can be handled using `ExtraVolumes` and `ExtraMySQLVolumesMounts`.
-* Update cron documentation
-* Set InnoDB buffer parameter: `innodb_buffer_pool_instances` to `min(resources.limit.cpu,
-   floor(innodb_buffer_pool_size/1G))` (see #502)
-* Change default resource requests/limits for `sidecar` container: requested=10m/32Mi, limit=the same as `.spec.podSpec.resources.limit`
-* Change default resource requests/limits for `exporter` container: requested=10m/32Mi, limit=100m/128Mi
-* Change default resource requests/limits for `heartbeat` container: requested=10m/32Mi, limit=100m/64Mi
-* If [`extra_port`](https://www.percona.com/doc/percona-server/5.7/performance/threadpool.html#extra_port)
-   is defined in the cluster spec, metrics exporter will use it to connect to MySQL providing that
-   [`extra_max_connections`](https://www.percona.com/doc/percona-server/5.7/performance/threadpool.html#extra_max_connections)
-   is larger than the default `1`. If MySQL server runs out of available connections, using `extra_port`
-   allows the exporter to continue collecting MySQL metrics.
-* Change the default number of workers for orchestrator controller from 1 to 10.
+- [#422](https://github.com/presslabs/mysql-operator/pull/422) adds the `SidecarServerPort` to the
+  `MasterService` and introduces one new service, HealthyReplicasService, so that we can try to
+  clone from replicas first, then fall back to master.
+- Changed the connect timeout from the default of 30s to 5s so that an empty k8s service will not
+  cause cloning attempts to hang unnecessarily for 30s.
+- Update documentation structure and formatting.
+- Update Orchestrator version to v3.1.4
+- Update orchestrator base image to `alpine:3.11`.
+- Update FailoverInProgress condition to false when both Replicas and ReadyNodes are 0.
+- Fall back to current master, not pod 0, when no healthy replicas found for backup candidate.
+- Change the `mysql-operator` chart to be helm v3 compatible while keeping backward compatibility.
+- Change logging: change `cluster` logging field to `key`; normalize logging and more details;
+  output Stackdrive compatible format.
+- Decrease `MASTER_CONNECT_RETRY` interval from 10 to 1 second.
+- Deprecate `TmpfsSize` because can be handled using `ExtraVolumes` and `ExtraMySQLVolumesMounts`.
+- Update cron documentation
+- Set InnoDB buffer parameter: `innodb_buffer_pool_instances` to `min(resources.limit.cpu,
+floor(innodb_buffer_pool_size/1G))` (see #502)
+- Change default resource requests/limits for `sidecar` container: requested=10m/32Mi, limit=the same as `.spec.podSpec.resources.limit`
+- Change default resource requests/limits for `exporter` container: requested=10m/32Mi, limit=100m/128Mi
+- Change default resource requests/limits for `heartbeat` container: requested=10m/32Mi, limit=100m/64Mi
+- If [`extra_port`](https://www.percona.com/doc/percona-server/5.7/performance/threadpool.html#extra_port)
+  is defined in the cluster spec, metrics exporter will use it to connect to MySQL providing that
+  [`extra_max_connections`](https://www.percona.com/doc/percona-server/5.7/performance/threadpool.html#extra_max_connections)
+  is larger than the default `1`. If MySQL server runs out of available connections, using `extra_port`
+  allows the exporter to continue collecting MySQL metrics.
+- Change the default number of workers for orchestrator controller from 1 to 10.
 
 ### Removed
 
 ### Fixed
 
-* Update and fix e2e tests
-* Fix double date string in backup path
-* Fix double date string in bakup path
-* Copy the nodeSelector as-is in the statefulset (fixes #454)
-* Fix flakines in ReadOnly cluster condition (fixes #434)
-* Fix rounding in computing `innodb-buffer-pool-size` (fixes #501)
-* rclone extra arguments are now properly passed to the backup job.
+- Update and fix e2e tests
+- Fix double date string in backup path
+- Fix double date string in bakup path
+- Copy the nodeSelector as-is in the statefulset (fixes #454)
+- Fix flakines in ReadOnly cluster condition (fixes #434)
+- Fix rounding in computing `innodb-buffer-pool-size` (fixes #501)
+- rclone extra arguments are now properly passed to the backup job.
 
 ## [0.3.8] - 2020-01-22
 
 ### Fixed
 
-* Fixed `TmpfsSize` type in CRD
+- Fixed `TmpfsSize` type in CRD
 
 ## [0.3.7] - 2020-01-22
 
 ### Added
 
-* Add support for mounting a tmpfs into /tmp. Add `TmpfsSize` field on the cluster
+- Add support for mounting a tmpfs into /tmp. Add `TmpfsSize` field on the cluster
 
 ## [0.3.6] - 2020-01-08
 
 ### Added
 
-* Update `mysql-cluster` chart to support setting `backupScheduleJobsHistoryLimit`
+- Update `mysql-cluster` chart to support setting `backupScheduleJobsHistoryLimit`
 
 ### Changed
 
-* Increase size of `value` column in `sys.operator` table (see
-   [#447](https://github.com/presslabs/mysql-operator/pull/447#issuecomment-572538559)) (fixes #446)
-* Determine master logic: prevent to follow infinit loops
+- Increase size of `value` column in `sys.operator` table (see
+  [#447](https://github.com/presslabs/mysql-operator/pull/447#issuecomment-572538559)) (fixes #446)
+- Determine master logic: prevent to follow infinit loops
 
 ### Fixed
 
-* Use custom server offset (`MyServerIDOffset`) when deciding to clone from bucket
+- Use custom server offset (`MyServerIDOffset`) when deciding to clone from bucket
 
 ## [0.3.5] - 2019-11-28
 
 ### Changed
 
-* Update Orchestrator version to v3.1.2
-* Update Go lang to 1.13.4
+- Update Orchestrator version to v3.1.2
+- Update Go lang to 1.13.4
 
 ### Fixed
 
-* Don't require `backupSecretName` if not set. Fixes delete on remove when using workload identity
+- Don't require `backupSecretName` if not set. Fixes delete on remove when using workload identity
 
 ## [0.3.4] - 2019-11-04
 
 ### Added
 
-* Update `mysql-cluster` chart to support custom server id offset
+- Update `mysql-cluster` chart to support custom server id offset
 
 ### Changed
 
-* During failover don't interfere with readdable/wriatable master (fixes #411)
-* Imorove logging
+- During failover don't interfere with readdable/wriatable master (fixes #411)
+- Imorove logging
 
 ## [0.3.3] - 2019-10-03
 
 ### Added
 
-* Allow server id offset to be set via `MySQLCluster` resource by adding `MyServerIDOffset` field
+- Allow server id offset to be set via `MySQLCluster` resource by adding `MyServerIDOffset` field
 
 ### Changed
 
-* Make app credentials optional for mysql-cluster chart
-* Don't create user with empty password (fixes #385)
+- Make app credentials optional for mysql-cluster chart
+- Don't create user with empty password (fixes #385)
 
 ### Fixed
 
-* Fix wrong enviroment for `mysql` container
-* Fix pt-kill client configure file prefix
+- Fix wrong enviroment for `mysql` container
+- Fix pt-kill client configure file prefix
 
 ## [0.3.2] - 2019-07-26
 
 ### Changed
 
-* Update docs structure on
-   [presslabs.com/docs/mysql-operator/](https://www.presslabs.com/docs/mysql-operator/)
-* Set limit on mysql `mysql-init-only` container the same as on the `mysql` container (fixes #371)
-* Don't limit memory on sidecars containers
+- Update docs structure on
+  [presslabs.com/docs/mysql-operator/](https://www.presslabs.com/docs/mysql-operator/)
+- Set limit on mysql `mysql-init-only` container the same as on the `mysql` container (fixes #371)
+- Don't limit memory on sidecars containers
 
 ## [0.3.1] - 2019-07-17
 
 ### Fixed
 
-* Upgrade path from version `v0.2.x` (#369)
-* Changes the default leader election id from `controller-leader-election-helper` to
-   `mysql-operator-leader-election` (#368)
+- Upgrade path from version `v0.2.x` (#369)
+- Changes the default leader election id from `controller-leader-election-helper` to
+  `mysql-operator-leader-election` (#368)
 
 ## [0.3.0] - 2019-07-08
 
 ### Added
 
-* add a new cluster condition `FailoverInProgress` that marks the cluster during a failover
-* set orchestrator related events on the cluster: `OrcFailureDetection`,
-   `OrcPostUnsuccessfulFailover`, `OrcPostMasterFailover`, `OrcPostIntermediateMasterFailover`
-* new command line flag `--mysql-versions-to-image` to allow user to specify image for a mysql
-   version
-* add print column in mysqlcluster CRD: `Ready`, `Replicas`, `Age`
-* allow specifying more PodSpec on MySQL cluster (9b6b46f)
-* add a node controller for MySQL configuration (1950812)
-* add "standard" labels on services created by the operator (#299)
+- add a new cluster condition `FailoverInProgress` that marks the cluster during a failover
+- set orchestrator related events on the cluster: `OrcFailureDetection`,
+  `OrcPostUnsuccessfulFailover`, `OrcPostMasterFailover`, `OrcPostIntermediateMasterFailover`
+- new command line flag `--mysql-versions-to-image` to allow user to specify image for a mysql
+  version
+- add print column in mysqlcluster CRD: `Ready`, `Replicas`, `Age`
+- allow specifying more PodSpec on MySQL cluster (9b6b46f)
+- add a node controller for MySQL configuration (1950812)
+- add "standard" labels on services created by the operator (#299)
 
 ### Changed
 
-* merge Orchestrator chart with the mysql-operator chart. Now instead of deployment it uses a
-   statefulset
-* nodes are removed from cluster status at scale down
-* use init container for MySQL initialization (#342)
-* enhance Backup Job Pod for Workload Identity (#366)
-* refactor of how the information flow works: from k8s -> Operator -> Orchestrator; the sidecar
-   container does not connect to Orchestrator anymore.
-* rename of `initBackupURI` to `initBackupURL` (a3c6556)
-* use of Percona CentOS based images (#254)
-* don't run as `root` user in containers (#291)
-* rename orchestrator finalizer (to block cluster deletion while it's registered into Orchestrator)
-   from `OrchestratorFinalizer` to `mysql.presslabs.org/registered-in-orchestrator` (bfe4646)
-* improvement of `getBackupCandidate` function (9ce4e68)
-* configure MySQL using `init-file` (beb41ce, e5823cb)
-* rename `AWS_SECRET_KEY` field from bucket/backup secret to `AWS_SECRET_ACCESS_KEY` (#301)
-* use an internal status table to store the MySQL status (181909f)
-* use a common headless service for all MySQL nodes to reduce the host-name length (#246)
+- merge Orchestrator chart with the mysql-operator chart. Now instead of deployment it uses a
+  statefulset
+- nodes are removed from cluster status at scale down
+- use init container for MySQL initialization (#342)
+- enhance Backup Job Pod for Workload Identity (#366)
+- refactor of how the information flow works: from k8s -> Operator -> Orchestrator; the sidecar
+  container does not connect to Orchestrator anymore.
+- rename of `initBackupURI` to `initBackupURL` (a3c6556)
+- use of Percona CentOS based images (#254)
+- don't run as `root` user in containers (#291)
+- rename orchestrator finalizer (to block cluster deletion while it's registered into Orchestrator)
+  from `OrchestratorFinalizer` to `mysql.presslabs.org/registered-in-orchestrator` (bfe4646)
+- improvement of `getBackupCandidate` function (9ce4e68)
+- configure MySQL using `init-file` (beb41ce, e5823cb)
+- rename `AWS_SECRET_KEY` field from bucket/backup secret to `AWS_SECRET_ACCESS_KEY` (#301)
+- use an internal status table to store the MySQL status (181909f)
+- use a common headless service for all MySQL nodes to reduce the host-name length (#246)
 
 ### Removed
 
-* cleanup of deprecated fields: `bucketURI` and top-level `MySQLCluster.spec.volumeSpec` PVC
-   specification (d909ab9, df80b28)
+- cleanup of deprecated fields: `bucketURI` and top-level `MySQLCluster.spec.volumeSpec` PVC
+  specification (d909ab9, df80b28)
 
 ### Fixed
 
-* fix readiness probe for MySQL container
-* fix remote storage delete bug
-* fix mysqlbackup deletion failure when cluster is not found
-* fix #350 where no backups were created when one fails
-* fix #107, the orchestrator RAFT issue
+- fix readiness probe for MySQL container
+- fix remote storage delete bug
+- fix mysqlbackup deletion failure when cluster is not found
+- fix #350 where no backups were created when one fails
+- fix #107, the orchestrator RAFT issue
 
-[Unreleased]: https://github.com/presslabs/mysql-operator/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/codecapsules-io/mysql-operator/compare/v0.6.3...HEAD
+
+<!-- Upstream compare links (historical) -->
+
 [0.3.8]: https://github.com/presslabs/mysql-operator/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/presslabs/mysql-operator/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/presslabs/mysql-operator/compare/v0.3.5...v0.3.6

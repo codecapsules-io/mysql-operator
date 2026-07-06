@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # Copyright 2016 The Upbound Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -175,24 +178,28 @@ debug.nuke:
 		docker rmi -f $$i > /dev/null 2>&1; \
 	done
 
+# Registry strings often contain ':' (e.g. host:5000). Colons in target names break GNU make
+# (parsed like static pattern rules). Use a slug only in rule names; keep $(1) in recipes.
 # 1: registry 2: image, 3: arch
+registry-slug = $(subst :,_,$(subst /,_,$(subst .,_,$(1))))
+
 define repo.targets
-.PHONY: .img.release.build.$(1).$(2).$(3)
-.img.release.build.$(1).$(2).$(3):
+.PHONY: .img.release.build.$(call registry-slug,$(1)).$(2).$(3)
+.img.release.build.$(call registry-slug,$(1)).$(2).$(3):
 	@$(INFO) docker build $(1)/$(2):$(IMAGE_TAG)-$(3)
 	@docker tag $(BUILD_REGISTRY)/$(2)-$(3) $(1)/$(2):$(IMAGE_TAG)-$(3) || $(FAIL)
 	@$(OK) docker build $(1)/$(2):$(IMAGE_TAG)-$(3)
-.img.release.build: .img.release.build.$(1).$(2).$(3)
+.img.release.build: .img.release.build.$(call registry-slug,$(1)).$(2).$(3)
 
-.PHONY: .img.release.publish.$(1).$(2).$(3)
-.img.release.publish.$(1).$(2).$(3):
+.PHONY: .img.release.publish.$(call registry-slug,$(1)).$(2).$(3)
+.img.release.publish.$(call registry-slug,$(1)).$(2).$(3):
 	@$(INFO) docker push $(1)/$(2):$(IMAGE_TAG)-$(3)
 	@docker push $(1)/$(2):$(IMAGE_TAG)-$(3) || $(FAIL)
 	@$(OK) docker push $(1)/$(2):$(IMAGE_TAG)-$(3)
-.img.release.publish: .img.release.publish.$(1).$(2).$(3)
+.img.release.publish: .img.release.publish.$(call registry-slug,$(1)).$(2).$(3)
 
-.PHONY: .img.release.promote.$(1).$(2).$(3)
-.img.release.promote.$(1).$(2).$(3):
+.PHONY: .img.release.promote.$(call registry-slug,$(1)).$(2).$(3)
+.img.release.promote.$(call registry-slug,$(1)).$(2).$(3):
 	@$(INFO) docker promote $(1)/$(2):$(IMAGE_TAG)-$(3) to $(1)/$(2)-$(3):$(CHANNEL)
 	@docker pull $(1)/$(2):$(IMAGE_TAG)-$(3) || $(FAIL)
 	@[ "$(CHANNEL)" = "master" ] || docker tag $(1)/$(2):$(IMAGE_TAG)-$(3) $(1)/$(2):$(IMAGE_TAG)-$(3)-$(CHANNEL) || $(FAIL)
@@ -200,14 +207,14 @@ define repo.targets
 	@[ "$(CHANNEL)" = "master" ] || docker push $(1)/$(2):$(IMAGE_TAG)-$(3)-$(CHANNEL)
 	@docker push $(1)/$(2)-$(3):$(CHANNEL) || $(FAIL)
 	@$(OK) docker promote $(1)/$(2):$(IMAGE_TAG)-$(3) to $(1)/$(2)-$(3):$(CHANNEL) || $(FAIL)
-.img.release.promote: .img.release.promote.$(1).$(2).$(3)
+.img.release.promote: .img.release.promote.$(call registry-slug,$(1)).$(2).$(3)
 
-.PHONY: .img.release.clean.$(1).$(2).$(3)
-.img.release.clean.$(1).$(2).$(3):
+.PHONY: .img.release.clean.$(call registry-slug,$(1)).$(2).$(3)
+.img.release.clean.$(call registry-slug,$(1)).$(2).$(3):
 	@[ -z "$$$$(docker images -q $(1)/$(2):$(IMAGE_TAG)-$(3))" ] || docker rmi $(1)/$(2):$(IMAGE_TAG)-$(3)
 	@[ -z "$$$$(docker images -q $(1)/$(2):$(IMAGE_TAG)-$(3)-$(CHANNEL))" ] || docker rmi $(1)/$(2):$(IMAGE_TAG)-$(3)-$(CHANNEL)
 	@[ -z "$$$$(docker images -q $(1)/$(2)-$(3):$(CHANNEL))" ] || docker rmi $(1)/$(2)-$(3):$(CHANNEL)
-.img.release.clean: .img.release.clean.$(1).$(2).$(3)
+.img.release.clean: .img.release.clean.$(call registry-slug,$(1)).$(2).$(3)
 endef
 $(foreach r,$(REGISTRIES), $(foreach i,$(IMAGES), $(foreach a,$(IMAGE_ARCHS),$(eval $(call repo.targets,$(r),$(i),$(a))))))
 

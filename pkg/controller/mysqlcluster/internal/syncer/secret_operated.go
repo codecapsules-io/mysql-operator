@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,8 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 const (
@@ -59,7 +61,7 @@ func NewOperatedSecretSyncer(c client.Client, scheme *runtime.Scheme, cluster *m
 		}
 
 		// the user that is used by the metrics exporter sidecar to collect mysql metrics
-		secret.Data["METRICS_EXPORTER_USER"] = []byte("sys_exporter")
+		secret.Data["METRICS_EXPORTER_USER"] = []byte(constants.MetricsExporterMySQLUser)
 		if err := addRandomPassword(secret.Data, "METRICS_EXPORTER_PASSWORD"); err != nil {
 			return err
 		}
@@ -67,6 +69,12 @@ func NewOperatedSecretSyncer(c client.Client, scheme *runtime.Scheme, cluster *m
 		// the user that is used by orchestrator to manage topology and failover
 		secret.Data["ORC_TOPOLOGY_USER"] = []byte(opt.OrchestratorTopologyUser)
 		secret.Data["ORC_TOPOLOGY_PASSWORD"] = []byte(opt.OrchestratorTopologyPassword)
+
+		// pt-heartbeat (must match pkg/sidecar NewConfig HEARTBEAT_* env from this secret via envFrom)
+		secret.Data["HEARTBEAT_USER"] = []byte(constants.HeartBeatMySQLUser)
+		if err := addRandomPassword(secret.Data, "HEARTBEAT_PASSWORD"); err != nil {
+			return err
+		}
 
 		// the user that is used to serve backups over HTTP
 		secret.Data["BACKUP_USER"] = []byte("sys_backups")

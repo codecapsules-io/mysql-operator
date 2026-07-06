@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,10 +35,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
-	fakeOrc "github.com/bitpoke/mysql-operator/pkg/orchestrator/fake"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
+	fakeOrc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator/fake"
 )
 
 var _ = Describe("Orchestrator reconciler", func() {
@@ -76,6 +77,27 @@ var _ = Describe("Orchestrator reconciler", func() {
 			_, err := orcSyncer.Sync(context.TODO())
 			Expect(err).To(Succeed())
 			Expect(orcClient.CheckDiscovered(cluster.GetPodHostname(0))).To(Equal(true))
+		})
+	})
+
+	Describe("getFromOrchestrator", func() {
+		It("uses topology-derived master when orchestrator Master() is empty (e.g. all instances read-only in Orc)", func() {
+			orcClient.Reset()
+			orcClient.AddInstance(orc.Instance{
+				ClusterName:       cluster.GetClusterAlias(),
+				Key:               orc.InstanceKey{Hostname: cluster.GetPodHostname(0)},
+				ReadOnly:          true,
+				SlaveLagSeconds:   sql.NullInt64{Valid: false},
+				IsUpToDate:        true,
+				IsRecentlyChecked: true,
+				IsLastCheckValid:  true,
+			})
+			u := NewOrcUpdater(cluster, rec, orcClient).(*orcUpdater)
+			insts, master, err := u.getFromOrchestrator()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(insts).To(HaveLen(1))
+			Expect(master).NotTo(BeNil())
+			Expect(master.Key.Hostname).To(Equal(cluster.GetPodHostname(0)))
 		})
 	})
 

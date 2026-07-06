@@ -1,5 +1,6 @@
 /*
 Copyright 2020 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +18,7 @@ limitations under the License.
 package controller
 
 import (
-	"github.com/bitpoke/mysql-operator/pkg/controller/mysqldatabase"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller/mysqldatabase"
 )
 
 func init() {

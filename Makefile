@@ -1,15 +1,19 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # Project Setup
 PROJECT_NAME := mysql-operator
-PROJECT_REPO := github.com/bitpoke/mysql-operator
+PROJECT_REPO := github.com/codecapsules-io/mysql-operator
 
 PLATFORMS := darwin_amd64 linux_amd64
 include build/makelib/common.mk
 
 GO111MODULE=on
 GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/mysql-operator $(GO_PROJECT)/cmd/mysql-operator-sidecar $(GO_PROJECT)/cmd/orc-helper
-GO_SUPPORTED_VERSIONS = 1.17
+# golang.mk accepts any toolchain >= this (go.mod language version may stay older).
+GO_MIN_VERSION = 1.17
 GOFMT_VERSION = 1.17
-GOLANGCI_LINT_VERSION = 1.42.1
+GOLANGCI_LINT_VERSION = 2.12.2
 GO_LDFLAGS += \
 	       -X $(GO_PROJECT)/pkg/version.buildDate=$(BUILD_DATE) \
 	       -X $(GO_PROJECT)/pkg/version.gitVersion=$(VERSION) \
@@ -19,7 +23,7 @@ GO_INTEGRATION_TESTS_SUBDIRS = test/e2e
 ifeq ($(CI),true)
 E2E_IMAGE_REGISTRY ?= $(DOCKER_REGISTRY)
 E2E_IMAGE_TAG ?= $(COMMIT_HASH)
-GO_LINT_ARGS += --timeout 3m
+GO_LINT_ARGS += --timeout 15m
 else
 E2E_IMAGE_REGISTRY ?= docker.io/$(BUILD_REGISTRY)
 E2E_IMAGE_TAG ?= latest
@@ -33,16 +37,26 @@ GO_INTEGRATION_TESTS_PARAMS ?= -timeout 50m \
 							   --operator-image $(E2E_IMAGE_REGISTRY)/mysql-operator$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
 							   --sidecar-mysql57-image $(E2E_IMAGE_REGISTRY)/mysql-operator-sidecar-5.7$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
 							   --sidecar-mysql8-image $(E2E_IMAGE_REGISTRY)/mysql-operator-sidecar-8.0$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
+							   --sidecar-mysql84-image $(E2E_IMAGE_REGISTRY)/mysql-operator-sidecar-8.4$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG) \
 							   --orchestrator-image $(E2E_IMAGE_REGISTRY)/mysql-operator-orchestrator$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG)
 TEST_FILTER_PARAM += $(GO_INTEGRATION_TESTS_PARAMS)
 include build/makelib/golang.mk
 
-DOCKER_REGISTRY ?= docker.io/bitpoke
-IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0
+# Ginkgo specs live in test/e2e (cluster/backups imported there). Do not use ./test/e2e/...
+# or ginkgo also compiles test/e2e/framework as a separate suite without e2e flags.
+go.test.integration: $(GINKGO)
+	@$(INFO) ginkgo integration-tests
+	@mkdir -p $(GO_TEST_OUTPUT) || $(FAIL)
+	@CGO_ENABLED=0 $(GINKGO) $(GO_TEST_FLAGS) $(GO_STATIC_FLAGS) ./test/e2e $(TEST_FILTER_PARAM) || $(FAIL)
+	@$(OK) go test integration-tests
+
+DOCKER_REGISTRY ?= ghcr.io/codecapsules-io
+IMAGES ?= mysql-operator mysql-operator-orchestrator mysql-operator-sidecar-5.7 mysql-operator-sidecar-8.0 mysql-operator-sidecar-8.4
 include build/makelib/image.mk
 
-KUBEBUILDER_ASSETS_VERSION := 1.21.2
-GEN_CRD_OPTIONS := crd:crdVersions=v1,preserveUnknownFields=false
+KUBEBUILDER_ASSETS_VERSION := 1.23.5
+# preserveUnknownFields is applied post-generate via .kubebuilder.fix-preserve-unknown-fields (yq).
+GEN_CRD_OPTIONS := crd:crdVersions=v1
 include build/makelib/kubebuilder-v3.mk
 
 # fix for https://github.com/kubernetes-sigs/controller-tools/issues/476
@@ -51,53 +65,40 @@ include build/makelib/kubebuilder-v3.mk
 		@for crd in $(wildcard $(CRD_DIR)/*.yaml) ; do \
 			$(YQ) e '.spec.preserveUnknownFields=false' -i "$${crd}" ;\
 		done
-.kubebuilder.manifests.done: .kubebuilder.fix-preserve-unknown-fields
-
-include build/makelib/helm.mk
-
-.PHONY: .kubebuilder.update.chart
-.kubebuilder.update.chart: kubebuilder.manifests $(YQ)
-	@$(INFO) updating helm RBAC and CRDs from kubebuilder manifests
-	@rm -rf $(HELM_CHARTS_DIR)/mysql-operator/crds
-	@mkdir -p $(HELM_CHARTS_DIR)/mysql-operator/crds
-	@set -e; \
-		for crd in $(wildcard $(CRD_DIR)/*.yaml) ; do \
-			cp $${crd} $(HELM_CHARTS_DIR)/mysql-operator/crds/ ; \
-			$(YQ) e '.metadata.labels["app.kubernetes.io/name"]="mysql-operator"' -i $(HELM_CHARTS_DIR)/mysql-operator/crds/$$(basename $${crd}) ; \
-			$(YQ) e 'del(.metadata.creationTimestamp)'                            -i $(HELM_CHARTS_DIR)/mysql-operator/crds/$$(basename $${crd}) ; \
-			$(YQ) e 'del(.status)'                                                -i $(HELM_CHARTS_DIR)/mysql-operator/crds/$$(basename $${crd}) ; \
+.PHONY: .kubebuilder.fix-license-headers
+.kubebuilder.fix-license-headers:
+		@for f in $(wildcard $(CRD_DIR)/*.yaml) config/rbac/role.yaml ; do \
+			test -f "$${f}" || continue ; \
+			head -n 5 "$${f}" | grep -q 'SPDX-License-Identifier' && continue ; \
+			{ echo '# Copyright 2026 Code Capsules' ; \
+			  echo '# SPDX-License-Identifier: Apache-2.0' ; \
+			  echo '#' ; \
+			  cat "$${f}" ; } > "$${f}.tmp" && mv "$${f}.tmp" "$${f}" ; \
 		done
-	@echo '{{- if .Values.rbac.create }}'                             > $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'apiVersion: rbac.authorization.k8s.io/v1'                 >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'kind: ClusterRole'                                        >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'metadata:'                                                >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '  name: {{ include "mysql-operator.fullname" . }}'        >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '  labels:'                                                >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '    {{- include "mysql-operator.labels" . | nindent 4 }}' >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo 'rules:'                                                   >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@yq e -P '.rules' config/rbac/role.yaml                          >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@echo '{{- end }}'                                               >> $(HELM_CHARTS_DIR)/mysql-operator/templates/clusterrole.yaml
-	@$(OK) updating helm RBAC and CRDs from kubebuilder manifests
-.generate.run: .kubebuilder.update.chart
+.kubebuilder.manifests.done: .kubebuilder.fix-preserve-unknown-fields .kubebuilder.fix-license-headers
 
-.PHONY: .helm.package.prepare.mysql-operator
-.helm.package.prepare.mysql-operator:  $(YQ)
-	@$(INFO) prepare mysql-operator chart $(HELM_CHART_VERSION)
-	@$(SED) 's/:latest/:$(VERSION)/g' $(HELM_CHARTS_WORK_DIR)/mysql-operator/Chart.yaml
-	@$(OK) prepare mysql-operator chart $(HELM_CHART_VERSION)
-.helm.package.run.mysql-operator: .helm.package.prepare.mysql-operator
+DEPLOY_MANIFESTS_DIR ?= deploy/manifests
 
-.PHONY: .helm.publish
-.helm.publish:
-	@$(INFO) publishing helm charts
-	@rm -rf $(WORK_DIR)/charts
-	@git clone -q git@github.com:bitpoke/helm-charts.git $(WORK_DIR)/charts
-	@cp $(HELM_OUTPUT_DIR)/*.tgz $(WORK_DIR)/charts/docs/
-	@git -C $(WORK_DIR)/charts add $(WORK_DIR)/charts/docs/*.tgz
-	@git -C $(WORK_DIR)/charts commit -q -m "Added $(call list-join,$(COMMA)$(SPACE),$(foreach c,$(HELM_CHARTS),$(c)-v$(HELM_CHART_VERSION)))"
-	@git -C $(WORK_DIR)/charts push -q
-	@$(OK) publishing helm charts
-.publish.run: .helm.publish
+.PHONY: version
+version:
+	@echo $(VERSION)
+
+.PHONY: deploy.crds deploy.manifests
+deploy.crds: $(YQ) kubebuilder.manifests
+	@$(INFO) syncing CRDs into deploy/manifests/$(VERSION)
+	@VERSION=$(VERSION) YQ=$(YQ) bash hack/generate-deploy-manifests.sh $(VERSION)
+	@$(OK) syncing CRDs into deploy/manifests/$(VERSION)
+
+# Operator manifests are maintained manually per version; this target only syncs CRDs.
+deploy.manifests: deploy.crds
+
+.PHONY: validate-domain
+validate-domain:
+	@$(INFO) validating domain metadata consistency
+	@bash hack/validate-domain.sh
+	@$(OK) validating domain metadata consistency
+
+.lint.run: validate-domain go.fmt.verify go.lint
 
 CLUSTER_NAME ?= mysql-operator
 delete-environment:
@@ -112,3 +113,10 @@ kind-load-images:
 		for image in $(IMAGES); do \
 		kind load docker-image --name $(CLUSTER_NAME) $(E2E_IMAGE_REGISTRY)/$${image}$(E2E_IMAGE_SUFFIX):$(E2E_IMAGE_TAG); \
 	done
+
+.PHONY: e2e-kind e2e-kind-down
+e2e-kind:
+	@bash hack/e2e-kind.sh
+
+e2e-kind-down:
+	@bash hack/e2e-kind.sh --down

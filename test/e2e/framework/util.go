@@ -1,3 +1,20 @@
+/*
+Copyright 2015 The Kubernetes Authors.
+Copyright 2026 Code Capsules
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package framework
 
 import (
@@ -14,14 +31,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/test/e2e/framework/ginkgowrapper"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/test/e2e/framework/ginkgowrapper"
 )
 
 const (
@@ -165,20 +183,31 @@ func GetPodLogs(c clientset.Interface, namespace, podName, containerName string)
 	return getPodLogsInternal(c, namespace, podName, containerName, false)
 }
 
+// GetPodLogsTail returns the last tailLines lines of a container log.
+func GetPodLogsTail(c clientset.Interface, namespace, podName, containerName string, tailLines int64) (string, error) {
+	return getPodLogsInternalWithTail(c, namespace, podName, containerName, false, tailLines)
+}
+
 func getPreviousPodLogs(c clientset.Interface, namespace, podName, containerName string) (string, error) {
 	return getPodLogsInternal(c, namespace, podName, containerName, true)
 }
 
 // utility function for gomega Eventually
 func getPodLogsInternal(c clientset.Interface, namespace, podName, containerName string, previous bool) (string, error) {
-	logs, err := c.CoreV1().RESTClient().Get().
+	return getPodLogsInternalWithTail(c, namespace, podName, containerName, previous, 0)
+}
+
+func getPodLogsInternalWithTail(c clientset.Interface, namespace, podName, containerName string, previous bool, tailLines int64) (string, error) {
+	req := c.CoreV1().RESTClient().Get().
 		Resource("pods").
 		Namespace(namespace).
 		Name(podName).SubResource("log").
 		Param("container", containerName).
-		Param("previous", strconv.FormatBool(previous)).
-		Do(context.TODO()).
-		Raw()
+		Param("previous", strconv.FormatBool(previous))
+	if tailLines > 0 {
+		req = req.Param("tailLines", strconv.FormatInt(tailLines, 10))
+	}
+	logs, err := req.Do(context.TODO()).Raw()
 	if err != nil {
 		return "", err
 	}
@@ -232,6 +261,18 @@ func LogContainersInPodsWithLabels(c clientset.Interface, ns string, match map[s
 
 func NewCluster(name, ns string) *api.MysqlCluster {
 	one := int32(1)
+	// Sized for Kind on GHA (~16Gi host): mysql-init-only runs full Percona briefly;
+	// limits prevent unbounded RSS; small buffer pool keeps init peak low.
+	mysqlResources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("768Mi"),
+		},
+	}
 	return &api.MysqlCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -240,6 +281,32 @@ func NewCluster(name, ns string) *api.MysqlCluster {
 		Spec: api.MysqlClusterSpec{
 			Replicas:   &one,
 			SecretName: name,
+			MysqlConf: api.MysqlConf{
+				"innodb-buffer-pool-size": intstr.FromString("128M"),
+			},
+			PodSpec: api.PodSpec{
+				Resources: mysqlResources,
+				MySQLOperatorSidecarResources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+						corev1.ResourceMemory: resource.MustParse("64Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("200m"),
+						corev1.ResourceMemory: resource.MustParse("128Mi"),
+					},
+				},
+				MetricsExporterResources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+						corev1.ResourceMemory: resource.MustParse("32Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("100m"),
+						corev1.ResourceMemory: resource.MustParse("64Mi"),
+					},
+				},
+			},
 			VolumeSpec: api.VolumeSpec{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimSpec{
 					Resources: corev1.ResourceRequirements{

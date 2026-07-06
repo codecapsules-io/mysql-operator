@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,18 +32,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	orc "github.com/bitpoke/mysql-operator/pkg/orchestrator"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	orc "github.com/codecapsules-io/mysql-operator/pkg/orchestrator"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 var log = logf.Log.WithName("upgrades.cluster")
-
-const (
-	// VersionAnnotation represents the annotation used to annotate a cluster to it's version
-	VersionAnnotation = "mysql.presslabs.org/version"
-)
 
 // Interface represents the upgrader interface
 type Interface interface {
@@ -136,7 +133,7 @@ func (u *upgrader) Run(ctx context.Context) error {
 func (u *upgrader) ShouldUpdate() bool {
 	var version string
 	var ok bool
-	if version, ok = u.cluster.ObjectMeta.Annotations[VersionAnnotation]; !ok {
+	if version, ok = u.cluster.ObjectMeta.Annotations[domain.AnnotationVersion]; !ok {
 		// no version annotation present, (it's a cluster older than 0.3.0) or it's a new cluster
 		log.Info("annotation not set on cluster", "key", u.cluster)
 		return true
@@ -155,7 +152,7 @@ func (u *upgrader) markUpgradeComplete() error {
 	if u.cluster.Annotations == nil {
 		u.cluster.Annotations = make(map[string]string)
 	}
-	u.cluster.Annotations[VersionAnnotation] = strconv.Itoa(u.version)
+	u.cluster.Annotations[domain.AnnotationVersion] = strconv.Itoa(u.version)
 	err := u.client.Update(context.TODO(), u.cluster.Unwrap())
 	if err != nil {
 		log.Error(err, "failed to update cluster spec", "key", u.cluster)

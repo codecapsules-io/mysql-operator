@@ -1,0 +1,15 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mysql-operator
+resources:
+  - serviceaccount.yaml
+  - orchestrator-secret.yaml
+  - orchestrator-config.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+  - orchestrator-raft-service.yaml
+  - service.yaml
+  - statefulset.yaml

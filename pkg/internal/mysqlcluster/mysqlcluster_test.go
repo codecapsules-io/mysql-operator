@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,9 +34,9 @@ import (
 
 	logf "github.com/presslabs/controller-util/log"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 func TestMySQLClusterWrapper(t *testing.T) {
@@ -68,17 +69,85 @@ var _ = Describe("Test MySQL cluster wrapper", func() {
 	})
 
 	It("should have defaults set", func() {
-		Expect(cluster.GetMySQLSemVer()).To(Equal(constants.MySQLDefaultVersion))
+		Expect(cluster.GetMySQLSemVer().String()).To(Equal(constants.MySQLDefaultVersion))
 		Expect(cluster.GetMysqlImage()).To(ContainSubstring("percona"))
 
 		Expect(cluster.Spec.PodSpec.Resources.Requests.Memory()).To(PointTo(Equal(resource.MustParse("1Gi"))))
 		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-buffer-pool-size")))
+		// Default version is 5.7.35; InnoDB log sizing uses innodb-log-file-size before MySQL 8.0.30+.
 		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-log-file-size")))
+		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("innodb-redo-log-capacity")))
 		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("max-binlog-size")))
 	})
 
-	It("should use init MySQL container", func() {
+	It("should use init MySQL container for default Percona 5.7", func() {
 		Expect(cluster.ShouldHaveInitContainerForMysql()).To(Equal(true))
+	})
+
+	It("uses innodb-redo-log-capacity on MySQL 8.0.30+ instead of innodb-log-file-size", func() {
+		cluster = New(&api.MysqlCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cl-name",
+				Namespace: "default",
+			},
+			Spec: api.MysqlClusterSpec{
+				SecretName:   "sct-name",
+				MysqlVersion: "8.4.8",
+				MysqlConf:    map[string]intstr.IntOrString{},
+				PodSpec: api.PodSpec{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("4Gi"),
+						},
+					},
+				},
+			},
+		})
+		api.SetDefaults_MysqlCluster(cluster.Unwrap())
+		cluster.SetDefaults(options.GetOptions())
+		Expect(cluster.Spec.MysqlConf).To(HaveKey(Equal("innodb-redo-log-capacity")))
+		redo := cluster.Spec.MysqlConf["innodb-redo-log-capacity"]
+		Expect((&redo).String()).To(Equal("256M"))
+		Expect(cluster.Spec.MysqlConf).NotTo(HaveKey(Equal("innodb-log-file-size")))
+	})
+
+	It("selects sidecar image by mysql version", func() {
+		o := options.GetOptions()
+		prev84 := o.SidecarMysql84Image
+		defer func() {
+			o.SidecarMysql84Image = prev84
+		}()
+		o.SidecarMysql84Image = "reg/sidecar84:tag"
+
+		cluster.Spec.MysqlVersion = "5.7.35"
+		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql57Image))
+
+		cluster.Spec.MysqlVersion = "8.0.20"
+		Expect(cluster.GetSidecarImage()).To(Equal(o.SidecarMysql8Image))
+
+		cluster.Spec.MysqlVersion = "8.4.8"
+		Expect(cluster.GetSidecarImage()).To(Equal("reg/sidecar84:tag"))
+	})
+
+	It("returns empty 8.4 sidecar image when unset", func() {
+		o := options.GetOptions()
+		prev := o.SidecarMysql84Image
+		defer func() { o.SidecarMysql84Image = prev }()
+		o.SidecarMysql84Image = ""
+		cluster.Spec.MysqlVersion = "8.4.8"
+		Expect(cluster.GetSidecarImage()).To(Equal(""))
+	})
+
+	It("rejects cluster when sidecar image is unset for the mysql version", func() {
+		o := options.GetOptions()
+		prev := o.SidecarMysql84Image
+		defer func() { o.SidecarMysql84Image = prev }()
+		o.SidecarMysql84Image = ""
+		cluster.Spec.MysqlVersion = "8.4.8"
+		cluster.Spec.VolumeSpec = api.VolumeSpec{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimSpec{},
+		}
+		Expect(cluster.Validate()).To(MatchError(ContainSubstring("no sidecar image configured")))
 	})
 
 	It("should return 0.0.0 version if wrong mysql version was given", func() {

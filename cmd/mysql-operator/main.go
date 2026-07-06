@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,9 +31,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	"github.com/bitpoke/mysql-operator/pkg/apis"
-	"github.com/bitpoke/mysql-operator/pkg/controller"
-	"github.com/bitpoke/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
 )
 
 var log = logf.Log.WithName("mysql-operator")
@@ -57,6 +59,11 @@ func main() {
 
 	if err := opt.Validate(); err != nil {
 		log.Error(err, "failed to validate command line args, see help.")
+		os.Exit(1)
+	}
+
+	if err := mysqlversioning.InitDefault(opt); err != nil {
+		log.Error(err, "failed to initialize mysql versioning runtime")
 		os.Exit(1)
 	}
 

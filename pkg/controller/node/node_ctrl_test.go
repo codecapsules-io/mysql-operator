@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,9 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/controller/internal/testutil"
-	"github.com/bitpoke/mysql-operator/pkg/internal/mysqlcluster"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/semver"
+
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	"github.com/codecapsules-io/mysql-operator/pkg/controller/internal/testutil"
+	"github.com/codecapsules-io/mysql-operator/pkg/internal/mysqlcluster"
 )
 
 var (
@@ -62,7 +66,7 @@ var _ = Describe("MysqlNode controller", func() {
 		c = mgr.GetClient()
 
 		sqli = &fakeSQLRunner{}
-		newNodeConn := func(dsn, host string) SQLInterface {
+		newNodeConn := func(dsn, host string, _ semver.Version) SQLInterface {
 			return sqli
 		}
 
@@ -89,7 +93,7 @@ var _ = Describe("MysqlNode controller", func() {
 					Name:      fmt.Sprintf("cluster-%d", rand.Int31()),
 					Namespace: "default",
 					Annotations: map[string]string{
-						"mysql.presslabs.org/version": "300",
+						domain.AnnotationVersion: "300",
 					},
 				},
 				Spec: api.MysqlClusterSpec{
@@ -206,7 +210,7 @@ func getOrCreatePod(c client.Client, cluster *mysqlcluster.MysqlCluster, index i
 				Name:      fmt.Sprintf("%s-%d", cluster.GetNameForResource(mysqlcluster.StatefulSet), index),
 				Namespace: cluster.Namespace,
 				Labels: map[string]string{
-					"app.kubernetes.io/managed-by": "mysql.presslabs.org",
+					"app.kubernetes.io/managed-by": domain.ManagedBy,
 				},
 			},
 			Spec: corev1.PodSpec{

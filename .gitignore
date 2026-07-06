@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # C extensions
 *.so
 
@@ -67,3 +70,12 @@ webroot/*
 _output
 
 build
+
+# local testing
+rendered-local-test/
+build-all-local.test.sh
+
+# local docs
+.venv
+.venv-docs
+/site

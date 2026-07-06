@@ -1,0 +1,9 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apply CRDs before upgrading operator workloads across major/minor releases.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - crds
+  - operator

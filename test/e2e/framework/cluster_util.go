@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +20,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,12 +40,15 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 	gomegatypes "github.com/onsi/gomega/types"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	pf "github.com/bitpoke/mysql-operator/test/e2e/framework/portforward"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis/domain"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	pf "github.com/codecapsules-io/mysql-operator/test/e2e/framework/portforward"
 )
 
 var (
 	POLLING = 2 * time.Second
+	// Tail length per container when logging during cluster readiness waits.
+	clusterReadinessLogTailLines int64 = 120
 )
 
 func (f *Framework) ClusterEventuallyCondition(cluster *api.MysqlCluster,
@@ -233,8 +238,8 @@ func (f *Framework) ReadSQLTest(cluster *api.MysqlCluster, pod int, pw string) s
 // GetClusterLabels returns labels.Set for the given cluster
 func GetClusterLabels(cluster *api.MysqlCluster) labels.Set {
 	labels := labels.Set{
-		"mysql.presslabs.org/cluster": cluster.Name,
-		"app.kubernetes.io/name":      "mysql",
+		domain.LabelCluster:      cluster.Name,
+		"app.kubernetes.io/name": "mysql",
 	}
 
 	return labels
@@ -250,4 +255,286 @@ func (f *Framework) GetClusterPVCsFn(cluster *api.MysqlCluster) func() []corev1.
 		f.Client.List(context.TODO(), pvcList, lo)
 		return pvcList.Items
 	}
+}
+
+// LogClusterReadinessDiagnostics prints cluster status, workload objects, and recent events
+// to help debug e2e readiness timeouts.
+func (f *Framework) LogClusterReadinessDiagnostics(cluster *api.MysqlCluster, cl *api.MysqlCluster) {
+	if cl == nil {
+		cl = &api.MysqlCluster{}
+		key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+		if err := f.Client.Get(context.TODO(), key, cl); err != nil {
+			Logf("cluster readiness diagnostics: failed to get MysqlCluster %s/%s: %v",
+				cluster.Namespace, cluster.Name, err)
+			return
+		}
+	}
+
+	replicas := int32(0)
+	if cluster.Spec.Replicas != nil {
+		replicas = *cluster.Spec.Replicas
+	}
+
+	Logf("=== cluster readiness diagnostics: %s/%s ===", cluster.Namespace, cluster.Name)
+	Logf("spec.replicas=%d status.readyNodes=%d appliedMysqlVersion=%q spec.mysqlVersion=%q spec.image=%q",
+		replicas, cl.Status.ReadyNodes, cl.Status.AppliedMysqlVersion, cl.Spec.MysqlVersion, cl.Spec.Image)
+
+	for _, cond := range cl.Status.Conditions {
+		Logf("cluster condition %s=%s reason=%q message=%q",
+			cond.Type, cond.Status, cond.Reason, cond.Message)
+	}
+	for _, node := range cl.Status.Nodes {
+		Logf("status node %q master=%s replicating=%s readonly=%s lagged=%s",
+			node.Name,
+			nodeConditionStatus(node.Conditions, api.NodeConditionMaster),
+			nodeConditionStatus(node.Conditions, api.NodeConditionReplicating),
+			nodeConditionStatus(node.Conditions, api.NodeConditionReadOnly),
+			nodeConditionStatus(node.Conditions, api.NodeConditionLagged),
+		)
+	}
+
+	f.logClusterStatefulSet(cluster)
+	f.logClusterPods(cluster)
+	f.logClusterPodLogs(cluster)
+	f.logClusterPVCs(cluster)
+	f.logClusterEvents(cluster)
+	Logf("=== end cluster readiness diagnostics: %s/%s ===", cluster.Namespace, cluster.Name)
+}
+
+func nodeConditionStatus(conds []api.NodeCondition, condType api.NodeConditionType) string {
+	for _, cond := range conds {
+		if cond.Type == condType {
+			return string(cond.Status)
+		}
+	}
+	return "Unknown"
+}
+
+func (f *Framework) logClusterStatefulSet(cluster *api.MysqlCluster) {
+	stsName := GetNameForResource("sts", cluster)
+	sts, err := f.ClientSet.AppsV1().StatefulSets(cluster.Namespace).Get(context.TODO(), stsName, metav1.GetOptions{})
+	if err != nil {
+		Logf("statefulset %s: get failed: %v", stsName, err)
+		return
+	}
+
+	Logf("statefulset %s: replicas=%d ready=%d current=%d updated=%d observedGeneration=%d",
+		stsName,
+		int32Value(sts.Spec.Replicas),
+		sts.Status.ReadyReplicas,
+		sts.Status.CurrentReplicas,
+		sts.Status.UpdatedReplicas,
+		sts.Status.ObservedGeneration,
+	)
+}
+
+func int32Value(v *int32) int32 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func (f *Framework) logClusterPods(cluster *api.MysqlCluster) {
+	podList, err := f.ClientSet.CoreV1().Pods(cluster.Namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(GetClusterLabels(cluster)).String(),
+	})
+	if err != nil {
+		Logf("cluster pods: list failed: %v", err)
+		return
+	}
+	if len(podList.Items) == 0 {
+		Logf("cluster pods: none found with labels %v", GetClusterLabels(cluster))
+		return
+	}
+
+	for _, pod := range podList.Items {
+		podReady := corev1.ConditionUnknown
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.PodReady {
+				podReady = cond.Status
+				break
+			}
+		}
+		Logf("pod %s phase=%s ready=%s node=%s ip=%s",
+			pod.Name, pod.Status.Phase, podReady, pod.Spec.NodeName, pod.Status.PodIP)
+		for _, cs := range pod.Status.InitContainerStatuses {
+			logContainerStatus("init", cs)
+		}
+		for _, cs := range pod.Status.ContainerStatuses {
+			logContainerStatus("main", cs)
+		}
+	}
+}
+
+func logContainerStatus(kind string, cs corev1.ContainerStatus) {
+	msg := fmt.Sprintf("  %s container %q image=%q ready=%v restartCount=%d",
+		kind, cs.Name, cs.Image, cs.Ready, cs.RestartCount)
+	switch {
+	case cs.State.Waiting != nil:
+		msg += fmt.Sprintf(" state=Waiting reason=%q message=%q",
+			cs.State.Waiting.Reason, cs.State.Waiting.Message)
+	case cs.State.Running != nil:
+		msg += " state=Running"
+	case cs.State.Terminated != nil:
+		msg += fmt.Sprintf(" state=Terminated reason=%q exitCode=%d message=%q",
+			cs.State.Terminated.Reason, cs.State.Terminated.ExitCode, cs.State.Terminated.Message)
+	}
+	Logf(msg)
+}
+
+func (f *Framework) logClusterPodLogs(cluster *api.MysqlCluster) {
+	podList, err := f.ClientSet.CoreV1().Pods(cluster.Namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(GetClusterLabels(cluster)).String(),
+	})
+	if err != nil {
+		Logf("cluster pod logs: list failed: %v", err)
+		return
+	}
+	if len(podList.Items) == 0 {
+		return
+	}
+
+	for _, pod := range podList.Items {
+		if podIsReady(pod) {
+			continue
+		}
+		Logf("cluster pod logs: %s/%s (phase=%s)", pod.Namespace, pod.Name, pod.Status.Phase)
+		for _, c := range pod.Spec.InitContainers {
+			f.logPodContainerTail(pod.Namespace, pod.Name, c.Name, containerRestartCount(pod, c.Name, true))
+		}
+		for _, c := range pod.Spec.Containers {
+			if containerIsReady(pod, c.Name) {
+				continue
+			}
+			f.logPodContainerTail(pod.Namespace, pod.Name, c.Name, containerRestartCount(pod, c.Name, false))
+		}
+	}
+}
+
+func podIsReady(pod corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func containerIsReady(pod corev1.Pod, name string) bool {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == name {
+			return cs.Ready
+		}
+	}
+	return false
+}
+
+func containerRestartCount(pod corev1.Pod, name string, init bool) int32 {
+	var statuses []corev1.ContainerStatus
+	if init {
+		statuses = pod.Status.InitContainerStatuses
+	} else {
+		statuses = pod.Status.ContainerStatuses
+	}
+	for _, cs := range statuses {
+		if cs.Name == name {
+			return cs.RestartCount
+		}
+	}
+	return 0
+}
+
+func (f *Framework) logPodContainerTail(namespace, podName, containerName string, restartCount int32) {
+	logs, err := GetPodLogsTail(f.ClientSet, namespace, podName, containerName, clusterReadinessLogTailLines)
+	if err != nil {
+		Logf("  logs %s/%s:%s (tail): %v", namespace, podName, containerName, err)
+	} else if strings.TrimSpace(logs) != "" {
+		Logf("  logs %s/%s:%s (last %d lines):\n%s", namespace, podName, containerName, clusterReadinessLogTailLines, logs)
+	} else {
+		Logf("  logs %s/%s:%s: (empty)", namespace, podName, containerName)
+	}
+	if restartCount > 0 {
+		prev, err := getPreviousPodLogs(f.ClientSet, namespace, podName, containerName)
+		if err != nil {
+			Logf("  previous logs %s/%s:%s: %v", namespace, podName, containerName, err)
+		} else if strings.TrimSpace(prev) != "" {
+			Logf("  previous logs %s/%s:%s (last attempt):\n%s", namespace, podName, containerName, prev)
+		}
+	}
+}
+
+func (f *Framework) logClusterPVCs(cluster *api.MysqlCluster) {
+	pvcs := f.GetClusterPVCsFn(cluster)()
+	if len(pvcs) == 0 {
+		Logf("cluster PVCs: none found")
+		return
+	}
+	for _, pvc := range pvcs {
+		Logf("pvc %s phase=%s capacity=%s storageClass=%q",
+			pvc.Name,
+			pvc.Status.Phase,
+			pvc.Status.Capacity.Storage().String(),
+			stringValue(pvc.Spec.StorageClassName),
+		)
+	}
+}
+
+func stringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func (f *Framework) logClusterEvents(cluster *api.MysqlCluster) {
+	eventList, err := f.ClientSet.CoreV1().Events(cluster.Namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		Logf("cluster events: list failed: %v", err)
+		return
+	}
+
+	stsName := GetNameForResource("sts", cluster)
+	podPrefix := stsName + "-"
+	pvcPrefix := "data-" + podPrefix
+
+	var matches []corev1.Event
+	for _, event := range eventList.Items {
+		name := event.InvolvedObject.Name
+		if name == stsName || strings.HasPrefix(name, podPrefix) || strings.HasPrefix(name, pvcPrefix) {
+			matches = append(matches, event)
+		}
+	}
+	if len(matches) == 0 {
+		Logf("cluster events: none for statefulset/pods/pvcs of %s", stsName)
+		return
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		return eventTime(matches[i]).After(eventTime(matches[j]))
+	})
+	if len(matches) > 30 {
+		matches = matches[:30]
+	}
+
+	Logf("cluster events (latest %d):", len(matches))
+	for _, event := range matches {
+		Logf("  %s %s %s/%s: %s",
+			eventTime(event).Format(time.RFC3339),
+			event.Type,
+			event.InvolvedObject.Kind,
+			event.InvolvedObject.Name,
+			strings.TrimSpace(event.Message),
+		)
+	}
+}
+
+func eventTime(event corev1.Event) time.Time {
+	if !event.LastTimestamp.IsZero() {
+		return event.LastTimestamp.Time
+	}
+	if !event.EventTime.IsZero() {
+		return event.EventTime.Time
+	}
+	return event.CreationTimestamp.Time
 }

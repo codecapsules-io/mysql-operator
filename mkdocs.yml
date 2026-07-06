@@ -1,0 +1,73 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
+site_name: Code Capsules MySQL Operator
+site_description: Kubernetes operator for highly available MySQL clusters
+site_url: https://codecapsules-io.github.io/mysql-operator/
+repo_url: https://github.com/codecapsules-io/mysql-operator
+repo_name: codecapsules-io/mysql-operator
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Install the operator: install-operator.md
+  - Migrating from Helm: migrate-from-helm.md
+  - MysqlCluster: mysql-cluster.md
+  - Storage & configuration: storage-and-configuration.md
+  - Connecting applications: connecting-applications.md
+  - MysqlUser & MysqlDatabase: mysql-user-and-database.md
+  - Orchestrator: orchestrator.md
+  - MySQL versions & upgrades: mysql-versions-and-upgrades.md
+  - Version profiles: mysql-version-profiles.md
+  - Operator upgrades: operator-upgrades.md
+  - Operator configuration: operator-configuration.md
+  - Monitoring: monitoring.md
+  - Legacy backups: legacy-backups.md
+  - Troubleshooting: troubleshooting.md
+  - Project:
+    - Maintenance scope: https://github.com/codecapsules-io/mysql-operator/blob/master/MAINTENANCE.md
+    - Contributing: https://github.com/codecapsules-io/mysql-operator/blob/master/CONTRIBUTING.md
+    - Changelog: https://github.com/codecapsules-io/mysql-operator/blob/master/CHANGELOG.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/codecapsules-io/mysql-operator

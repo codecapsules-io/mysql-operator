@@ -1,3 +1,6 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 # Copyright 2016 The Upbound Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,8 +60,8 @@ ifeq ($(DEBUG),0)
 GO_LDFLAGS += -s -w
 endif
 
-# supported go versions
-GO_SUPPORTED_VERSIONS ?= 1.16|1.17
+# Minimum Go toolchain (major.minor or full release); newer Go is allowed.
+GO_MIN_VERSION ?= 1.16
 
 # set GOOS and GOARCH
 GOOS := $(OS)
@@ -236,9 +239,13 @@ endif # GO_TEST_TOOL
 # Go Targets
 
 .go.init:
-	@if ! `$(GO) version | grep -q -E '\bgo($(GO_SUPPORTED_VERSIONS))\b'`; then \
-		$(ERR) unsupported go version. Please make install one of the following supported version: '$(GO_SUPPORTED_VERSIONS)' ;\
-		exit 1 ;\
+	@ver_raw="$$($(GO) env GOVERSION)"; ver="$${ver_raw#go}"; \
+	if [ -z "$$ver" ]; then \
+		$(ERR) could not read Go version from "$(GO) env GOVERSION" ; exit 1 ;\
+	fi; \
+	first="$$(printf '%s\n' '$(GO_MIN_VERSION)' "$$ver" | sort -V | head -1)"; \
+	if [ "$$first" != '$(GO_MIN_VERSION)' ]; then \
+		$(ERR) unsupported go version "$$ver", need Go $(GO_MIN_VERSION) or newer ; exit 1 ;\
 	fi
 	@if [ "$(GO111MODULE)" != "on" ] && [ "$(realpath ../../../..)" !=  "$(realpath $(GOPATH))" ]; then \
 		$(WARN) the source directory is not relative to the GOPATH at $(GOPATH) or you are you using symlinks. The build might run into issue. Please move the source directory to be at $(GOPATH)/src/$(GO_PROJECT) ;\

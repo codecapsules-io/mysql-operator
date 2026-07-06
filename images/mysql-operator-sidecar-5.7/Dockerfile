@@ -1,19 +1,33 @@
+# Copyright 2026 Code Capsules
+# SPDX-License-Identifier: Apache-2.0
+#
 ###############################################################################
 #  Docker image for sidecar containers
 ###############################################################################
 
-FROM debian:buster-slim as sidecar
+# Use a supported Debian release (bookworm) for reliable mirrors; override with DEBIAN_RELEASE if needed.
+ARG DEBIAN_RELEASE=bookworm
+FROM debian:${DEBIAN_RELEASE}-slim AS sidecar
 
-RUN groupadd -g 999 mysql
-RUN useradd -u 999 -r -g 999 -s /sbin/nologin \
-    -c "Default Application User" mysql
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY rootfs/ /
+RUN printf 'Acquire::Retries "5";\n' >/etc/apt/apt.conf.d/80retry
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        apt-transport-https ca-certificates unzip pigz wget gnupg \
+    bash ca-certificates curl gnupg lsb-release passwd pigz unzip wget \
     && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 999 mysql
+RUN useradd -u 999 -r -g 999 -s /sbin/nologin \
+    -c "Default Application User" mysql \
+    && mkdir -p /home/mysql \
+    && chown mysql:mysql /home/mysql
+
+COPY rootfs/ /
+
+# Apache 2.0 redistribution (object form): include LICENSE and NOTICE for recipients.
+COPY LICENSE NOTICE /licenses/
 
 RUN export RCLONE_VERSION=1.57.0 \
     && gpg --import /etc/gpg-keys/rclone.gpg \
@@ -26,12 +40,27 @@ RUN export RCLONE_VERSION=1.57.0 \
     && chmod 755 /usr/local/bin/rclone \
     && rm -r rclone-*-linux-amd64 rclone-*-linux-amd64.zip
 
-RUN echo 'deb https://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
-
+# Register Percona signing key and apt sources (raw deb line alone is not enough on modern apt).
+# Register Percona signing key and apt sources.
+# - percona-toolkit lives in the 'pt' repo (the 'tools' repo is deprecated and stuck at 3.6.0)
+# - percona-xtrabackup-24 lives in the legacy 'tools' repo
+# - percona-xtrabackup-80 lives in the 'pxb-80' repo
+# - percona-xtrabackup-84 lives in the 'pxb-84-lts' repo
 ARG XTRABACKUP_PKG=percona-xtrabackup-24
-RUN apt-get update \
+RUN wget -nv -O /tmp/percona-release.deb https://repo.percona.com/apt/percona-release_latest.generic_all.deb \
+    && dpkg -i /tmp/percona-release.deb \
+    && rm -f /tmp/percona-release.deb \
+    && percona-release enable pt release \
+    && percona-release enable mysql-shell release \
+    && case "${XTRABACKUP_PKG}" in \
+    percona-xtrabackup-24) percona-release enable tools release ;; \
+    percona-xtrabackup-80) percona-release enable pxb-80 release ;; \
+    percona-xtrabackup-84) percona-release enable pxb-84-lts release ;; \
+    *) echo "ERROR: Unknown XTRABACKUP_PKG '${XTRABACKUP_PKG}'" >&2; exit 1 ;; \
+    esac \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
-        percona-toolkit ${XTRABACKUP_PKG} unzip default-mysql-client \
+    percona-toolkit percona-mysql-shell ${XTRABACKUP_PKG} unzip default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
 USER mysql

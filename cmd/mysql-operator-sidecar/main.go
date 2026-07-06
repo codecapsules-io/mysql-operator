@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2/klogr"
 
-	"github.com/bitpoke/mysql-operator/pkg/sidecar"
+	"github.com/codecapsules-io/mysql-operator/pkg/sidecar"
 )
 
 var log = logf.Log.WithName("sidecar")
@@ -63,14 +64,17 @@ func main() {
 		Use:   "clone-and-init",
 		Short: "Clone data from a bucket or prior node.",
 		Run: func(cmd *cobra.Command, args []string) {
+			log.Info("clone-and-init: starting clone phase")
 			if err := sidecar.RunCloneCommand(cfg); err != nil {
 				log.Error(err, "clone command failed")
 				os.Exit(8)
 			}
+			log.Info("clone-and-init: clone phase done, starting config phase")
 			if err := sidecar.RunConfigCommand(cfg); err != nil {
 				log.Error(err, "init command failed")
 				os.Exit(1)
 			}
+			log.Info("clone-and-init: config phase finished successfully")
 		},
 	}
 	cmd.AddCommand(cloneCmd)

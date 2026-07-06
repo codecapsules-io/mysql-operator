@@ -1,5 +1,6 @@
 /*
 Copyright 2019 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,8 +26,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	"github.com/bitpoke/mysql-operator/pkg/apis"
-	orchelper "github.com/bitpoke/mysql-operator/pkg/orc-helper"
+	"github.com/codecapsules-io/mysql-operator/pkg/apis"
+	orchelper "github.com/codecapsules-io/mysql-operator/pkg/orc-helper"
 )
 
 var (

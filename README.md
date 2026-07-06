@@ -1,86 +1,173 @@
-# MySQL Operator
+<!--
+Copyright 2026 Code Capsules
 
-MySQL Operator enables bulletproof MySQL on Kubernetes. It manages all the necessary resources for deploying and managing a highly available MySQL cluster. It provides effortless backups, while keeping the cluster highly available.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-:beer: :pizza: :coffee:
-If the operator has helped you out with your projects, **please consider [sponsoring](https://github.com/sponsors/bitpoke)** it to speed up the development. [Issues](https://github.com/bitpoke/mysql-operator/issues) are answered in this repo on a best-effort basis. 
+    http://www.apache.org/licenses/LICENSE-2.0
 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
 
-:wrench: :nut_and_bolt: :hammer: 
-For **paid commercial support**, deployment, integration and prioritizing of features, please check the dedicated service provided by [Bitpoke](https://www.bitpoke.io/services/mysql-support/).  
+# Code Capsules MySQL Operator
 
-The operator has been developed by [Bitpoke](https://www.bitpoke.io/) for internal use to [run WordPress in a cloud-native app](https://www.bitpoke.io/wordpress/) and has been open-sourced for the general public to benefit.
+<p align="center">
+  <a href="https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator">
+    <img alt="Code Capsules" title="Code Capsules" src="./logo.svg" width="400" style="color: black">
+  </a>
+</p>
 
+<p align="center">
+  <i>The simplest way to deploy your code.</i><br/>
+  <a href="https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator">https://codecapsules.io</a>
+</p>
 
-## Goals and status
+The **Code Capsules MySQL Operator** is a Kubernetes controller used to run and manage MySQL workloads for **Code Capsules** hosting. It deploys highly available MySQL clusters, handles failover, and day-to-day operations needed to host MySQL-based capsules on our platform infrastructure.
 
-The main goals of this operator are:
-
- 1. Easily deploy MySQL clusters in Kubernetes (cluster-per-service model)
- 2. Friendly to devops (monitoring, availability, scalability and backup stories solved)
- 3. Out-of-the-box backups (scheduled and on demand) and point-in-time recovery
- 4. Support for cloning in cluster and across clusters.
-
-
-## Contributing
-
-We welcome all contributions in the form of new issues for feature requests, bugs or even pull requests. We are open to discuss ideas on how to improve the operator and would also love to find out where and how it's used. The discussion related to this project should happen on the Kubernetes Community [Slack](https://kubernetes.slack.com/messages/CEKQXFR0E/). The current maintainers of this project can be reached via [email](mailto:hello@bitpoke.io), too.
+This repository is a maintained fork of the open-source [mysql-operator](https://github.com/bitpoke/mysql-operator) project. **It does not track or adopt upstream changes from Bitpoke**; feature work, releases, and operational practices are owned by Code Capsules.
 
 ## Documentation
 
-* [Getting started](https://www.bitpoke.io/docs/mysql-operator/getting-started/) provides an overview over deploying and using the MySQL operator
-* [Deploy a MySQL cluster](https://www.bitpoke.io/docs/mysql-operator/deploy-mysql-cluster/) describes in detail how a cluster can be installed and configured
-* [Configure backups](https://www.bitpoke.io/docs/mysql-operator/backups/) shows how to configure and take backups of a cluster
-* [Recurrent backups](https://www.bitpoke.io/docs/mysql-operator/cluster-recurrent-backups/) describes how to setup recurrent backups for the cluster
-* [Restore a cluster](https://www.bitpoke.io/docs/mysql-operator/backups/#initialize-a-cluster-from-a-backup) explains how to restore a cluster from a backup
-* [How to integrate](https://www.bitpoke.io/docs/mysql-operator/integrate-operator/) the operator with your deployment setup. This presents a simple way of using the MySQL operator and helm to deploy your application
-* [Orchestrator](https://www.bitpoke.io/docs/mysql-operator/orchestrator/) shows you how to access the orchestrator for more details.
+**Full documentation:** [https://codecapsules-io.github.io/mysql-operator/](https://codecapsules-io.github.io/mysql-operator/)
 
-## Controller deploy
+| Topic                     | Location                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| Getting started & install | [Docs site](https://codecapsules-io.github.io/mysql-operator/getting-started/)             |
+| `MysqlCluster` reference  | [Docs site](https://codecapsules-io.github.io/mysql-operator/mysql-cluster/)               |
+| MySQL 8.4 & upgrades      | [Docs site](https://codecapsules-io.github.io/mysql-operator/mysql-versions-and-upgrades/) |
+| Migrating from Helm       | [Docs site](https://codecapsules-io.github.io/mysql-operator/migrate-from-helm/)           |
+| Active maintenance scope  | [`MAINTENANCE.md`](MAINTENANCE.md)                                                         |
+| Contributing              | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                                       |
+| Manifest maintainer guide | [`deploy/manifests/README.md`](deploy/manifests/README.md)                                 |
 
-To deploy this controller, use the provided helm chart by running:
+### Running docs locally
 
-```shell
-helm repo add bitpoke https://helm-charts.bitpoke.io
-helm install mysql-operator bitpoke/mysql-operator
-```
+The docs site is built with [MkDocs](https://www.mkdocs.org/) and the [Material theme](https://squidfunk.github.io/mkdocs-material/). Source lives in [`docs/`](docs/); navigation and site settings are in [`mkdocs.yml`](mkdocs.yml).
 
-For more information about chart values see chart [README](deploy/charts/mysql-operator/README.md). This chart will deploy the controller together with an [orchestrator](https://github.com/github/orchestrator) cluster.
-
-__NOTE__: MySQL operator 0.6.x requires at least Kubernetes 1.19.x to upgrade, check the [0.6.x upgrade notes](https://www.bitpoke.io/docs/mysql-operator/operator-upgrades/#v06x-upgrade) as some additional steps may be required.
-
-__NOTE__: MySQL operator 0.2.x requires at least Kubernetes 1.11.x (or 1.10.x with alpha features) while version 0.1.x is known to work with Kubernetes up 1.9.x. To upgrade, check the [0.2.x upgrade notes](https://www.bitpoke.io/docs/mysql-operator/operator-upgrades/#v02x-upgrade) as some additional steps are required.
-
-## Controller upgrade
-
-It is possible that upgrading the MySQL operator to a newer version requires additional steps. Those steps can be found in the operator's documentation at [upgrades](docs/operator-upgrades.md) section.
-
-## Deploying a cluster
-
+Requires Python 3 (3.12+ recommended). From the repository root:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/bitpoke/mysql-operator/master/examples/example-cluster-secret.yaml
-kubectl apply -f https://raw.githubusercontent.com/bitpoke/mysql-operator/master/examples/example-cluster.yaml
+python3 -m venv .venv-docs
+source .venv-docs/bin/activate
+pip install -r docs/requirements.txt
+mkdocs serve
 ```
 
-## Roadmap to v1.0
- - [ ] Integration with Google Cloud Marketplace, OperatorHub.io, AWS Marketplace
- - [ ] CRD Validation and webhooks
- - [ ] SSL support
- - [ ] Default integrated with MySQL 8.0
- - [ ] Proxy SQL integration
- - [ ] Backup policies
- - [x] Physical backups
- - [x] HA [Orchestrator](https://github.com/github/orchestrator) integration
- - [x] [Prometheus](https://github.com/prometheus/prometheus) metrics exporter
- - [x] Lag mitigation
- - [x] Query limits
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). `mkdocs serve` reloads when you edit files under `docs/`.
 
+To validate the site the same way CI does:
 
-## Tech considerations
+```shell
+mkdocs build --strict
+```
 
-This project uses Percona Server for MySQL 5.7 / 8.0 because of backup improvements (eg. backup locks), monitoring improvements and some serviceability improvements (eg. utility user). Although we could have used MariaDB, our primary focus being WordPress, we wanted a drop-in rather than a fork. In the future we might support MariaDB if that can be implemented in a compatible way.
+Built output is written to `site/` (gitignored).
 
-## License
+## Relationship to upstream
 
-This project is licensed under Apache 2.0 license. Read the [LICENSE](LICENSE) file in the top distribution directory for the full license text.
+- **Upstream:** [bitpoke/mysql-operator](https://github.com/bitpoke/mysql-operator) (originally developed by Pressinfra SRL / Bitpoke).
+- **This fork:** Independently maintained by Code Capsules for internal platform use. Do not assume compatibility with upstream Helm charts, docs, or release cadence.
+
+## Capabilities
+
+The operator is intended to:
+
+1. Deploy and operate MySQL clusters on Kubernetes (cluster-per-service model).
+2. Provide HA, monitoring hooks, and failover suitable for managed hosting.
+3. Support Percona Server 5.7, 8.0, and 8.4 with operator-orchestrated upgrades.
+
+Built-in backup and restore features exist but are **not actively maintained** for new deployments. See [Legacy backups](https://codecapsules-io.github.io/mysql-operator/legacy-backups/) on the docs site.
+
+## Deploying the controller
+
+Install and upgrade using versioned Kubernetes manifests under [`deploy/manifests/`](deploy/manifests/).
+
+Quick start:
+
+```shell
+export OPERATOR_VERSION=v0.7.0
+kubectl create namespace mysql-operator --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/crds"
+kubectl apply -k "deploy/manifests/${OPERATOR_VERSION}/operator"
+kubectl rollout status statefulset/mysql-operator -n mysql-operator
+```
+
+See the [install guide](https://codecapsules-io.github.io/mysql-operator/install-operator/) for prerequisites, customization, and upgrades.
+
+## Deploying a MySQL cluster
+
+Example manifests are under [`examples/`](examples/). Apply a secret and cluster CR in your target namespace:
+
+```shell
+kubectl apply -f examples/example-cluster-secret.yaml
+kubectl apply -f examples/example-cluster.yaml
+```
+
+Adapt names, storage classes, and `mysqlVersion` to your environment before use in production.
+
+## Roadmap and support
+
+**Active maintenance:** See [`MAINTENANCE.md`](MAINTENANCE.md) for in-scope and out-of-scope areas.
+
+**Contributing:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the PR workflow and CI expectations.
+
+**Roadmap:** Not published publicly. Planning is handled internally by Code Capsules.
+
+**Support:** This operator is maintained for Code Capsules platform use. It is not affiliated with Bitpoke commercial support or upstream issue SLAs.
+
+## Tech notes
+
+Clusters use **Percona Server for MySQL** (5.7 / 8.0 / 8.4 lines as configured). Failover topology uses **Orchestrator** (see [`NOTICE`](NOTICE) for third-party attribution).
+
+## License and legal notices
+
+This project is licensed under the **Apache License, Version 2.0**.
+
+### License text
+
+The complete license text is in the root [`LICENSE`](LICENSE) file:
+
+> http://www.apache.org/licenses/LICENSE-2.0
+
+### NOTICE file (required for distributions)
+
+Apache License 2.0 **Section 4(d)** requires that if the Work includes a `NOTICE` file, derivative works and distributions must include a **readable copy** of that notice. This repository includes [`NOTICE`](NOTICE). When you redistribute source or binaries (including container images built from this repo), **include the `NOTICE` file** alongside `LICENSE` in your distribution package or image documentation.
+
+The [`NOTICE`](NOTICE) file summarizes:
+
+- Copyright and attribution for the original **Pressinfra SRL** work.
+- **Copyright 2026 Code Capsules** for modifications and additional contributions in this fork.
+- Third-party components (for example **Percona Orchestrator** built into the orchestrator image).
+
+### Copyright and attribution (Section 4(b)–(c))
+
+When distributing or modifying this software:
+
+1. **Retain** all copyright, patent, trademark, and attribution notices present in the source (including per-file headers in `pkg/`, `cmd/`, and other contributed files).
+2. **You may add** your own copyright statement for your modifications, as permitted by the License.
+3. **Do not** remove existing upstream notices (for example Pressinfra SRL, Platform9 Inc., The Kubernetes Authors, or Upbound Authors where present in individual files).
+
+### Source form
+
+Modified source files in this fork that contain substantive Code Capsules changes include a `Copyright 2026 Code Capsules` line in addition to upstream copyright lines, where applicable. New files authored for this fork are marked `Copyright 2026 Code Capsules` under the same Apache 2.0 terms.
+
+### No additional restrictions
+
+Apache 2.0 does not permit adding legal terms that contradict the License. This README does not change the License; it only describes how to comply with it when using or redistributing this project.
+
+### Verification
+
+Run the repository license header check:
+
+```shell
+./hack/license-check
+```
+
+---
+
+**SPDX-License-Identifier:** Apache-2.0

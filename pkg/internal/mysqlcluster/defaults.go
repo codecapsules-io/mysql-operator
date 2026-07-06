@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Pressinfra SRL
+Copyright 2026 Code Capsules
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,9 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	api "github.com/bitpoke/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"github.com/bitpoke/mysql-operator/pkg/options"
-	"github.com/bitpoke/mysql-operator/pkg/util/constants"
+	api "github.com/codecapsules-io/mysql-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/codecapsules-io/mysql-operator/pkg/mysqlversioning"
+	"github.com/codecapsules-io/mysql-operator/pkg/options"
+	"github.com/codecapsules-io/mysql-operator/pkg/util/constants"
 )
 
 // nolint: megacheck, deadcode, varcheck
@@ -57,7 +59,7 @@ func (cluster *MysqlCluster) SetDefaults(opt *options.Options) {
 
 	// set mysql version if not set to avoid spamming logs
 	if len(cluster.Spec.MysqlVersion) == 0 {
-		cluster.Spec.MysqlVersion = constants.MySQLDefaultVersion.String()
+		cluster.Spec.MysqlVersion = constants.MySQLDefaultVersion
 	}
 
 	// set pod antiaffinity to nodes stay away from other nodes.
@@ -92,8 +94,10 @@ func (cluster *MysqlCluster) SetDefaults(opt *options.Options) {
 	}
 
 	if mem := cluster.Spec.PodSpec.Resources.Requests.Memory(); mem != nil {
-		logFileSize := humanizeSize(computeInnodbLogFileSize(mem))
-		setConfigIfNotSet(cluster.Spec.MysqlConf, "innodb-log-file-size", logFileSize)
+		perFile := computeInnodbLogFileSize(mem)
+		v := cluster.DesiredVersion()
+		key, sizeBytes := mysqlversioning.ProfileFor(v).InnoDBOperatorLogSizing(v, perFile)
+		setConfigIfNotSet(cluster.Spec.MysqlConf, key, humanizeSize(sizeBytes))
 	}
 
 	if pvc := cluster.Spec.VolumeSpec.PersistentVolumeClaim; pvc != nil {
@@ -192,7 +196,7 @@ func computeInnodbLogFileSize(mem *resource.Quantity) int64 {
 }
 
 // computeInnodbBufferPoolSize returns a computed value, to configure MySQL, based on requested
-// memory. As described in: https://github.com/bitpoke/mysql-operator/issues/502
+// memory. As described in: https://github.com/codecapsules-io/mysql-operator/issues/502
 func computeInnodbBufferPoolSize(mem *resource.Quantity) (int64, error) {
 	availableMem := mem.DeepCopy()
 	percentRAM := 0.75

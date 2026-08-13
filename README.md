@@ -18,7 +18,7 @@ limitations under the License.
 
 <p align="center">
   <a href="https://codecapsules.io/?utm_source=github&utm_medium=referral&utm_campaign=mysql-operator">
-    <img alt="Code Capsules" title="Code Capsules" src="./logo.svg" width="400" style="color: black">
+    <img alt="Code Capsules" title="Code Capsules" src="https://www.codecapsules.io/logo/Code%20Capsules%20Logo%20-%20yellow-black.svg" width="400" style="color: black">
   </a>
 </p>
 
